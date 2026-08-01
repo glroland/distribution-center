@@ -1,0 +1,21 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src ./src
+COPY data ./data
+
+ENV HOST=0.0.0.0
+ENV PORT=8002
+ENV SHELVES_CSV_PATH=data/shelves.csv
+ENV GRID_WIDTH=10
+ENV GRID_HEIGHT=10
+ENV DOCK_X=0
+ENV DOCK_Y=0
+ENV CARRY_CAPACITY=100
+EXPOSE 8002
+
+CMD ["python", "-m", "src"]

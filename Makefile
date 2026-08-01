@@ -14,16 +14,17 @@ REQUIREMENTS := $(shell find . \
 	-not -path '*/.venv/*' \
 	-name 'requirements.txt')
 
-.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api clean
+.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api clean
 
 help:
 	@echo "Targets:"
-	@echo "  install            Install dependencies from every requirements.txt (via: $(PIP))"
-	@echo "  generate-pos       Generate sample PO PDFs into $(TARGET_DIR)/pos (ARGS=\"--count 25\" to pass flags)"
-	@echo "  run-ingest-api     Run the PO ingest API (http://localhost:8000)"
-	@echo "  run-local-dc-agent Run the distribution center A2A agent (http://localhost:9100)"
-	@echo "  run-local-wms-api  Run the local WMS inventory API (http://localhost:8001)"
-	@echo "  clean              Remove the $(TARGET_DIR) directory"
+	@echo "  install                      Install dependencies from every requirements.txt (via: $(PIP))"
+	@echo "  generate-pos                 Generate sample PO PDFs into $(TARGET_DIR)/pos (ARGS=\"--count 25\" to pass flags)"
+	@echo "  run-ingest-api               Run the PO ingest API (http://localhost:8000)"
+	@echo "  run-local-dc-agent           Run the distribution center A2A agent (http://localhost:9100)"
+	@echo "  run-local-wms-api            Run the local WMS inventory API (http://localhost:8001)"
+	@echo "  run-local-inventory-robot-api Run the local inventory robot API (http://localhost:8002)"
+	@echo "  clean                        Remove the $(TARGET_DIR) directory"
 
 install:
 	@echo "Using: $(PIP)"
@@ -44,6 +45,9 @@ run-local-dc-agent:
 
 run-local-wms-api:
 	cd local-wms-api && python3 -m src
+
+run-local-inventory-robot-api:
+	cd local-inventory-robot-api && python3 -m src
 
 clean:
 	rm -rf $(TARGET_DIR)
