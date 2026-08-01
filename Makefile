@@ -14,13 +14,14 @@ REQUIREMENTS := $(shell find . \
 	-not -path '*/.venv/*' \
 	-name 'requirements.txt')
 
-.PHONY: help install generate-pos run-ingest-api clean
+.PHONY: help install generate-pos run-ingest-api run-dc-agent clean
 
 help:
 	@echo "Targets:"
 	@echo "  install         Install dependencies from every requirements.txt (via: $(PIP))"
 	@echo "  generate-pos    Generate sample PO PDFs into $(TARGET_DIR)/pos (ARGS=\"--count 25\" to pass flags)"
 	@echo "  run-ingest-api  Run the PO ingest API (http://localhost:8000)"
+	@echo "  run-dc-agent    Run the distribution center A2A agent (http://localhost:9100)"
 	@echo "  clean           Remove the $(TARGET_DIR) directory"
 
 install:
@@ -36,6 +37,9 @@ generate-pos:
 
 run-ingest-api:
 	cd po-ingest-api && python3 -m src
+
+run-dc-agent:
+	cd dc-agent && python3 -m src
 
 clean:
 	rm -rf $(TARGET_DIR)
