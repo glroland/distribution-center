@@ -14,13 +14,14 @@ REQUIREMENTS := $(shell find . \
 	-not -path '*/.venv/*' \
 	-name 'requirements.txt')
 
-.PHONY: help install generate-pos clean
+.PHONY: help install generate-pos run-ingest-api clean
 
 help:
 	@echo "Targets:"
-	@echo "  install       Install dependencies from every requirements.txt (via: $(PIP))"
-	@echo "  generate-pos  Generate sample PO PDFs into $(TARGET_DIR)/pos (ARGS=\"--count 25\" to pass flags)"
-	@echo "  clean         Remove the $(TARGET_DIR) directory"
+	@echo "  install         Install dependencies from every requirements.txt (via: $(PIP))"
+	@echo "  generate-pos    Generate sample PO PDFs into $(TARGET_DIR)/pos (ARGS=\"--count 25\" to pass flags)"
+	@echo "  run-ingest-api  Run the PO ingest API (http://localhost:8000)"
+	@echo "  clean           Remove the $(TARGET_DIR) directory"
 
 install:
 	@echo "Using: $(PIP)"
@@ -32,6 +33,9 @@ install:
 generate-pos:
 	@mkdir -p $(TARGET_DIR)/pos
 	cd test-po-generator && python3 -m src --output-dir "../$(TARGET_DIR)/pos" $(ARGS)
+
+run-ingest-api:
+	cd po-ingest-api && python3 -m src
 
 clean:
 	rm -rf $(TARGET_DIR)
