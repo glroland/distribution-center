@@ -1,0 +1,106 @@
+pipeline 
+{
+   agent any
+   
+   options 
+   {
+      disableConcurrentBuilds()
+      buildDiscarder(logRotator(numToKeepStr: '3'))
+   }
+
+   stages
+   {
+      stage('Prepare') 
+      {
+         steps 
+         {
+            sh '''
+                    echo "PATH = ${PATH}"
+                '''
+
+            git branch: 'main', 
+                url: 'https://github.com/glroland/baseball-chatbot.git'
+         }
+      }
+
+      stage('Create Docker Image for agent-team') 
+      {
+         steps 
+         {
+            sh 'cd agent-team ; docker build --no-cache . --tag agent-team:$BUILD_NUMBER'
+            sh 'cd agent-team ; docker save agent-team:$BUILD_NUMBER > agent-team-dockerimage.tar'
+            step(followSymlinks: false, artifacts: 'agent-team/agent-team-dockerimage.tar', $class: 'ArtifactArchiver')
+            sh 'cd agent-team ; docker rmi agent-team:$BUILD_NUMBER'
+         }
+      }
+
+      stage('Create Docker Image for agent-game') 
+      {
+         steps 
+         {
+            sh 'cd agent-game ; docker build --no-cache . --tag agent-game:$BUILD_NUMBER'
+            sh 'cd agent-game ; docker save agent-game:$BUILD_NUMBER > agent-game-dockerimage.tar'
+            step(followSymlinks: false, artifacts: 'agent-game/agent-game-dockerimage.tar', $class: 'ArtifactArchiver')
+            sh 'cd agent-game ; docker rmi agent-game:$BUILD_NUMBER'
+         }
+      }
+
+      stage('Create Docker Image for agent-utilities') 
+      {
+         steps 
+         {
+            sh 'cd agent-utilities ; docker build --no-cache . --tag agent-utilities:$BUILD_NUMBER'
+            sh 'cd agent-utilities ; docker save agent-utilities:$BUILD_NUMBER > agent-utilities-dockerimage.tar'
+            step(followSymlinks: false, artifacts: 'agent-utilities/agent-utilities-dockerimage.tar', $class: 'ArtifactArchiver')
+            sh 'cd agent-utilities ; docker rmi agent-utilities:$BUILD_NUMBER'
+         }
+      }
+
+      stage('Create Docker Image for chatbot') 
+      {
+         steps 
+         {
+            sh 'cd chatbot ; docker build --no-cache . --tag chatbot:$BUILD_NUMBER'
+            sh 'cd chatbot ; docker save chatbot:$BUILD_NUMBER > chatbot-dockerimage.tar'
+            step(followSymlinks: false, artifacts: 'chatbot/chatbot-dockerimage.tar', $class: 'ArtifactArchiver')
+            sh 'cd chatbot ; docker rmi chatbot:$BUILD_NUMBER'
+         }
+      }
+
+      stage('Reload then push images to quay') 
+      {
+         steps 
+         {
+            script 
+            {
+               docker.withRegistry('https://registry.home.glroland.com/', 'quay') 
+               {
+                  sh 'docker load -i agent-team/agent-team-dockerimage.tar'
+                  sh 'docker tag agent-team:$BUILD_NUMBER registry.home.glroland.com/baseball/agent-team:$BUILD_NUMBER'
+                  sh 'docker rmi agent-team:$BUILD_NUMBER'
+                  sh 'docker push registry.home.glroland.com/baseball/agent-team:$BUILD_NUMBER'
+                  sh 'docker rmi registry.home.glroland.com/baseball/agent-team:$BUILD_NUMBER'
+               
+                  sh 'docker load -i agent-game/agent-game-dockerimage.tar'
+                  sh 'docker tag agent-game:$BUILD_NUMBER registry.home.glroland.com/baseball/agent-game:$BUILD_NUMBER'
+                  sh 'docker rmi agent-game:$BUILD_NUMBER'
+                  sh 'docker push registry.home.glroland.com/baseball/agent-game:$BUILD_NUMBER'
+                  sh 'docker rmi registry.home.glroland.com/baseball/agent-game:$BUILD_NUMBER'
+               
+                  sh 'docker load -i agent-utilities/agent-utilities-dockerimage.tar'
+                  sh 'docker tag agent-utilities:$BUILD_NUMBER registry.home.glroland.com/baseball/agent-utilities:$BUILD_NUMBER'
+                  sh 'docker rmi agent-utilities:$BUILD_NUMBER'
+                  sh 'docker push registry.home.glroland.com/baseball/agent-utilities:$BUILD_NUMBER'
+                  sh 'docker rmi registry.home.glroland.com/baseball/agent-utilities:$BUILD_NUMBER'
+               
+                  sh 'docker load -i chatbot/chatbot-dockerimage.tar'
+                  sh 'docker tag chatbot:$BUILD_NUMBER registry.home.glroland.com/baseball/chatbot:$BUILD_NUMBER'
+                  sh 'docker rmi chatbot:$BUILD_NUMBER'
+                  sh 'docker push registry.home.glroland.com/baseball/chatbot:$BUILD_NUMBER'
+                  sh 'docker rmi registry.home.glroland.com/baseball/chatbot:$BUILD_NUMBER'
+               }
+            }
+         }
+      }
+   }
+}

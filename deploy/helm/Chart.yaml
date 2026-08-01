@@ -1,0 +1,15 @@
+apiVersion: v2
+name: ai-distribution-center
+description: >-
+  Deploys the AI Distribution Center application (purchase-order ingest,
+  supervisor escalation, and one or more distribution center local
+  component groups: agent, WMS, picking robot, and shipping) to OpenShift.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - distribution-center
+  - fulfillment
+  - a2a
+  - mcp
+home: https://github.com/ai-distribution-center

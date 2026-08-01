@@ -1,0 +1,121 @@
+{{- range $dc := .Values.distributionCenters }}
+{{- $root := $ }}
+{{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "robot-api") }}
+{{- $cmName := printf "%s-%s-robot-shelves" (include "adc.fullname" $root) $dc.name }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $cmName }}
+  labels:
+    {{- include "adc.commonLabels" $root | nindent 4 }}
+    app.kubernetes.io/name: robot-api
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/component: robot-api
+    distribution-center: {{ $dc.name }}
+data:
+  shelves.csv: |
+    {{- $dc.robotApi.shelvesCsv | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $svcName }}
+  labels:
+    {{- include "adc.commonLabels" $root | nindent 4 }}
+    app.kubernetes.io/name: robot-api
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/component: robot-api
+    distribution-center: {{ $dc.name }}
+  annotations:
+    distribution-center/display-name: {{ $dc.displayName | quote }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: robot-api
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+      distribution-center: {{ $dc.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: robot-api
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        app.kubernetes.io/component: robot-api
+        distribution-center: {{ $dc.name }}
+    spec:
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "adc.podSecurityContext" $root | nindent 8 }}
+      containers:
+        - name: robot-api
+          image: {{ include "adc.image" (dict "root" $root "image" $dc.robotApi.image) }}
+          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          securityContext:
+            {{- include "adc.containerSecurityContext" $root | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $dc.robotApi.port }}
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: {{ $dc.robotApi.port | quote }}
+            - name: SHELVES_CSV_PATH
+              value: data/shelves.csv
+            - name: GRID_WIDTH
+              value: {{ $dc.robotApi.grid.width | quote }}
+            - name: GRID_HEIGHT
+              value: {{ $dc.robotApi.grid.height | quote }}
+            - name: DOCK_X
+              value: {{ $dc.robotApi.dock.x | quote }}
+            - name: DOCK_Y
+              value: {{ $dc.robotApi.dock.y | quote }}
+            - name: CARRY_CAPACITY
+              value: {{ $dc.robotApi.carryCapacity | quote }}
+          volumeMounts:
+            - name: shelves-data
+              mountPath: /app/data/shelves.csv
+              subPath: shelves.csv
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml $dc.robotApi.resources | nindent 12 }}
+      volumes:
+        - name: shelves-data
+          configMap:
+            name: {{ $cmName }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svcName }}
+  labels:
+    {{- include "adc.commonLabels" $root | nindent 4 }}
+    app.kubernetes.io/name: robot-api
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/component: robot-api
+    distribution-center: {{ $dc.name }}
+spec:
+  selector:
+    app.kubernetes.io/name: robot-api
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    distribution-center: {{ $dc.name }}
+  ports:
+    - name: http
+      port: {{ $dc.robotApi.port }}
+      targetPort: http
+{{- end }}

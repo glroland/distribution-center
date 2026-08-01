@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: baseball-chatbot
+spec:
+  destination:
+    name: in-cluster
+    namespace: baseball-chatbot
+    server: https://kubernetes.default.svc
+  source:
+    path: deploy/helm
+    repoURL: https://github.com/glroland/baseball-chatbot.git
+    targetRevision: HEAD
+    helm:
+      valueFiles:
+        - values.yaml
+  sources: []
+  project: default
+
