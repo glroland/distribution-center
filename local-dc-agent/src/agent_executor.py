@@ -1,4 +1,3 @@
-import asyncio
 import base64
 
 import httpx
@@ -9,13 +8,22 @@ from a2a.types import DataPart, FileWithBytes, FileWithUri, Part, TextPart, Unsu
 from a2a.utils import get_file_parts, new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 
-from .ingest_client import IngestError, convert_pdf_to_markdown
-from .order_extraction import ExtractionError, extract_order
-from .order_processing import process_order, summarize
+from .fulfillment import FulfillmentError
+from .ingest_client import IngestError
+from .order_extraction import ExtractionError
+from .order_processing import summarize
+from .worker import OrderWorker
 
 
 class ProcessOrderAgentExecutor(AgentExecutor):
-    """Implements the distribution center's single skill: process_purchase_order."""
+    """Implements the distribution center's single skill: process_purchase_order.
+
+    Hands each PDF off to a shared OrderWorker, which serializes ingest,
+    extraction, and fulfillment through one persistent background loop rather
+    than doing this work inline per HTTP request."""
+
+    def __init__(self, worker: OrderWorker) -> None:
+        self.worker = worker
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         task = context.current_task
@@ -49,22 +57,22 @@ class ProcessOrderAgentExecutor(AgentExecutor):
         filename = pdf_file.name or "purchase_order.pdf"
 
         try:
-            markdown = await convert_pdf_to_markdown(pdf_bytes, filename)
+            result = await self.worker.submit(pdf_bytes, filename)
         except IngestError as exc:
             await updater.failed(
                 new_agent_text_message(f"Failed to ingest PDF: {exc}", task.context_id, task.id)
             )
             return
-
-        try:
-            extracted = await asyncio.to_thread(extract_order, markdown)
         except ExtractionError as exc:
             await updater.failed(
                 new_agent_text_message(f"Failed to extract order data: {exc}", task.context_id, task.id)
             )
             return
-
-        result = process_order(extracted)
+        except FulfillmentError as exc:
+            await updater.failed(
+                new_agent_text_message(f"Failed to fulfill order: {exc}", task.context_id, task.id)
+            )
+            return
 
         await updater.add_artifact(
             [

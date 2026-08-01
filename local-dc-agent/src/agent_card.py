@@ -7,11 +7,13 @@ PROCESS_PURCHASE_ORDER_SKILL = AgentSkill(
     name="Process Purchase Order",
     description=(
         "Ingests a purchase order PDF, extracts its structured fields "
-        "(PO number, vendor, line items, totals), and processes it into a "
-        "distribution center order record."
+        "(PO number, vendor, line items, totals), checks warehouse inventory, "
+        "dispatches the picking robot, ships whatever was retrieved, and "
+        "returns a processed order record with carrier tracking numbers (or "
+        "supervisor escalations for anything out of stock)."
     ),
-    tags=["orders", "purchase-order", "pdf", "distribution-center"],
-    examples=["Process this purchase order PDF for receiving."],
+    tags=["orders", "purchase-order", "pdf", "distribution-center", "fulfillment", "shipping"],
+    examples=["Process this purchase order PDF for receiving and fulfillment."],
     input_modes=["application/pdf"],
     output_modes=["application/json", "text/plain"],
 )
@@ -19,10 +21,10 @@ PROCESS_PURCHASE_ORDER_SKILL = AgentSkill(
 AGENT_CARD = AgentCard(
     name="Distribution Center Agent",
     description=(
-        "Handles inbound purchase order processing for a distribution center. "
-        "Currently supports one skill: converting a PO PDF into a structured, "
-        "processed order record. More distribution center capabilities "
-        "(inventory allocation, pick/pack, shipping) are planned."
+        "Handles inbound purchase order processing and fulfillment for a "
+        "distribution center: parses a PO PDF, checks inventory, drives a "
+        "picking robot, ships what's available, and escalates shortages to "
+        "a human supervisor."
     ),
     url=settings.AGENT_URL,
     version="0.1.0",

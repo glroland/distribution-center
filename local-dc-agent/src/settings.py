@@ -6,8 +6,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     PO_INGEST_API_URL: str = "http://localhost:8000"
+    WMS_API_URL: str = "http://localhost:8001"
+    ROBOT_API_URL: str = "http://localhost:8002"
+    SUPERVISOR_API_URL: str = "http://localhost:8003"
+    SHIPPING_API_URL: str = "http://localhost:8004"
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-5"
+    MAX_FULFILLMENT_TURNS: int = 20
     HOST: str = "0.0.0.0"
     PORT: int = 9100
     AGENT_URL: str | None = None

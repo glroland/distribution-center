@@ -16,11 +16,26 @@ from a2a.types import (
     TextPart,
 )
 
-from src import agent_executor as executor_module
 from src.agent_executor import ProcessOrderAgentExecutor
+from src.fulfillment import FulfillmentError
 from src.ingest_client import IngestError
-from src.models import ExtractedOrder, LineItem
+from src.models import ExtractedOrder, LineItem, ProcessOrderResult
 from src.order_extraction import ExtractionError
+from src.order_processing import process_order
+
+
+class _FakeWorker:
+    def __init__(self, result: ProcessOrderResult | None = None, error: Exception | None = None):
+        self.result = result
+        self.error = error
+        self.calls: list[tuple[bytes, str]] = []
+
+    async def submit(self, pdf_bytes: bytes, filename: str) -> ProcessOrderResult:
+        self.calls.append((pdf_bytes, filename))
+        if self.error is not None:
+            raise self.error
+        assert self.result is not None
+        return self.result
 
 
 def _message(parts: list[Part]) -> Message:
@@ -42,30 +57,23 @@ async def _drain(queue: EventQueue) -> list:
     return events
 
 
-def _sample_extracted_order() -> ExtractedOrder:
-    return ExtractedOrder(
+def _sample_result() -> ProcessOrderResult:
+    extracted = ExtractedOrder(
         po_number="PO-2002",
         vendor_name="Northwind Traders",
         line_items=[LineItem(sku="SKU-9", description="Pallet Jack", quantity=1, unit_price=450.0)],
         stated_total=450.0,
     )
+    return process_order(extracted)
 
 
 @pytest.mark.asyncio
-async def test_process_purchase_order_success(monkeypatch) -> None:
-    async def fake_convert(pdf_bytes: bytes, filename: str) -> str:
-        return "# Purchase Order PO-2002"
-
-    def fake_extract(markdown: str) -> ExtractedOrder:
-        return _sample_extracted_order()
-
-    monkeypatch.setattr(executor_module, "convert_pdf_to_markdown", fake_convert)
-    monkeypatch.setattr(executor_module, "extract_order", fake_extract)
-
+async def test_process_purchase_order_success() -> None:
+    worker = _FakeWorker(result=_sample_result())
     context = RequestContext(request=MessageSendParams(message=_message([_pdf_part()])))
     queue = EventQueue()
 
-    await ProcessOrderAgentExecutor().execute(context, queue)
+    await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
     events = await _drain(queue)
     artifact_events = [e for e in events if hasattr(e, "artifact")]
@@ -78,14 +86,30 @@ async def test_process_purchase_order_success(monkeypatch) -> None:
     assert "PO-2002" in text_parts[0]
 
     assert status_events[-1].status.state == TaskState.completed
+    assert len(worker.calls) == 1
 
 
 @pytest.mark.asyncio
 async def test_missing_pdf_part_fails_task() -> None:
+    worker = _FakeWorker()
     context = RequestContext(request=MessageSendParams(message=_message([Part(root=TextPart(text="hello"))])))
     queue = EventQueue()
 
-    await ProcessOrderAgentExecutor().execute(context, queue)
+    await ProcessOrderAgentExecutor(worker).execute(context, queue)
+
+    events = await _drain(queue)
+    status_events = [e for e in events if hasattr(e, "status")]
+    assert status_events[-1].status.state == TaskState.failed
+    assert worker.calls == []
+
+
+@pytest.mark.asyncio
+async def test_ingest_failure_fails_task() -> None:
+    worker = _FakeWorker(error=IngestError("docling exploded"))
+    context = RequestContext(request=MessageSendParams(message=_message([_pdf_part()])))
+    queue = EventQueue()
+
+    await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
     events = await _drain(queue)
     status_events = [e for e in events if hasattr(e, "status")]
@@ -93,16 +117,12 @@ async def test_missing_pdf_part_fails_task() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ingest_failure_fails_task(monkeypatch) -> None:
-    async def fake_convert(pdf_bytes: bytes, filename: str) -> str:
-        raise IngestError("docling exploded")
-
-    monkeypatch.setattr(executor_module, "convert_pdf_to_markdown", fake_convert)
-
+async def test_extraction_failure_fails_task() -> None:
+    worker = _FakeWorker(error=ExtractionError("model refused"))
     context = RequestContext(request=MessageSendParams(message=_message([_pdf_part()])))
     queue = EventQueue()
 
-    await ProcessOrderAgentExecutor().execute(context, queue)
+    await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
     events = await _drain(queue)
     status_events = [e for e in events if hasattr(e, "status")]
@@ -110,20 +130,12 @@ async def test_ingest_failure_fails_task(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_extraction_failure_fails_task(monkeypatch) -> None:
-    async def fake_convert(pdf_bytes: bytes, filename: str) -> str:
-        return "# Purchase Order"
-
-    def fake_extract(markdown: str) -> ExtractedOrder:
-        raise ExtractionError("model refused")
-
-    monkeypatch.setattr(executor_module, "convert_pdf_to_markdown", fake_convert)
-    monkeypatch.setattr(executor_module, "extract_order", fake_extract)
-
+async def test_fulfillment_failure_fails_task() -> None:
+    worker = _FakeWorker(error=FulfillmentError("OpenAI API call failed"))
     context = RequestContext(request=MessageSendParams(message=_message([_pdf_part()])))
     queue = EventQueue()
 
-    await ProcessOrderAgentExecutor().execute(context, queue)
+    await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
     events = await _drain(queue)
     status_events = [e for e in events if hasattr(e, "status")]

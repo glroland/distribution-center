@@ -44,4 +44,16 @@ def summarize(result: ProcessOrderResult) -> str:
             f" WARNING: stated total (${result.stated_total:,.2f}) does not match "
             f"the computed line-item subtotal (${result.computed_subtotal:,.2f})."
         )
+
+    fulfillment = result.fulfillment
+    if fulfillment is not None:
+        if fulfillment.shipment is not None:
+            summary += (
+                f" Shipped via {fulfillment.shipment.carrier}, tracking "
+                f"{fulfillment.shipment.tracking_number}, ETA {fulfillment.shipment.estimated_delivery}."
+            )
+        if fulfillment.escalations:
+            skus = ", ".join(e.sku or "unknown SKU" for e in fulfillment.escalations)
+            summary += f" ESCALATED to supervisor for: {skus}."
+
     return summary

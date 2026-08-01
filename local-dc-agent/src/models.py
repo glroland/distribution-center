@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -27,6 +29,43 @@ class ExtractedOrder(BaseModel):
     stated_total: float | None = None
 
 
+class Shipment(BaseModel):
+    """A shipment created by local-shipping-api for a fulfilled order."""
+
+    carrier: str
+    tracking_number: str
+    estimated_delivery: str
+
+
+class FulfillmentItemResult(BaseModel):
+    """Outcome of trying to fulfil one PO line item from the DC's inventory."""
+
+    sku: str | None = None
+    description: str
+    requested_qty: float
+    fulfilled_qty: float
+    status: Literal["fulfilled", "partial", "out_of_stock", "escalated"]
+    note: str | None = None
+
+
+class Escalation(BaseModel):
+    """A supervisor help request raised while fulfilling an order."""
+
+    sku: str | None = None
+    question: str
+    help_request_id: int | None = None
+
+
+class FulfillmentResult(BaseModel):
+    """Outcome of the fulfillment agent's attempt to pick and ship an order."""
+
+    items: list[FulfillmentItemResult]
+    shipment: Shipment | None = None
+    escalations: list[Escalation] = []
+    order_status: Literal["shipped", "partially_shipped", "escalated", "failed"]
+    summary: str
+
+
 class ProcessOrderResult(BaseModel):
     """The distribution center's processed record of an inbound purchase order."""
 
@@ -41,3 +80,4 @@ class ProcessOrderResult(BaseModel):
     computed_subtotal: float
     stated_total: float | None = None
     totals_mismatch: bool
+    fulfillment: FulfillmentResult | None = None
