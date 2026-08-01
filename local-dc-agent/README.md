@@ -33,7 +33,7 @@ this is not meant to be the last one.
 ## Setup
 
 ```bash
-cd dc-agent
+cd local-dc-agent
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -57,7 +57,7 @@ cd po-ingest-api && python3 -m src
 
 # in another
 export OPENAI_API_KEY=...
-cd dc-agent && python3 -m src
+cd local-dc-agent && python3 -m src
 ```
 
 Starts the agent on `http://localhost:9100`. The agent card is served at
