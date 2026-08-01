@@ -4,7 +4,7 @@ from typing import Any
 from openai import OpenAI
 from pydantic import ValidationError
 
-from . import settings
+from .settings import settings
 from .models import ExtractedOrder
 
 _TOOL_NAME = "record_purchase_order"

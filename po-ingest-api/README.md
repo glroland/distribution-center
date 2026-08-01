@@ -27,6 +27,16 @@ python -m src
 Starts the API on `http://0.0.0.0:8000`. Interactive docs are available at
 `http://localhost:8000/docs`.
 
+Settings are defined in [`src/settings.py`](src/settings.py) with
+reasonable defaults; copy `.env.example` to `.env` and fill it in to
+override them, or set environment variables directly (env vars take
+precedence over `.env`).
+
+| Env var | Default | Description |
+|---|---|---|
+| `HOST` | `0.0.0.0` | Bind host |
+| `PORT` | `8000` | Bind port |
+
 > Docling downloads its layout/OCR models the first time it runs a
 > conversion. The first request (or first test run) will be slow and needs
 > network access; subsequent runs use the cached models.

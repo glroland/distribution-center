@@ -1,6 +1,6 @@
 import uvicorn
 
-from . import settings
+from .settings import settings
 
 
 def main() -> None:

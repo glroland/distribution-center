@@ -1,8 +1,22 @@
-import os
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-PO_INGEST_API_URL = os.environ.get("PO_INGEST_API_URL", "http://localhost:8000")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5")
-HOST = os.environ.get("HOST", "0.0.0.0")
-PORT = int(os.environ.get("PORT", "9100"))
-AGENT_URL = os.environ.get("AGENT_URL", f"http://localhost:{PORT}/")
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    PO_INGEST_API_URL: str = "http://localhost:8000"
+    OPENAI_API_KEY: str | None = None
+    OPENAI_MODEL: str = "gpt-5"
+    HOST: str = "0.0.0.0"
+    PORT: int = 9100
+    AGENT_URL: str | None = None
+
+    @model_validator(mode="after")
+    def _default_agent_url(self) -> "Settings":
+        if self.AGENT_URL is None:
+            self.AGENT_URL = f"http://localhost:{self.PORT}/"
+        return self
+
+
+settings = Settings()

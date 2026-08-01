@@ -1,6 +1,6 @@
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill
 
-from . import settings
+from .settings import settings
 
 PROCESS_PURCHASE_ORDER_SKILL = AgentSkill(
     id="process_purchase_order",

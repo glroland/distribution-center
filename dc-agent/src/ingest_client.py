@@ -1,6 +1,6 @@
 import httpx
 
-from . import settings
+from .settings import settings
 
 
 class IngestError(Exception):

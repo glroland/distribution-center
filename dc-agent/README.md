@@ -42,9 +42,12 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-Set `OPENAI_API_KEY` in the environment before running the agent for
-real (extraction will fail without it; this is not needed to run the
-test suite, which mocks the OpenAI and po-ingest-api calls).
+Set `OPENAI_API_KEY` before running the agent for real (extraction will
+fail without it; this is not needed to run the test suite, which mocks
+the OpenAI and po-ingest-api calls). Settings are defined in
+[`src/settings.py`](src/settings.py) with reasonable defaults; copy
+`.env.example` to `.env` and fill it in to override them, or set
+environment variables directly (env vars take precedence over `.env`).
 
 ## Run
 
