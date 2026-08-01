@@ -20,7 +20,7 @@ def build_mcp_server(store: SupervisorStore) -> MCPServer:
     """Build an MCP server letting an AI agent escalate to a human supervisor."""
 
     mcp_server = MCPServer(
-        name="local-supervisor-api",
+        name="supervisor-api",
         instructions=(
             "Tools for an AI agent to ask a human supervisor for help when it gets "
             "stuck. Call request_help with a clear question and any relevant "
