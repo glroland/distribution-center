@@ -1,0 +1,80 @@
+apiVersion: llamastack.io/v1alpha1
+kind: LlamaStackDistribution
+metadata:
+  name: {{ include "adc.fullname" . }}-openai-responses-api
+spec:
+  replicas: 1
+  server:
+    containerSpec:
+      env:
+        - name: VLLM_URL
+          value: 'https://gemma-4-kserve-workload-svc.sandbox.svc.cluster.local:8000/v1'
+        - name: VLLM_TLS_VERIFY
+          value: 'false'
+        - name: VLLM_API_TOKEN
+          value: 'fake'
+        - name: INFERENCE_MODEL
+          value: gemma-4
+        - name: ENABLE_SENTENCE_TRANSFORMERS
+          value: 'true'
+        - name: EMBEDDING_PROVIDER
+          value: sentence-transformers
+        - name: EMBEDDING_MODEL
+          value: granite-embedding-125m-english
+        - name: EMBEDDING_PROVIDER_MODEL_ID
+          value: ibm-granite/granite-embedding-125m-english
+        - name: ENABLE_INLINE_MILVUS
+          value: 'true'
+        - name: MILVUS_ENDPOINT
+          value: 'http://db.home.glroland.com:19530'
+        - name: MILVUS_TOKEN
+          value: "root:Milvus"
+        - name: MILVUS_SECURE
+          value: "false"
+        - name: MILVUS_CONSISTENCY_LEVEL
+          value: "Bounded"
+        - name: POSTGRES_HOST
+          value: lls-postgresql
+        - name: POSTGRES_PORT
+          value: '5432'
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              key: database-name
+              name: lls-postgresql
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              key: database-user
+              name: lls-postgresql
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: database-password
+              name: lls-postgresql
+      name: llama-stack
+      port: 8321
+    distribution:
+      name: 'rh-dev'
+    storage:
+      size: 50Gi
+    {{ if eq .Values.global.useServiceAccount true }}
+    server:
+      serviceAccountName: {{ include "adc.fullname" . }}
+    {{ end }}
+---
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: {{ include "adc.fullname" . }}-openai-responses-api
+spec:
+  to:
+    name: {{ include "adc.fullname" . }}-openai-responses-api-service
+    weight: 100
+    kind: Service
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
