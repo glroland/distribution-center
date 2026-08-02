@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A demo of an AI-driven distribution center: an A2A agent ingests a purchase
 order PDF, extracts it with an LLM, checks/fulfills inventory via a virtual
 picking robot, ships whatever was retrieved, and escalates to a human
-supervisor when something's short or unknown. Seven independent Python
+supervisor when something's short or unknown. Eight independent Python
 services (each its own venv/requirements/Containerfile) plus a PDF generator
 for demo data, wired together over HTTP/MCP and run either individually or
 all at once via the root `Makefile`.
@@ -22,6 +22,7 @@ all at once via the root `Makefile`.
 | `local-inventory-robot-api` | 8002 | Simulated picking robot on a 2D shelf grid |
 | `supervisor-api` | 8003 | Human-in-the-loop escalation queue |
 | `local-shipping-api` | 8004 | Mock carrier handoff (tracking numbers, no real carrier) |
+| `label-generator-api` | 8005 | Synthesizes low-quality camera-style photos of SKU stickers |
 | `dashboard-ui` | 8090 | Backend-for-frontend + static UI that drives/watches a demo run |
 | `test-po-generator` | - | CLI, not a server; generates sample PO PDFs |
 
@@ -95,6 +96,12 @@ rather than hosting its own tools. See "The dc-agent pipeline" below.
 `dashboard-ui` is also different: it owns no business state, just
 orchestrates calls to the other services and serves a static UI
 (`src/static/`).
+
+`label-generator-api` is also different: it's a standalone image-generation
+utility (no MCP, no LLM, no MLflow tracing) — `src/stickers.py` renders a
+synthetic camera photo of a white SKU sticker with PIL/numpy, and
+`src/bulk.py` batches that into a zip on request. Nothing else in the repo
+calls it yet.
 
 ### The dc-agent pipeline (`local-dc-agent`)
 
