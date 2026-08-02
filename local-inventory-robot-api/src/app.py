@@ -16,7 +16,6 @@ from .models import (
 )
 from .robot import (
     CapacityExceededError,
-    CollisionError,
     InsufficientQuantityError,
     InvalidRestockLocationError,
     InventoryRobot,
@@ -83,7 +82,7 @@ def get_status() -> RobotStatusResponse:
 async def move(body: MoveRequest) -> RobotStatusResponse:
     try:
         status = await robot.move_to((body.x, body.y))
-    except (OutOfBoundsError, CollisionError) as exc:
+    except OutOfBoundsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     return _to_status_response(status)
 

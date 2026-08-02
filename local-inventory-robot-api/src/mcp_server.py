@@ -30,27 +30,27 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
             f"robot's dock is at ({dock_x}, {dock_y}); it can only carry "
             f"{robot.get_status().capacity} total units at once and can only "
             "deliver what it's carrying once it's back at the dock. Typical "
-            "workflow: call get_warehouse_map once at the start of a multi-item "
-            "pick run to see every occupied shelf cell at once, so you can plan an "
-            "efficient visiting order and route around known-occupied cells up "
-            "front instead of discovering them one collision at a time; then for "
-            "each item, find_item to confirm which shelf locations stock its SKU, "
-            "move_robot there, fetch_item to pick it off the shelf, move_robot "
-            "back to the dock, then deliver_items. Use get_robot_status any time "
-            "to check current location and what's currently loaded, and "
-            "get_shelf_inventory to see everything stocked at a single location. Use "
-            "restock_shelf when new stock physically arrives (e.g. from an inter-DC "
-            "transfer) and needs to be placed on a shelf before it can be found and "
-            "fetched like any other stock; omit x/y to let it pick a sensible cell "
-            "automatically. "
-            "move_robot physically drives the robot there one grid cell at a time "
-            "(it will not teleport), so it's fine to call it with any destination on "
-            "the grid - the robot itself is only rejected if the straight path there "
-            "would cross a cell that currently holds product; if that happens, retry "
-            "with a different route, e.g. move_robot to an intermediate waypoint "
-            "first and continue from there. Arriving exactly at a shelf's own "
-            "location (to fetch_item from it) is always allowed. Call reset_robot to "
-            "restore the demo to its starting state."
+            "workflow: for a multi-item pick run, call plan_and_fetch_items once "
+            "with every SKU/qty you want fetched - it works out an efficient "
+            "visiting order, moves the robot, picks each item, makes extra dock "
+            "round-trips automatically if capacity would otherwise be exceeded, "
+            "and delivers everything at the end. Its response reports "
+            "fetched_qty per SKU, which may be less than requested_qty if a SKU "
+            "isn't stocked anywhere or doesn't have enough on hand - that's not "
+            "an error, just a shortfall for you to handle (e.g. via a supervisor "
+            "transfer). Use get_robot_status any time to check current location "
+            "and what's currently loaded, find_item or get_warehouse_map to look "
+            "up stock before deciding what to request, and get_shelf_inventory "
+            "to see everything stocked at a single location. Use restock_shelf "
+            "when new stock physically arrives (e.g. from an inter-DC transfer) "
+            "and needs to be placed on a shelf before it can be found and "
+            "fetched - after restocking, call plan_and_fetch_items again for "
+            "that SKU to pick it up like any other stock; omit x/y on "
+            "restock_shelf to let it pick a sensible cell automatically. The "
+            "lower-level move_robot/fetch_item/deliver_items tools are also "
+            "available for manual control if you need it, but plan_and_fetch_items "
+            "is the normal way to fulfil a pick run. Call reset_robot to restore "
+            "the demo to its starting state."
         ),
     )
 
@@ -78,9 +78,8 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         carry capacity, the robot's current position and what it's carrying, and
         every occupied shelf cell with its full contents. Unlike
         get_shelf_inventory (one cell at a time), this returns the whole grid at
-        once, so it's the right first call before planning a route to pick
-        multiple line items - use it to work out a visiting order and to spot
-        cells you'll need to route around, without probing cell by cell."""
+        once - useful for inspecting stock before deciding what to request from
+        plan_and_fetch_items, without probing cell by cell."""
         return robot.snapshot()
 
     @mcp_server.tool()
@@ -99,11 +98,9 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
     @mcp_server.tool()
     @tool_trace
     async def move_robot(x: int, y: int) -> dict:
-        """Move the robot to grid location (x, y), one grid cell at a time. Fails if
-        the location is outside the grid, or if the path there would cross a cell
-        that currently holds product - pick a different route (e.g. an intermediate
-        waypoint) and try again. Arriving exactly at a shelf's location to pick from
-        it is always fine."""
+        """Move the robot directly to grid location (x, y). Fails only if the
+        location is outside the grid. For a normal multi-item pick run, prefer
+        plan_and_fetch_items instead of driving the robot manually."""
         return _status_dict(await robot.move_to((x, y)))
 
     @mcp_server.tool()
@@ -113,6 +110,28 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         load them onto the robot. Fails if the SKU isn't stocked there, there isn't
         enough on hand, or it would exceed the robot's carry capacity."""
         return _status_dict(robot.pick(sku, qty))
+
+    @mcp_server.tool()
+    @tool_trace
+    async def plan_and_fetch_items(items: list[dict]) -> dict:
+        """Fetch a whole set of items in one call - the normal way to fulfil a
+        pick run. Pass a list of {"sku": str, "qty": int} entries; the robot
+        works out an efficient visiting order, moves and picks each one,
+        automatically makes extra dock round-trips if carry capacity would
+        otherwise be exceeded, and delivers everything once done. Returns
+        {"items": [{"sku", "requested_qty", "fetched_qty"}], "trace": [...],
+        "final_status": {...}}. A SKU coming back with fetched_qty below
+        requested_qty is not an error - it means that SKU isn't stocked
+        anywhere, or not in sufficient quantity; decide what to do about the
+        shortfall yourself (e.g. request a supervisor transfer)."""
+        result = await robot.run_pick_plan([(item["sku"], item["qty"]) for item in items])
+        return {
+            "items": result["items"],
+            "trace": [
+                {**step, "status": _status_dict(step["status"])} for step in result["trace"]
+            ],
+            "final_status": _status_dict(result["final_status"]),
+        }
 
     @mcp_server.tool()
     @tool_trace

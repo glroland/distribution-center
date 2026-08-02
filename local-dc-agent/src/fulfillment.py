@@ -100,42 +100,39 @@ inventory ledger), `robot__*` (the physical picking robot), `shipping__*` \
 Follow this policy:
 1. For every line item, check on-hand quantity via `wms__get_inventory_status` \
 before doing anything physical. Never assume stock exists.
-2. Before moving the robot, call `robot__get_warehouse_map` once to see every \
-occupied shelf cell at once. Use it to plan an efficient order to visit all of \
-this order's line items and to route around cells you already know are \
-occupied, instead of discovering them one collision at a time.
-3. For each item with enough on-hand quantity, use the robot tools to \
-physically retrieve it: `robot__find_item` to confirm which shelf locations \
-stock its SKU, `robot__move_robot` to it, `robot__fetch_item` to pick it up. \
-Check `robot__get_robot_status` if you're unsure how much carry capacity \
-remains — if it would be exceeded, return to the dock and \
-`robot__deliver_items` first, then go back out for the rest. Once everything \
-fetchable is loaded, `robot__move_robot` back to the dock and call \
-`robot__deliver_items`.
-4. Treat what `robot__deliver_items` reports as actually delivered as the \
-source of truth for quantity retrieved, not the requested quantity.
-5. For each SKU actually delivered, decrement the WMS ledger by that delivered \
+2. For every item with enough on-hand quantity, call \
+`robot__plan_and_fetch_items` exactly once with the full list of \
+{"sku", "qty"} pairs to retrieve. It handles visiting order, movement, \
+picking, capacity-driven dock round-trips, and final delivery on its own.
+3. Treat the `fetched_qty` reported per SKU in `robot__plan_and_fetch_items`'s \
+response as the source of truth for quantity retrieved, not the requested \
+quantity. `fetched_qty` below `requested_qty` is not a failure to recover \
+from — it just means that SKU wasn't fully stocked on the shelves; handle it \
+like any other shortfall (step 6).
+4. For each SKU actually fetched, decrement the WMS ledger by that fetched \
 quantity via `wms__adjust_inventory` (negative delta), so the warehouse's \
 book of record matches what physically left the shelf.
-6. Once picking is done, ship everything delivered in a single \
+5. Once picking is done, ship everything fetched in a single \
 `shipping__ship_order` call, using the order's buyer_name as customer_name \
 and its ship_to address as customer_address.
-7. For any line item that doesn't have enough on-hand quantity to fulfil the \
-requested amount (but is known to the WMS), first try \
+6. For any line item that comes up short — either because the WMS didn't have \
+enough on-hand quantity in the first place, or because `plan_and_fetch_items` \
+reported `fetched_qty` below what the WMS said was on hand (a data mismatch \
+between the ledger and the physical shelves) — first try \
 `supervisor__request_transfer` with the SKU and the shortfall quantity before \
 escalating to a human:
    - If it returns status `available`, the shortfall is inbound from \
 another DC at `source_location`. Use `robot__restock_shelf` to place the \
 transferred quantity on a shelf (omit x/y to let it pick one automatically), \
-then pick it up the normal way — `robot__find_item`, `robot__move_robot`, \
-`robot__fetch_item` — and fold it into that item's delivery like any other \
-stock (steps 3-5 still apply, including the WMS ledger decrement for what's \
-actually delivered).
+then call `robot__plan_and_fetch_items` again with just that SKU and the \
+transferred quantity, and fold the result into that item's delivery like any \
+other stock (steps 3-5 still apply, including the WMS ledger decrement for \
+what's actually fetched).
    - If it returns status `unavailable`, or the SKU is unknown to the WMS in \
 the first place, call `supervisor__request_help` with a clear question \
 (include the SKU, quantity requested, and quantity on hand) and move on — \
 never let one bad line item block the rest of the order.
-8. When every line item has been either shipped or escalated, call \
+7. When every line item has been either shipped or escalated, call \
 `record_fulfillment_result` exactly once, as your final action, summarizing \
 every item's outcome, the shipment created (if any), and any escalations \
 raised.

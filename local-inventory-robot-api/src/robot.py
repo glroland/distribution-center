@@ -7,14 +7,11 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 MOVE_STEP_DELAY_SECONDS = 0.25
+MOVE_STEP_STRIDE = 2
 
 
 class OutOfBoundsError(ValueError):
     """Raised when a move target falls outside the warehouse grid."""
-
-
-class CollisionError(ValueError):
-    """Raised when a move's path would pass through a grid cell that currently holds product."""
 
 
 class SkuNotAtLocationError(KeyError):
@@ -148,24 +145,28 @@ class InventoryRobot:
         return bool(self._shelves.get(location))
 
     def _plan_path(self, target: Coordinate) -> list[Coordinate]:
-        """Cell-by-cell path from the current location to `target`, one grid step at
-        a time (all x-axis steps first, then all y-axis steps)."""
+        """Hop-by-hop path from the current location to `target`, moving up to
+        `MOVE_STEP_STRIDE` grid cells per hop (all x-axis hops first, then all
+        y-axis hops), with the final hop on each axis shortened to land exactly
+        on `target`."""
         x, y = self._x, self._y
         target_x, target_y = target
         path: list[Coordinate] = []
         while x != target_x:
-            x += 1 if target_x > x else -1
+            step = min(MOVE_STEP_STRIDE, abs(target_x - x))
+            x += step if target_x > x else -step
             path.append((x, y))
         while y != target_y:
-            y += 1 if target_y > y else -1
+            step = min(MOVE_STEP_STRIDE, abs(target_y - y))
+            y += step if target_y > y else -step
             path.append((x, y))
         return path
 
     async def move_to(self, location: Coordinate) -> RobotStatus:
-        """Walk to `location` one grid cell at a time, pausing between steps so the
-        move is visible rather than instantaneous. Rejects the move outright - without
-        moving the robot at all - if the target is out of bounds or the path would
-        cross a cell that currently holds product; the caller must route around it."""
+        """Walk to `location`, pausing between hops so the move is visible rather
+        than instantaneous. Rejects the move outright - without moving the robot
+        at all - if the target is out of bounds. There's no collision to worry
+        about: any destination on the grid is reachable directly."""
         x, y = location
         if not (0 <= x < self._grid_width) or not (0 <= y < self._grid_height):
             logger.warning(
@@ -174,18 +175,7 @@ class InventoryRobot:
             raise OutOfBoundsError(
                 f"({x}, {y}) is outside the {self._grid_width}x{self._grid_height} grid"
             )
-        path = self._plan_path(location)
-        blocked = [cell for cell in path[:-1] if self._is_occupied(cell)]
-        if blocked:
-            blocker = blocked[0]
-            logger.warning(
-                "Move to (%d, %d) rejected: path is blocked by product at %s", x, y, blocker
-            )
-            raise CollisionError(
-                f"cannot move to ({x}, {y}): the path from ({self._x}, {self._y}) passes "
-                f"through {blocker}, which currently holds product; move around it instead"
-            )
-        for step_x, step_y in path:
+        for step_x, step_y in self._plan_path(location):
             await asyncio.sleep(self._move_step_delay)
             self._x, self._y = step_x, step_y
             logger.info("Moved to (%d, %d)", step_x, step_y)
@@ -267,3 +257,73 @@ class InventoryRobot:
         self._carrying = {}
         logger.info("Delivered %s at the dock", delivered)
         return delivered, self.get_status()
+
+    async def run_pick_plan(self, items: list[tuple[str, int]]) -> dict:
+        """Fetch every requested (sku, qty) pair in one go: resolve each SKU to
+        its shelf locations, visit them in an efficient order, pick as much as
+        is on hand at each (up to what's still needed and what carry capacity
+        allows, running back to the dock to deliver whenever it would otherwise
+        overflow), and deliver whatever's left once the whole plan is done.
+        Never raises for a shortfall - if a SKU comes up short or isn't stocked
+        anywhere, the returned per-item `fetched_qty` is simply less than
+        `requested_qty`, leaving what to do about it up to the caller."""
+        requested: dict[str, int] = {}
+        for sku, qty in items:
+            requested[sku] = requested.get(sku, 0) + qty
+        remaining = dict(requested)
+        fetched = {sku: 0 for sku in requested}
+
+        pool: list[tuple[Coordinate, str]] = [
+            (loc, sku) for sku in requested for loc, _ in self.find_item(sku)
+        ]
+        trace: list[dict] = []
+
+        async def _move(target: Coordinate) -> None:
+            if (self._x, self._y) == target:
+                return
+            status = await self.move_to(target)
+            trace.append({"type": "move", "x": target[0], "y": target[1], "status": status})
+
+        async def _return_and_deliver() -> None:
+            await _move(self._dock)
+            if self._carrying:
+                delivered, status = self.deliver()
+                trace.append({"type": "deliver", "delivered": delivered, "status": status})
+
+        cur = (self._x, self._y)
+        while pool:
+            pool.sort(key=lambda s: abs(s[0][0] - cur[0]) + abs(s[0][1] - cur[1]))
+            location, sku = pool.pop(0)
+            need = remaining.get(sku, 0)
+            available = self.get_shelf_stock(location).get(sku, 0)
+            if need <= 0 or available <= 0:
+                continue
+            room = self._capacity - self.get_status().carrying_total
+            if room <= 0:
+                await _return_and_deliver()
+                cur = self._dock
+                room = self._capacity
+            take = min(need, available, room)
+            if take <= 0:
+                continue
+            if take < min(need, available):
+                pool.append((location, sku))
+            await _move(location)
+            status = self.pick(sku, take)
+            trace.append(
+                {"type": "pick", "x": location[0], "y": location[1], "sku": sku, "qty": take, "status": status}
+            )
+            remaining[sku] -= take
+            fetched[sku] += take
+            cur = location
+
+        await _return_and_deliver()
+
+        return {
+            "items": [
+                {"sku": sku, "requested_qty": qty, "fetched_qty": fetched[sku]}
+                for sku, qty in requested.items()
+            ],
+            "trace": trace,
+            "final_status": self.get_status(),
+        }

@@ -15,17 +15,9 @@ def _reset_robot():
 
 
 def _goto(x: int, y: int) -> None:
-    """Walk the robot to (x, y) one grid cell at a time via POST /move, so the
-    route never crosses (only ever lands on) a cell holding product."""
-    location = client.get("/location").json()
-    cx, cy = location["x"], location["y"]
-    while (cx, cy) != (x, y):
-        if cx != x:
-            cx += 1 if x > cx else -1
-        else:
-            cy += 1 if y > cy else -1
-        resp = client.post("/move", json={"x": cx, "y": cy})
-        assert resp.status_code == 200
+    """Test-only helper: move the robot straight to (x, y) via POST /move."""
+    resp = client.post("/move", json={"x": x, "y": y})
+    assert resp.status_code == 200
 
 
 def test_health() -> None:
@@ -61,14 +53,6 @@ def test_move() -> None:
 def test_move_out_of_bounds_returns_400() -> None:
     resp = client.post("/move", json={"x": 99, "y": 0})
     assert resp.status_code == 400
-
-
-def test_move_blocked_by_product_returns_400() -> None:
-    # the straight path from the dock to (1, 5) crosses (1, 1), which stocks
-    # SKU-1001 - the move should be rejected rather than driving through it
-    resp = client.post("/move", json={"x": 1, "y": 5})
-    assert resp.status_code == 400
-    assert client.get("/location").json() == {"x": 0, "y": 0}
 
 
 def test_get_shelf_at_location() -> None:

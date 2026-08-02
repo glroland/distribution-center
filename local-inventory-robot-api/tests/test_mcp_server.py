@@ -22,17 +22,8 @@ def _call(tool: str, args: dict) -> dict:
 
 
 def _goto(x: int, y: int) -> dict:
-    """Walk the robot to (x, y) one grid cell at a time via move_robot, so the
-    route never crosses (only ever lands on) a cell holding product."""
-    status = _call("get_robot_status", {})
-    cx, cy = status["x"], status["y"]
-    while (cx, cy) != (x, y):
-        if cx != x:
-            cx += 1 if x > cx else -1
-        else:
-            cy += 1 if y > cy else -1
-        status = _call("move_robot", {"x": cx, "y": cy})
-    return status
+    """Test-only helper: move the robot straight to (x, y) via move_robot."""
+    return _call("move_robot", {"x": x, "y": y})
 
 
 def test_get_robot_status_tool() -> None:
@@ -93,15 +84,6 @@ def test_move_robot_out_of_bounds_raises() -> None:
         _call("move_robot", {"x": 99, "y": 0})
 
 
-def test_move_robot_blocked_by_product_raises() -> None:
-    # the straight path from the dock to (1, 5) crosses (1, 1), which stocks
-    # SKU-1001 - the move should be rejected rather than driving through it
-    with pytest.raises(ToolError):
-        _call("move_robot", {"x": 1, "y": 5})
-    status = _call("get_robot_status", {})
-    assert (status["x"], status["y"]) == (0, 0)
-
-
 def test_fetch_item_tool() -> None:
     _goto(1, 1)
     body = _call("fetch_item", {"sku": "SKU-1001", "qty": 10})
@@ -155,6 +137,27 @@ def test_restock_shelf_tool_at_dock_raises() -> None:
 def test_restock_shelf_tool_nonpositive_qty_raises() -> None:
     with pytest.raises(ToolError):
         _call("restock_shelf", {"sku": "SKU-9999", "qty": 0, "x": 4, "y": 4})
+
+
+def test_plan_and_fetch_items_tool() -> None:
+    body = _call(
+        "plan_and_fetch_items",
+        {"items": [{"sku": "SKU-1001", "qty": 10}, {"sku": "SKU-1002", "qty": 5}]},
+    )
+    items = {item["sku"]: item for item in body["items"]}
+    assert items["SKU-1001"] == {"sku": "SKU-1001", "requested_qty": 10, "fetched_qty": 10}
+    assert items["SKU-1002"] == {"sku": "SKU-1002", "requested_qty": 5, "fetched_qty": 5}
+    assert body["final_status"]["x"] == 0
+    assert body["final_status"]["y"] == 0
+    assert body["final_status"]["carrying"] == {}
+    assert any(step["type"] == "deliver" for step in body["trace"])
+    for step in body["trace"]:
+        assert set(step["status"].keys()) == {"x", "y", "carrying", "capacity", "carrying_total"}
+
+
+def test_plan_and_fetch_items_tool_reports_shortfall() -> None:
+    body = _call("plan_and_fetch_items", {"items": [{"sku": "does-not-exist", "qty": 3}]})
+    assert body["items"] == [{"sku": "does-not-exist", "requested_qty": 3, "fetched_qty": 0}]
 
 
 def test_reset_robot_tool() -> None:

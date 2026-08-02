@@ -121,10 +121,14 @@ A2A message (PDF)
 Key detail: the fulfillment loop connects to all four downstream MCP servers
 once (`src/mcp_tools.py`) and reuses those connections for the worker's
 lifetime, with tool names prefixed by service (`wms__adjust_inventory`,
-`robot__fetch_item`, `shipping__ship_order`, `supervisor__request_help`) so
-one OpenAI tool-calling loop can drive all four. What `robot__deliver_items`
-reports as *actually delivered* — not the originally requested quantity — is
-what gets shipped and what decrements the WMS ledger. The loop finishes by
+`robot__plan_and_fetch_items`, `shipping__ship_order`,
+`supervisor__request_help`) so one OpenAI tool-calling loop can drive all
+four. The robot side is a single coarse-grained call: `plan_and_fetch_items`
+takes a full `{sku, qty}` list, and the robot works out visiting order,
+movement, capacity-driven dock round-trips, and delivery on its own rather
+than the LLM driving `move_robot`/`fetch_item` turn by turn. What it reports
+as *fetched_qty* per SKU — not the originally requested quantity — is what
+gets shipped and what decrements the WMS ledger. The loop finishes by
 calling a `record_fulfillment_result` tool with a structured per-item
 summary; if it stalls past `MAX_FULFILLMENT_TURNS`, the agent escalates to
 the supervisor directly and returns a degraded result instead of hanging.

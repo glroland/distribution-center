@@ -10,15 +10,12 @@ The robot can move to any grid cell, pick stock off the shelf at its current
 cell into its own carry basket (up to a capacity limit), and drop everything
 it's carrying once it's back at the dock.
 
-A move walks the robot to its target one grid cell at a time (pausing
-`MOVE_STEP_DELAY_SECONDS` between steps) rather than teleporting, so the
+A move walks the robot to its target in hops of up to 2 grid cells (pausing
+`MOVE_STEP_DELAY_SECONDS` between hops) rather than teleporting, so the
 robot's progress is visible - e.g. in a UI polling `/status` or `/location`
-mid-move - instead of jumping instantly. A move is rejected outright (leaving
-the robot exactly where it was) if the straight path to the target would
-cross a grid cell that currently holds product; arriving exactly on a shelf's
-own location (to pick from it) is always fine, only *crossing* an occupied
-cell en route to somewhere else is disallowed. Route around a blocked cell by
-moving to an intermediate waypoint first.
+mid-move - instead of jumping instantly. There's no collision model: any
+destination on the grid, including a cell that currently holds product, is
+directly reachable in one call.
 
 ## Setup
 
@@ -66,8 +63,7 @@ for `POST /reset`. A SKU may appear on multiple rows to stock it at more than
 one shelf location.
 
 For the default 10x10 grid, the seed data is laid out as alternating shelf
-rows and aisle rows so the robot always has a clear route rather than
-threading between product scattered at random:
+rows and aisle rows:
 
 - Odd `y` (1, 3, 5, 7, 9) are shelf rows, each stocking four (or, for the
   last row, three) SKUs spread across `x` 1-8.
@@ -76,12 +72,8 @@ threading between product scattered at random:
 - `x = 0` is kept empty in every row, forming a vertical aisle from the
   dock down the left edge of the grid; `x = 9` is likewise never stocked.
 
-A shelf row nearest the dock (`y = 1`) is directly reachable in one
-straight move. Reaching a farther shelf row directly may cross a nearer
-row that happens to use the same `x` column and get rejected with
-`CollisionError`/400 - route around it via the `x = 0` or `x = 9` aisle and
-the nearest empty cross-aisle row instead, e.g. move to `(0, y-1)`, then
-`(x, y-1)`, then `(x, y)`.
+Since there's no collision model, any shelf row is directly reachable from
+the dock in one straight move regardless of what's on the rows in between.
 
 ## REST API
 
@@ -90,7 +82,7 @@ the nearest empty cross-aisle row instead, e.g. move to `(0, y-1)`, then
 | `GET` | `/health` | Liveness check |
 | `GET` | `/location` | Robot's current `{x, y}` |
 | `GET` | `/status` | Robot's location, carried items, and capacity |
-| `POST` | `/move` | Body `{"x": int, "y": int}`; walk the robot there one cell at a time (400 if outside the grid, or if the path crosses a cell holding product) |
+| `POST` | `/move` | Body `{"x": int, "y": int}`; walk the robot there (400 if outside the grid) |
 | `GET` | `/shelf?x=&y=` | Stock at `(x, y)`, or the robot's current location if omitted |
 | `GET` | `/find/{sku}` | Every shelf location stocking `sku`, with on-hand quantity |
 | `POST` | `/pick` | Body `{"sku": str, "qty": int}` (`qty > 0`); pick stock off the shelf at the robot's current location (404 unknown SKU there, 400 insufficient stock or over capacity) |
@@ -113,23 +105,25 @@ fetch inventory:
 
 | Tool | Args | Description |
 |---|---|---|
+| `plan_and_fetch_items` | `items: [{"sku": str, "qty": int}]` | Fetch a whole set of items in one call: works out an efficient visiting order, moves, picks each one, makes extra dock round-trips automatically if capacity would otherwise be exceeded, and delivers everything at the end. Returns per-item `fetched_qty` (may be less than `requested_qty` on a shortfall - not an error) and a full step-by-step trace |
 | `get_robot_status` | - | Current location, carried items, and capacity |
-| `get_warehouse_map` | - | Full snapshot: grid dimensions, dock, capacity, the robot's current position/carry, and every occupied shelf cell with its contents - the whole grid at once, for route planning |
+| `get_warehouse_map` | - | Full snapshot: grid dimensions, dock, capacity, the robot's current position/carry, and every occupied shelf cell with its contents |
 | `find_item` | `sku: str` | Shelf locations stocking `sku`, with on-hand quantity at each |
 | `get_shelf_inventory` | `x: int \| None`, `y: int \| None` | Everything stocked at `(x, y)`, or the robot's current location if omitted |
-| `move_robot` | `x: int`, `y: int` | Walk the robot to `(x, y)` one cell at a time; fails if the path there crosses a cell holding product - route around it via a waypoint |
+| `move_robot` | `x: int`, `y: int` | Walk the robot directly to `(x, y)`; fails only if it's outside the grid. Manual/fallback control - prefer `plan_and_fetch_items` for a normal pick run |
 | `fetch_item` | `sku: str`, `qty: int` | Pick `qty` of `sku` off the shelf at the robot's current location |
 | `restock_shelf` | `sku: str`, `qty: int`, `x: int \| None`, `y: int \| None` | Place newly arrived stock (e.g. from a supervisor-approved inter-DC transfer) on a shelf so it can then be found and fetched like any other stock; `x`/`y` omitted auto-picks a cell already stocking `sku`, else the first empty non-dock cell |
 | `deliver_items` | - | Drop everything carried, at the dock only |
 | `reset_robot` | - | Reload shelf stock and return the robot to the dock, empty-handed |
 
-A typical agent workflow: `get_warehouse_map` once to see every occupied
-shelf cell and plan a route, then per item `find_item` to confirm its SKU's
-shelf location, `move_robot` there, `fetch_item` to pick it up, `move_robot`
-back to the dock, then `deliver_items`. When a shortfall is resolved via an
-inter-DC transfer (`supervisor-api`'s `request_transfer` tool),
-`restock_shelf` places the arriving stock before it's picked and delivered
-the normal way.
+A typical agent workflow: call `plan_and_fetch_items` once with every SKU/qty
+needed for a pick run. When a shortfall is resolved via an inter-DC transfer
+(`supervisor-api`'s `request_transfer` tool), `restock_shelf` places the
+arriving stock, then another `plan_and_fetch_items` call picks it up and
+delivers it the normal way. `get_warehouse_map`, `find_item`, and
+`get_robot_status` remain useful for inspecting state before deciding what to
+request; `move_robot`/`fetch_item`/`deliver_items` remain available for
+manual control.
 
 Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
 Python SDK's `mcp.client.streamable_http.streamable_http_client`.

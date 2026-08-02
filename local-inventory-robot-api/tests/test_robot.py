@@ -5,7 +5,6 @@ import pytest
 
 from src.robot import (
     CapacityExceededError,
-    CollisionError,
     Coordinate,
     InsufficientQuantityError,
     InvalidRestockLocationError,
@@ -31,20 +30,8 @@ def _robot(capacity: int = 100, move_step_delay: float = 0.0) -> InventoryRobot:
 
 
 async def _goto(robot: InventoryRobot, target: Coordinate):
-    """Walk `robot` to `target` one grid cell at a time. Test-only helper: a
-    single-cell hop's path never has an intermediate cell to collide on, so this
-    reaches any target regardless of what's on shelves along the way - useful for
-    getting set up without the test itself being about collision avoidance."""
-    target_x, target_y = target
-    status = robot.get_status()
-    while (robot.get_location()) != (target_x, target_y):
-        x, y = robot.get_location()
-        if x != target_x:
-            x += 1 if target_x > x else -1
-        else:
-            y += 1 if target_y > y else -1
-        status = await robot.move_to((x, y))
-    return status
+    """Test-only helper: move `robot` straight to `target`."""
+    return await robot.move_to(target)
 
 
 def test_starts_at_dock_empty_handed() -> None:
@@ -90,10 +77,7 @@ def test_move_to_updates_location() -> None:
     assert robot.get_location() == (9, 3)
 
 
-def test_move_lands_directly_on_a_shelf_when_the_path_there_is_clear() -> None:
-    # (7, 1) is stocked and is on the shelf row nearest the dock, so nothing on
-    # the straight path there is stocked - the robot is only blocked from
-    # crossing product, never from arriving on it.
+def test_move_lands_directly_on_a_stocked_shelf() -> None:
     robot = _robot()
     asyncio.run(robot.move_to((7, 1)))
     assert robot.get_shelf_stock() == {"SKU-1004": 40}
@@ -107,16 +91,16 @@ def test_move_out_of_bounds_raises() -> None:
         asyncio.run(robot.move_to((0, -1)))
 
 
-def test_move_blocked_by_product_raises_and_does_not_move() -> None:
+def test_move_passes_through_a_cell_that_holds_product() -> None:
     # The straight path from the dock to (1, 5) crosses (1, 1), which stocks
-    # SKU-1001 - the move should be rejected rather than driving through it.
+    # SKU-1001 - there's no collision model, so the move succeeds anyway.
     robot = _robot()
-    with pytest.raises(CollisionError):
-        asyncio.run(robot.move_to((1, 5)))
-    assert robot.get_location() == (0, 0)
+    asyncio.run(robot.move_to((1, 5)))
+    assert robot.get_location() == (1, 5)
+    assert robot.get_shelf_stock((1, 1)) == {"SKU-1001": 50}
 
 
-def test_move_sleeps_once_per_grid_step(monkeypatch) -> None:
+def test_move_hops_two_cells_at_a_time(monkeypatch) -> None:
     robot = _robot(move_step_delay=0.25)
     sleeps: list[float] = []
 
@@ -125,7 +109,9 @@ def test_move_sleeps_once_per_grid_step(monkeypatch) -> None:
 
     monkeypatch.setattr("src.robot.asyncio.sleep", fake_sleep)
     asyncio.run(robot.move_to((3, 0)))
-    assert sleeps == [0.25, 0.25, 0.25]
+    # distance 3 in x, hops of up to 2: (2,0) then (3,0) - 2 hops, not 3.
+    assert sleeps == [0.25, 0.25]
+    assert robot.get_location() == (3, 0)
 
 
 def test_pick_removes_from_shelf_and_loads_robot() -> None:
@@ -282,3 +268,39 @@ def test_reset_restores_shelves_and_robot_state() -> None:
     assert robot.get_location() == (0, 0)
     assert robot.get_status().carrying == {}
     assert robot.get_shelf_stock((1, 1)) == {"SKU-1001": 50}
+
+
+def test_run_pick_plan_fetches_multiple_items_and_delivers() -> None:
+    robot = _robot()
+    result = asyncio.run(robot.run_pick_plan([("SKU-1001", 10), ("SKU-1002", 5)]))
+    items = {item["sku"]: item for item in result["items"]}
+    assert items["SKU-1001"] == {"sku": "SKU-1001", "requested_qty": 10, "fetched_qty": 10}
+    assert items["SKU-1002"] == {"sku": "SKU-1002", "requested_qty": 5, "fetched_qty": 5}
+    assert (result["final_status"].x, result["final_status"].y) == (0, 0)
+    assert result["final_status"].carrying == {}
+    assert any(step["type"] == "deliver" for step in result["trace"])
+
+
+def test_run_pick_plan_reports_shortfall_without_raising() -> None:
+    # Only 20 units of SKU-1002 exist on any shelf.
+    robot = _robot()
+    result = asyncio.run(robot.run_pick_plan([("SKU-1002", 1000)]))
+    assert result["items"] == [{"sku": "SKU-1002", "requested_qty": 1000, "fetched_qty": 20}]
+
+
+def test_run_pick_plan_unknown_sku_reports_zero_fetched() -> None:
+    robot = _robot()
+    result = asyncio.run(robot.run_pick_plan([("does-not-exist", 5)]))
+    assert result["items"] == [{"sku": "does-not-exist", "requested_qty": 5, "fetched_qty": 0}]
+
+
+def test_run_pick_plan_makes_multiple_dock_trips_when_capacity_exceeded() -> None:
+    robot = _robot(capacity=30)
+    result = asyncio.run(robot.run_pick_plan([("SKU-1001", 50), ("SKU-1002", 20)]))
+    items = {item["sku"]: item for item in result["items"]}
+    assert items["SKU-1001"]["fetched_qty"] == 50
+    assert items["SKU-1002"]["fetched_qty"] == 20
+    deliver_steps = [step for step in result["trace"] if step["type"] == "deliver"]
+    assert len(deliver_steps) >= 2
+    assert result["final_status"].carrying == {}
+    assert (result["final_status"].x, result["final_status"].y) == (0, 0)

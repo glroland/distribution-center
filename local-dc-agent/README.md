@@ -54,13 +54,14 @@ A2A message (PDF)
      SKU before doing anything physical, and decrement it once stock has
      actually been picked.
    - [`local-inventory-robot-api`](../local-inventory-robot-api) — call
-     `get_warehouse_map` once to see every occupied shelf cell and plan a
-     route, then locate each SKU's shelf, drive the robot there, pick it
-     up, and deliver everything to the dock. What `deliver_items` reports
-     as actually delivered — not the requested quantity — is what gets
-     shipped and what decrements the WMS ledger. Stock arriving via an
-     approved inter-DC transfer is placed on a shelf with `restock_shelf`
-     before being picked and delivered the normal way.
+     `plan_and_fetch_items` once with every SKU/qty needed; the robot works
+     out an efficient visiting order, moves, picks, makes extra dock
+     round-trips on its own if capacity would otherwise be exceeded, and
+     delivers everything at the end. What it reports as `fetched_qty` per
+     SKU — not the requested quantity — is what gets shipped and what
+     decrements the WMS ledger. Stock arriving via an approved inter-DC
+     transfer is placed on a shelf with `restock_shelf`, then picked up
+     with another `plan_and_fetch_items` call the normal way.
    - [`local-shipping-api`](../local-shipping-api) — ship whatever was
      delivered in one carrier handoff, returning a tracking number.
    - [`supervisor-api`](../supervisor-api) — for a SKU that's short, first
@@ -138,7 +139,7 @@ Starts the agent on `http://localhost:9100`. The agent card is served at
 | `SHIPPING_API_URL` | `http://localhost:8004` | Base URL of `local-shipping-api` |
 | `OPENAI_API_KEY` | *(none)* | Required to run extraction and fulfillment |
 | `OPENAI_MODEL` | `gpt-5` | Model used for both extraction and fulfillment |
-| `MAX_FULFILLMENT_TURNS` | `1000` | Tool-call turns before the fulfillment loop auto-escalates and gives up |
+| `MAX_FULFILLMENT_TURNS` | `20` | Tool-call turns before the fulfillment loop auto-escalates and gives up |
 | `HOST` | `0.0.0.0` | Bind host |
 | `PORT` | `9100` | Bind port |
 | `AGENT_URL` | `http://localhost:{PORT}/` | URL advertised in the agent card |

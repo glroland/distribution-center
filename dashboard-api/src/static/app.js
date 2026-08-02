@@ -319,6 +319,7 @@ const TOOL_LABELS = {
   robot__get_warehouse_map: ["🗺️", () => "Scanned the full warehouse map"],
   robot__find_item: ["📍", (a) => `Located shelves stocking ${a.sku}`],
   robot__get_shelf_inventory: ["🗺️", (a) => `Inspected shelf (${a.x ?? "cur"}, ${a.y ?? "cur"})`],
+  robot__plan_and_fetch_items: ["🚚", (a) => `Picking ${a.items?.length ?? 0} item(s)`],
   robot__move_robot: ["🚚", (a) => `Robot moving to (${a.x}, ${a.y})`],
   robot__fetch_item: ["📥", (a) => `Picked ${a.qty}× ${a.sku} off the shelf`],
   robot__deliver_items: ["🏗️", () => "Delivered carried items to the dock"],
@@ -365,6 +366,9 @@ function applyToolResult(name, args, result) {
     case "robot__deliver_items":
       if (result.status) updateRobotState(result.status);
       break;
+    case "robot__plan_and_fetch_items":
+      animateRobotTrace(result.trace || []);
+      break;
     case "robot__get_shelf_inventory":
       state.shelfStock[`${result.location_x},${result.location_y}`] = result.stock;
       updateShelfCellDisplay(result.location_x, result.location_y);
@@ -393,6 +397,25 @@ function updateRobotState(status) {
   state.robot = status;
   markVisited(status.x, status.y);
   moveRobotMarker(status.x, status.y);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// robot__plan_and_fetch_items resolves as a single tool call, but its trace
+// covers a whole multi-stop pick run - replay it step by step so the grid
+// still animates instead of the marker jumping straight to its final spot.
+// Runs detached from onToolCall/applyToolResult (not awaited there) so it
+// doesn't block handling of subsequent SSE events.
+let robotTraceToken = 0;
+async function animateRobotTrace(trace) {
+  const token = ++robotTraceToken;
+  for (const step of trace) {
+    if (token !== robotTraceToken) return; // a newer trace/tool call has taken over
+    if (step.status) updateRobotState(step.status);
+    await sleep(650);
+  }
 }
 
 function onFulfillmentResult(data, ts) {
