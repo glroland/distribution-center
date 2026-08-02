@@ -723,7 +723,24 @@ async function onReset() {
   if (!state.currentDc) return;
   if (!confirm(`Reset inventory, robot position, and shipments for ${state.currentDc.display_name}?`)) return;
   await api(`/api/dcs/${state.currentDc.name}/reset`, { method: "POST" });
+
+  if (state.run) state.run.source.close();
+  state.run = null;
+
   await loadDc(state.currentDc.name);
+
+  resetRunUi();
+  setBadge("run-status-badge", "Idle", "badge-idle");
+
+  state.selectedFilename = null;
+  $("#po-select").value = "";
+  $("#po-preview-frame").style.display = "none";
+  $("#po-preview-frame").src = "";
+  $("#po-preview-empty").style.display = "flex";
+  $("#send-btn").disabled = true;
+
+  state.helpRequests = {};
+  renderHelpRequests();
 }
 
 // ---------------------------------------------------------------------------

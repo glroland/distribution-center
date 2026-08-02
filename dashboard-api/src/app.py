@@ -107,6 +107,7 @@ async def reset_dc(name: str) -> dict:
             ("inventory", f"{dc.wms_url}/inventory/reset"),
             ("robot", f"{dc.robot_url}/reset"),
             ("shipments", f"{dc.shipping_url}/shipments/reset"),
+            ("help_requests", f"{settings.SUPERVISOR_API_URL}/help-requests/reset"),
         ):
             try:
                 response = await client.post(url)

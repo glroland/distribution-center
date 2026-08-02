@@ -47,6 +47,12 @@ def list_help_requests(status: str | None = None) -> list[HelpRequestResponse]:
     return [_to_response(r) for r in store.list_help_requests(status)]
 
 
+@app.post("/help-requests/reset")
+def reset_help_requests() -> dict[str, str]:
+    store.reset()
+    return {"status": "ok"}
+
+
 @app.get("/help-requests/{request_id}", response_model=HelpRequestResponse)
 def get_help_request(request_id: int) -> HelpRequestResponse:
     try:
