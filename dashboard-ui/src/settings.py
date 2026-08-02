@@ -1,3 +1,5 @@
+import json
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -42,7 +44,7 @@ settings = Settings()
 # One entry per distribution center, mirroring deploy/helm/values.yaml's
 # `distributionCenters` list. Add another entry here (with its own agent/wms/robot/
 # shipping URLs) to make a second DC selectable in the UI.
-DISTRIBUTION_CENTERS: list[DistributionCenter] = [
+_DEFAULT_DISTRIBUTION_CENTERS = [
     DistributionCenter(
         name="distribution-center-a",
         display_name="Distribution Center A",
@@ -56,5 +58,15 @@ DISTRIBUTION_CENTERS: list[DistributionCenter] = [
         dock_y=0,
     )
 ]
+
+# In Kubernetes the DCs live at in-cluster Service DNS names rather than
+# localhost, so the Helm chart (deploy/helm/charts/dashboardUi) renders this
+# list as JSON instead of hand-editing this file per deployment.
+_distribution_centers_json = os.environ.get("DISTRIBUTION_CENTERS_JSON")
+DISTRIBUTION_CENTERS: list[DistributionCenter] = (
+    [DistributionCenter(**entry) for entry in json.loads(_distribution_centers_json)]
+    if _distribution_centers_json
+    else _DEFAULT_DISTRIBUTION_CENTERS
+)
 
 DC_BY_NAME: dict[str, DistributionCenter] = {dc.name: dc for dc in DISTRIBUTION_CENTERS}

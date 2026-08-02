@@ -98,6 +98,38 @@ supervisorApi:
   route:
     enabled: false
 
+dashboardUi:
+  enabled: true
+  image:
+    repository: dashboard-ui
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  route:
+    enabled: true
+  # Hand-mirrors distributionCenter.centers below (name + ports) so this
+  # dashboard can address each DC's in-cluster services -- see
+  # charts/dashboardUi/values.yaml for why this can't just reference
+  # distributionCenter.centers directly.
+  distributionCenters:
+    - name: distribution-center-a
+      displayName: "Distribution Center A"
+      dcAgentPort: 9100
+      wmsApiPort: 8001
+      robotApiPort: 8002
+      shippingApiPort: 8004
+      grid:
+        width: 10
+        height: 10
+      dock:
+        x: 0
+        "y": 0
+
 # ---------------------------------------------------------------------------
 # Distribution centers (charts/distributionCenter subchart). Each entry in
 # centers is a self-contained "local" grouping: one dc-agent, wms-api,

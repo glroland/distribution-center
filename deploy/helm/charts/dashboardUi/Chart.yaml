@@ -1,0 +1,9 @@
+apiVersion: v2
+name: dashboardUi
+description: >-
+  The demo control room: a backend-for-frontend plus static UI for picking a
+  purchase order and distribution center, sending it, and watching it move
+  through ingest, extraction, fulfillment, and shipping live in the browser.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

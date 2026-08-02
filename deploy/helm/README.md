@@ -5,6 +5,12 @@ subchart per component group, under `charts/`:
 
 - **`charts/poIngestApi`** -- the global PO submission entry point (singleton).
 - **`charts/supervisorApi`** -- the global human-escalation service (singleton).
+- **`charts/dashboardUi`** -- the demo control room UI (singleton). Its
+  `DISTRIBUTION_CENTERS_JSON` env var is rendered from
+  `dashboardUi.distributionCenters` in `values.yaml`, which hand-mirrors
+  `distributionCenter.centers` (name + ports) so it can address each DC's
+  in-cluster Service DNS -- see `charts/dashboardUi/values.yaml` for why
+  this can't just reference `distributionCenter.centers` directly.
 - **`charts/distributionCenter`** -- one or more self-contained "local"
   groupings, each rendering `local-dc-agent`, `local-wms-api`,
   `local-inventory-robot-api`, `local-shipping-api` with 1 replica each. The
@@ -35,7 +41,7 @@ Tag and push each one to a registry the cluster can pull from (e.g.
 OpenShift's internal registry):
 
 ```sh
-for c in po-ingest-api supervisor-api local-dc-agent local-wms-api \
+for c in po-ingest-api supervisor-api dashboard-ui local-dc-agent local-wms-api \
          local-inventory-robot-api local-shipping-api; do
   podman build -t "$REGISTRY/$NAMESPACE/$c:latest" -f "$c/Containerfile" "$c"
   podman push "$REGISTRY/$NAMESPACE/$c:latest"
@@ -67,11 +73,13 @@ helm install adc deploy/helm --set global.openai.existingSecret=my-openai-secret
 
 ## MLflow tracing
 
-Every service (the two global singletons and every `local-*` component in
-each distribution center) gets `MLFLOW_TRACKING_URI`, `MLFLOW_WORKSPACE`,
-`MLFLOW_EXPERIMENT_NAME`, and `MLFLOW_TRACKING_AUTH` from a single shared
-ConfigMap (`templates/mlflow-configmap.yaml`), controlled by
-`global.mlflow.*` in `values.yaml`:
+Every service that makes LLM/MCP calls (`poIngestApi`, `supervisorApi`, and
+every `local-*` component in each distribution center) gets
+`MLFLOW_TRACKING_URI`, `MLFLOW_WORKSPACE`, `MLFLOW_EXPERIMENT_NAME`, and
+`MLFLOW_TRACKING_AUTH` from a single shared ConfigMap
+(`templates/mlflow-configmap.yaml`), controlled by `global.mlflow.*` in
+`values.yaml`. `dashboardUi` is deliberately excluded -- it makes no
+LLM/MCP calls of its own, just REST/SSE passthrough.
 
 ```sh
 helm install adc deploy/helm \
@@ -99,6 +107,11 @@ DNS-safe slug) and `displayName`, and adjust `locationName` /
 own fully-namespaced set of Deployments, Services, and ConfigMaps -- no
 manual wiring, and no new subchart or dependency entry required.
 
+Also copy the matching `dashboardUi.distributionCenters[0]` block, using the
+same `name` and matching ports, so the new DC becomes selectable in the
+dashboard UI -- this list is hand-mirrored rather than shared automatically
+(see `charts/dashboardUi/values.yaml`).
+
 ## Notes for OpenShift
 
 - Containers run with a hardened `securityContext` (non-root, all
@@ -106,10 +119,11 @@ manual wiring, and no new subchart or dependency entry required.
   `runAsUser`/`fsGroup` unset so the project's `restricted-v2` SCC assigns
   them -- no `anyuid` SCC binding required.
 - `route.openshift.io/v1` Routes are created for `po-ingest-api` (PO
-  submission entry point) and each distribution center's `dc-agent` (A2A
-  endpoint) by default; toggle via `global.openshift.routes.enabled` and
-  each component's `route.enabled`. Set `global.openshift.routes.enabled=false`
-  to deploy to plain Kubernetes instead.
+  submission entry point), `dashboard-ui` (the demo UI), and each
+  distribution center's `dc-agent` (A2A endpoint) by default; toggle via
+  `global.openshift.routes.enabled` and each component's `route.enabled`.
+  Set `global.openshift.routes.enabled=false` to deploy to plain Kubernetes
+  instead.
 
 ## Useful commands
 

@@ -20,5 +20,8 @@ dependencies:
   - name: supervisorApi
     version: 0.1.0
     condition: supervisorApi.enabled
+  - name: dashboardUi
+    version: 0.1.0
+    condition: dashboardUi.enabled
   - name: distributionCenter
     version: 0.1.0

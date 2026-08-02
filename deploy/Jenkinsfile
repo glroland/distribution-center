@@ -45,6 +45,17 @@ pipeline
          }
       }
 
+      stage('Create Docker Image for dashboard-ui')
+      {
+         steps
+         {
+            sh 'cd dashboard-ui ; docker build --no-cache -f Containerfile . --tag dashboard-ui:$BUILD_NUMBER'
+            sh 'cd dashboard-ui ; docker save dashboard-ui:$BUILD_NUMBER > dashboard-ui-dockerimage.tar'
+            step(followSymlinks: false, artifacts: 'dashboard-ui/dashboard-ui-dockerimage.tar', $class: 'ArtifactArchiver')
+            sh 'cd dashboard-ui ; docker rmi dashboard-ui:$BUILD_NUMBER'
+         }
+      }
+
       stage('Create Docker Image for local-dc-agent')
       {
          steps
@@ -108,6 +119,12 @@ pipeline
                   sh 'docker rmi supervisor-api:$BUILD_NUMBER'
                   sh 'docker push registry.home.glroland.com/distribution-center/supervisor-api:$BUILD_NUMBER'
                   sh 'docker rmi registry.home.glroland.com/distribution-center/supervisor-api:$BUILD_NUMBER'
+
+                  sh 'docker load -i dashboard-ui/dashboard-ui-dockerimage.tar'
+                  sh 'docker tag dashboard-ui:$BUILD_NUMBER registry.home.glroland.com/distribution-center/dashboard-ui:$BUILD_NUMBER'
+                  sh 'docker rmi dashboard-ui:$BUILD_NUMBER'
+                  sh 'docker push registry.home.glroland.com/distribution-center/dashboard-ui:$BUILD_NUMBER'
+                  sh 'docker rmi registry.home.glroland.com/distribution-center/dashboard-ui:$BUILD_NUMBER'
 
                   sh 'docker load -i local-dc-agent/local-dc-agent-dockerimage.tar'
                   sh 'docker tag local-dc-agent:$BUILD_NUMBER registry.home.glroland.com/distribution-center/local-dc-agent:$BUILD_NUMBER'

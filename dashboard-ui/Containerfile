@@ -1,0 +1,14 @@
+FROM registry.access.redhat.com/rhai/base-image-cpu-rhel9:3.0.2-1782929133
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src ./src
+
+ENV HOST=0.0.0.0
+ENV PORT=8090
+EXPOSE 8090
+
+CMD ["python", "-m", "src"]
