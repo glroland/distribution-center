@@ -2,7 +2,7 @@ import asyncio
 import json
 
 import pytest
-from mcp.server.mcpserver.exceptions import ToolError
+from fastmcp.exceptions import ToolError
 
 from src.app import mcp_server, store
 

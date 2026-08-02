@@ -3,8 +3,7 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass
 
 import mlflow
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from fastmcp import Client
 
 from .settings import settings
 from .tracing import configure_tracing
@@ -23,7 +22,7 @@ class ToolCallError(Exception):
 @dataclass
 class _Server:
     label: str
-    session: ClientSession
+    client: Client
     instructions: str | None
 
 
@@ -46,26 +45,24 @@ class McpToolRouter:
         }
         for label, base_url in server_urls.items():
             logger.info("Connecting to MCP server %s at %s", label, base_url)
-            read_stream, write_stream = await self._stack.enter_async_context(
-                streamable_http_client(f"{base_url}/mcp")
-            )
-            session = await self._stack.enter_async_context(ClientSession(read_stream, write_stream))
-            init_result = await session.initialize()
-            self._servers[label] = _Server(label=label, session=session, instructions=init_result.instructions)
+            client = await self._stack.enter_async_context(Client(f"{base_url}/mcp"))
+            init_result = client.initialize_result
+            instructions = init_result.instructions if init_result else None
+            self._servers[label] = _Server(label=label, client=client, instructions=instructions)
 
-            listed = await session.list_tools()
-            for tool in listed.tools:
+            tools = await client.list_tools()
+            for tool in tools:
                 self._tools.append(
                     {
                         "type": "function",
                         "function": {
                             "name": f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}",
                             "description": tool.description or "",
-                            "parameters": tool.input_schema,
+                            "parameters": tool.inputSchema,
                         },
                     }
                 )
-            logger.info("Connected to %s: %d tool(s) registered", label, len(listed.tools))
+            logger.info("Connected to %s: %d tool(s) registered", label, len(tools))
 
     async def close(self) -> None:
         await self._stack.aclose()
@@ -83,7 +80,7 @@ class McpToolRouter:
         if server is None:
             raise ToolCallError(f"Unknown tool server '{label}' for tool '{name}'")
 
-        result = await server.session.call_tool(tool_name, arguments)
+        result = await server.client.call_tool(tool_name, arguments, raise_on_error=False)
         text = "".join(part.text for part in result.content if hasattr(part, "text"))
         if result.is_error:
             logger.warning("MCP tool %s reported an error: %s", name, text)

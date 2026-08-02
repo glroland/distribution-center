@@ -1,5 +1,3 @@
-from contextlib import AsyncExitStack, asynccontextmanager
-
 from fastapi import FastAPI, HTTPException
 
 from .inventory import InsufficientQuantityError, InventoryStore, SkuNotFoundError
@@ -11,17 +9,9 @@ from .tracing import configure_tracing
 configure_tracing()
 store = InventoryStore(settings.inventory_csv_path(), settings.LOCATION_NAME)
 mcp_server = build_mcp_server(store)
-mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", host=settings.HOST)
+mcp_app = mcp_server.http_app(path="/")
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    async with AsyncExitStack() as stack:
-        await stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
-        yield
-
-
-app = FastAPI(title="Local WMS API", lifespan=lifespan)
+app = FastAPI(title="Local WMS API", lifespan=mcp_app.lifespan)
 app.mount("/mcp", mcp_app)
 
 

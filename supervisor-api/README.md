@@ -76,8 +76,8 @@ names a `source_location` to ship from; the rest of the time the SKU is
 unavailable everywhere else too and the agent should fall back to
 `request_help` for a human to sort out.
 
-Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
-Python SDK's `mcp.client.streamable_http.streamable_http_client`.
+Connect with any MCP client that supports Streamable HTTP, e.g.
+`fastmcp.Client`.
 
 ## Tests
 

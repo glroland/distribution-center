@@ -1,5 +1,3 @@
-from contextlib import AsyncExitStack, asynccontextmanager
-
 from fastapi import FastAPI, HTTPException
 
 from .mcp_server import build_mcp_server
@@ -18,17 +16,9 @@ from .tracing import configure_tracing
 configure_tracing()
 store = SupervisorStore(unavailable_chance=settings.TRANSFER_UNAVAILABLE_CHANCE)
 mcp_server = build_mcp_server(store)
-mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", host=settings.HOST)
+mcp_app = mcp_server.http_app(path="/")
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    async with AsyncExitStack() as stack:
-        await stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
-        yield
-
-
-app = FastAPI(title="Local Supervisor API", lifespan=lifespan)
+app = FastAPI(title="Local Supervisor API", lifespan=mcp_app.lifespan)
 app.mount("/mcp", mcp_app)
 
 

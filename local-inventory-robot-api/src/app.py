@@ -1,5 +1,3 @@
-from contextlib import AsyncExitStack, asynccontextmanager
-
 from fastapi import FastAPI, HTTPException
 
 from .mcp_server import build_mcp_server
@@ -38,17 +36,9 @@ robot = InventoryRobot(
     move_step_delay=settings.MOVE_STEP_DELAY_SECONDS,
 )
 mcp_server = build_mcp_server(robot)
-mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", host=settings.HOST)
+mcp_app = mcp_server.http_app(path="/")
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    async with AsyncExitStack() as stack:
-        await stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
-        yield
-
-
-app = FastAPI(title="Local Inventory Robot API", lifespan=lifespan)
+app = FastAPI(title="Local Inventory Robot API", lifespan=mcp_app.lifespan)
 app.mount("/mcp", mcp_app)
 
 

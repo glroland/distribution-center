@@ -125,8 +125,8 @@ delivers it the normal way. `get_warehouse_map`, `find_item`, and
 request; `move_robot`/`fetch_item`/`deliver_items` remain available for
 manual control.
 
-Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
-Python SDK's `mcp.client.streamable_http.streamable_http_client`.
+Connect with any MCP client that supports Streamable HTTP, e.g.
+`fastmcp.Client`.
 
 ## Tests
 

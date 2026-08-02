@@ -1,4 +1,4 @@
-from mcp.server import MCPServer
+from fastmcp import FastMCP
 
 from .robot import InventoryRobot, RobotStatus
 from .tracing import configure_tracing, tool_trace
@@ -16,13 +16,13 @@ def _status_dict(status: RobotStatus) -> dict:
     }
 
 
-def build_mcp_server(robot: InventoryRobot) -> MCPServer:
+def build_mcp_server(robot: InventoryRobot) -> FastMCP:
     """Build a coarse-grained MCP server for LLM-driven control of a warehouse robot."""
 
     grid_width, grid_height = robot.get_grid_size()
     dock_x, dock_y = robot.get_dock()
 
-    mcp_server = MCPServer(
+    mcp_server = FastMCP(
         name="local-inventory-robot-api",
         instructions=(
             "Tools for driving a single warehouse robot around a "
