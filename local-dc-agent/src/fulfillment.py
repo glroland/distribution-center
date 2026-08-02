@@ -150,7 +150,7 @@ async def fulfill_order(
     if not settings.OPENAI_API_KEY:
         raise FulfillmentError("OPENAI_API_KEY is not configured")
 
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = OpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.OPENAI_BASE_URL or None)
     available_tools = tools.list_openai_tools() + [_FINISH_TOOL_SCHEMA]
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _build_system_prompt(tools)},

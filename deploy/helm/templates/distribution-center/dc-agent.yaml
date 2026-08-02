@@ -73,6 +73,10 @@ spec:
               value: {{ $dc.dcAgent.maxFulfillmentTurns | quote }}
             - name: OPENAI_MODEL
               value: {{ $root.Values.openai.model | quote }}
+            {{- if $root.Values.openai.baseUrl }}
+            - name: OPENAI_BASE_URL
+              value: {{ $root.Values.openai.baseUrl | quote }}
+            {{- end }}
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:

@@ -25,6 +25,10 @@ openai:
   # instead of storing the key in values.
   apiKey: ""
   model: gpt-5
+  # Set to point dc-agent at an OpenAI-compatible endpoint (e.g. a local
+  # or self-hosted model server) instead of the real OpenAI API. Leave
+  # empty to use OpenAI's default endpoint.
+  baseUrl: ""
   existingSecret: ""
   existingSecretKey: OPENAI_API_KEY
 

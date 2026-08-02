@@ -61,7 +61,7 @@ def extract_order(markdown: str) -> ExtractedOrder:
     if not settings.OPENAI_API_KEY:
         raise ExtractionError("OPENAI_API_KEY is not configured")
 
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = OpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.OPENAI_BASE_URL or None)
     try:
         response = client.chat.completions.create(
             model=settings.OPENAI_MODEL,

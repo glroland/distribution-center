@@ -1,5 +1,12 @@
 TARGET_DIR := target
 
+# Every make target shares the repo-root .env (falling back to .env.example)
+# instead of each submodule's own .env/.env.example. Exporting these makes
+# them win over any leftover per-submodule .env when a `run-*` target cd's in.
+ENV_FILE := $(if $(wildcard .env),.env,.env.example)
+include $(ENV_FILE)
+export
+
 # Use uv's pip shim if uv is installed, otherwise fall back to plain pip.
 ifeq ($(shell command -v uv 2>/dev/null),)
 PIP := pip install

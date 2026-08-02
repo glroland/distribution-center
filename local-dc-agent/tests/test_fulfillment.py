@@ -138,7 +138,7 @@ async def test_happy_path_ships_and_returns_tracking_number(monkeypatch) -> None
         ),
     ]
     fake_client = _FakeOpenAIClient(responses)
-    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key: fake_client)
+    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key, base_url=None: fake_client)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
 
     tools = _FakeTools(tool_results={"wms__get_inventory_status": json.dumps({"on_hand_qty": 120})})
@@ -170,7 +170,7 @@ async def test_on_event_fires_for_tool_calls_and_final_result(monkeypatch) -> No
         ),
     ]
     fake_client = _FakeOpenAIClient(responses)
-    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key: fake_client)
+    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key, base_url=None: fake_client)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
 
     tools = _FakeTools(tool_results={"wms__get_inventory_status": json.dumps({"on_hand_qty": 120})})
@@ -220,7 +220,7 @@ async def test_escalation_path_records_supervisor_request(monkeypatch) -> None:
         ),
     ]
     fake_client = _FakeOpenAIClient(responses)
-    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key: fake_client)
+    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key, base_url=None: fake_client)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
 
     tools = _FakeTools(tool_results={"supervisor__request_help": json.dumps({"id": 3, "status": "open"})})
@@ -235,7 +235,7 @@ async def test_escalation_path_records_supervisor_request(monkeypatch) -> None:
 async def test_no_tool_call_after_nudge_raises_fulfillment_error(monkeypatch) -> None:
     responses = [_FakeMessage(content="Thinking..."), _FakeMessage(content="Still thinking...")]
     fake_client = _FakeOpenAIClient(responses)
-    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key: fake_client)
+    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key, base_url=None: fake_client)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
 
     with pytest.raises(FulfillmentError):
@@ -252,7 +252,7 @@ async def test_exceeding_max_turns_falls_back_to_escalation(monkeypatch) -> None
     )
     responses = [_FakeMessage(tool_calls=[stall_call]), _FakeMessage(tool_calls=[stall_call])]
     fake_client = _FakeOpenAIClient(responses)
-    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key: fake_client)
+    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key, base_url=None: fake_client)
 
     tools = _FakeTools(
         tool_results={
