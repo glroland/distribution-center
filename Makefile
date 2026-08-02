@@ -1,4 +1,20 @@
+# start-all/kill-all rely on bash-only syntax (indirect expansion, %%/# trims);
+# the default /bin/sh (e.g. dash on Linux) doesn't support that.
+SHELL := /bin/bash
+
 TARGET_DIR := target
+LOG_DIR := $(TARGET_DIR)/logs
+PID_DIR := $(TARGET_DIR)/pids
+
+# name:subdir:port-env-var for every service start-all/kill-all manage.
+SERVICES := \
+	ingest-api:po-ingest-api:PO_INGEST_API_PORT \
+	local-dc-agent:local-dc-agent:AGENT_PORT \
+	local-wms-api:local-wms-api:WMS_API_PORT \
+	local-inventory-robot-api:local-inventory-robot-api:ROBOT_API_PORT \
+	supervisor-api:supervisor-api:SUPERVISOR_API_PORT \
+	local-shipping-api:local-shipping-api:SHIPPING_API_PORT \
+	dashboard:dashboard-api:DASHBOARD_PORT
 
 # Every make target shares the repo-root .env (falling back to .env.example)
 # instead of each submodule's own .env/.env.example. Exporting these makes
@@ -21,7 +37,7 @@ REQUIREMENTS := $(shell find . \
 	-not -path '*/.venv/*' \
 	-name 'requirements.txt')
 
-.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-dashboard clean
+.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-dashboard start-all kill-all status-all clean
 
 help:
 	@echo "Targets:"
@@ -34,6 +50,9 @@ help:
 	@echo "  run-supervisor-api           Run the local supervisor API (http://localhost:8003)"
 	@echo "  run-local-shipping-api       Run the local shipping API (http://localhost:8004)"
 	@echo "  run-dashboard                Run the demo control room UI (http://localhost:8090)"
+	@echo "  start-all                    Start every service in the background (logs: $(LOG_DIR)/, pids: $(PID_DIR)/)"
+	@echo "  kill-all                     Stop every service started by start-all"
+	@echo "  status-all                   Show which start-all services are up"
 	@echo "  clean                        Remove the $(TARGET_DIR) directory"
 
 install:
@@ -67,6 +86,52 @@ run-local-shipping-api:
 
 run-dashboard:
 	cd dashboard-api && PORT=$(DASHBOARD_PORT) python3 -m src
+
+start-all:
+	@mkdir -p $(LOG_DIR) $(PID_DIR)
+	@echo "Starting all services (logs: $(LOG_DIR)/, pids: $(PID_DIR)/)..."
+	@for entry in $(SERVICES); do \
+		name=$${entry%%:*}; rest=$${entry#*:}; dir=$${rest%%:*}; portvar=$${rest#*:}; \
+		port=$${!portvar}; \
+		pidfile="$(CURDIR)/$(PID_DIR)/$$name.pid"; \
+		logfile="$(CURDIR)/$(LOG_DIR)/$$name.log"; \
+		if [ -f "$$pidfile" ] && kill -0 "$$(cat "$$pidfile")" 2>/dev/null; then \
+			echo "  [skip] $$name already running (pid $$(cat "$$pidfile"))"; \
+			continue; \
+		fi; \
+		(cd $$dir && trap '' HUP && exec env PORT=$$port python3 -m src > "$$logfile" 2>&1) & \
+		echo $$! > "$$pidfile"; \
+		echo "  [ok]   $$name -> http://localhost:$$port (pid $$(cat "$$pidfile"), log $$logfile)"; \
+	done
+	@echo "Done. Tail logs with: tail -f $(LOG_DIR)/*.log"
+
+kill-all:
+	@if [ ! -d $(PID_DIR) ]; then echo "Nothing to kill ($(PID_DIR) not found)."; exit 0; fi
+	@for pidfile in $(PID_DIR)/*.pid; do \
+		[ -e "$$pidfile" ] || continue; \
+		name=$$(basename "$$pidfile" .pid); \
+		pid=$$(cat "$$pidfile"); \
+		if kill -0 "$$pid" 2>/dev/null; then \
+			kill "$$pid" 2>/dev/null && echo "  [killed] $$name (pid $$pid)"; \
+		else \
+			echo "  [stale]  $$name (pid $$pid not running)"; \
+		fi; \
+		rm -f "$$pidfile"; \
+	done
+	@echo "Done."
+
+status-all:
+	@if [ ! -d $(PID_DIR) ]; then echo "No services started."; exit 0; fi
+	@for pidfile in $(PID_DIR)/*.pid; do \
+		[ -e "$$pidfile" ] || continue; \
+		name=$$(basename "$$pidfile" .pid); \
+		pid=$$(cat "$$pidfile"); \
+		if kill -0 "$$pid" 2>/dev/null; then \
+			echo "  [up]   $$name (pid $$pid)"; \
+		else \
+			echo "  [down] $$name (stale pid $$pid)"; \
+		fi; \
+	done
 
 clean:
 	rm -rf $(TARGET_DIR)

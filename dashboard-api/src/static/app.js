@@ -47,6 +47,10 @@ async function init() {
   $("#docling-modal").addEventListener("click", (e) => {
     if (e.target.id === "docling-modal") $("#docling-modal").close();
   });
+  $("#extracted-modal-close").addEventListener("click", () => $("#extracted-modal").close());
+  $("#extracted-modal").addEventListener("click", (e) => {
+    if (e.target.id === "extracted-modal") $("#extracted-modal").close();
+  });
 
   state.dcs = await api("/api/dcs");
   const select = $("#dc-select");
@@ -257,7 +261,14 @@ function handleRunEvent(event) {
 
 function onExtracted(data, ts) {
   state.poNumber = data.po_number;
-  addActivity("🧠", "LLM extracted structured fields from the PO", `PO ${data.po_number} · ${data.line_items.length} line item(s)`, "ok", ts);
+  addActivity(
+    "🧠",
+    "LLM extracted structured fields from the PO",
+    `PO ${data.po_number} · ${data.line_items.length} line item(s) — click to view`,
+    "ok",
+    ts,
+    () => openExtractedPreview(data)
+  );
 
   const header = $("#po-header");
   header.innerHTML = "";
@@ -789,6 +800,17 @@ function openDoclingPreview(filename, markdown) {
     : "No markdown was included with this event";
   $("#docling-modal-body").textContent = markdown || "(preview unavailable)";
   $("#docling-modal").showModal();
+}
+
+// ---------------------------------------------------------------------------
+// LLM data-extraction preview
+// ---------------------------------------------------------------------------
+
+function openExtractedPreview(data) {
+  $("#extracted-modal-title").textContent = `LLM extracted data elements${data.po_number ? ` — PO ${data.po_number}` : ""}`;
+  $("#extracted-modal-meta").textContent = `${data.line_items.length} line item(s) · structured fields the LLM pulled from the Docling markdown`;
+  $("#extracted-modal-body").textContent = JSON.stringify(data, null, 2);
+  $("#extracted-modal").showModal();
 }
 
 function escapeHtml(str) {
