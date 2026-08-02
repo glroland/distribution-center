@@ -170,7 +170,7 @@ distributionCenter:
           height: 10
         dock:
           x: 0
-          y: 0
+          "y": 0
         carryCapacity: 100
         resources:
           requests:
