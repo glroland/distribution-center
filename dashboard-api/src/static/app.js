@@ -43,6 +43,10 @@ async function init() {
   $("#po-select").addEventListener("change", onSelectPo);
   $("#send-btn").addEventListener("click", onSendPo);
   $("#dc-select").addEventListener("change", onSelectDc);
+  $("#docling-modal-close").addEventListener("click", () => $("#docling-modal").close());
+  $("#docling-modal").addEventListener("click", (e) => {
+    if (e.target.id === "docling-modal") $("#docling-modal").close();
+  });
 
   state.dcs = await api("/api/dcs");
   const select = $("#dc-select");
@@ -217,7 +221,14 @@ function handleRunEvent(event) {
     case "ingested":
       completeStep("sent");
       setStep("reading", "active");
-      addActivity("📄", "PDF converted to text (Docling)", `${data.markdown_length} characters extracted`, "", ts);
+      addActivity(
+        "📄",
+        "PDF converted to text (Docling)",
+        `${data.markdown_length} characters extracted — click to preview`,
+        "",
+        ts,
+        () => openDoclingPreview(data.filename, data.markdown)
+      );
       break;
     case "extracted":
       onExtracted(data, ts);
@@ -747,7 +758,7 @@ async function onReset() {
 // Activity feed
 // ---------------------------------------------------------------------------
 
-function addActivity(icon, title, detail, tone, ts) {
+function addActivity(icon, title, detail, tone, ts, onClick) {
   const feed = $("#activity-feed");
   if (feed.querySelector(".activity-empty")) feed.innerHTML = "";
   const tpl = $("#tpl-activity-item");
@@ -758,8 +769,26 @@ function addActivity(icon, title, detail, tone, ts) {
   node.querySelector(".activity-title").textContent = title;
   node.querySelector(".activity-detail").textContent = detail || "";
   node.querySelector(".activity-time").textContent = fmtTime(ts);
+  if (onClick) {
+    item.classList.add("activity-clickable");
+    item.title = "Click to preview";
+    item.addEventListener("click", onClick);
+  }
   feed.appendChild(node);
   feed.scrollTop = feed.scrollHeight;
+}
+
+// ---------------------------------------------------------------------------
+// Docling conversion preview
+// ---------------------------------------------------------------------------
+
+function openDoclingPreview(filename, markdown) {
+  $("#docling-modal-title").textContent = `Docling conversion result${filename ? ` — ${filename}` : ""}`;
+  $("#docling-modal-meta").textContent = markdown
+    ? `${markdown.length.toLocaleString()} characters · this is the text the LLM used for field extraction`
+    : "No markdown was included with this event";
+  $("#docling-modal-body").textContent = markdown || "(preview unavailable)";
+  $("#docling-modal").showModal();
 }
 
 function escapeHtml(str) {

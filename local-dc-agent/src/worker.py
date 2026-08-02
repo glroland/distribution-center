@@ -65,7 +65,10 @@ class OrderWorker:
 
         markdown = await convert_pdf_to_markdown(job.pdf_bytes, job.filename)
         if on_event:
-            await on_event("ingested", {"filename": job.filename, "markdown_length": len(markdown)})
+            await on_event(
+                "ingested",
+                {"filename": job.filename, "markdown_length": len(markdown), "markdown": markdown},
+            )
 
         extracted = await asyncio.to_thread(extract_order, markdown)
         if on_event:

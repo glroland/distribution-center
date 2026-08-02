@@ -107,7 +107,7 @@ def _build_progress_hook(message: Message | None):
 
     async def _emit(event_type: str, data: dict) -> None:
         try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
+            async with httpx.AsyncClient(timeout=5.0) as client:
                 await client.post(webhook_url, json={"type": event_type, "data": data})
         except Exception:
             pass  # a dashboard being slow or offline must never affect order processing

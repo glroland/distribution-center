@@ -223,6 +223,46 @@ h1, h2, h3 { margin: 0; }
 .activity-item.tone-warn { border-color: var(--warn-dim); }
 .activity-item.tone-error { border-color: var(--danger-dim); }
 .activity-item.tone-ok { border-color: var(--ok-dim); }
+.activity-item.activity-clickable { cursor: pointer; }
+.activity-item.activity-clickable:hover { border-color: var(--accent-dim); background: color-mix(in srgb, var(--accent) 6%, var(--bg-elevated)); }
+.activity-item.activity-clickable .activity-title::after { content: "  ›"; color: var(--accent); }
+
+/* --- docling conversion preview modal --- */
+.docling-modal {
+  width: min(820px, 92vw);
+  max-height: 82vh;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  color: var(--text);
+}
+.docling-modal::backdrop { background: rgba(4, 8, 20, 0.7); }
+.docling-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  position: sticky;
+  top: 0;
+  background: var(--bg-panel);
+}
+.docling-modal-head h3 { font-size: 14px; }
+.docling-modal-meta { margin-top: 4px; font-size: 11.5px; color: var(--text-faint); font-family: var(--font-mono); }
+.docling-modal-body {
+  margin: 0;
+  padding: 16px;
+  max-height: calc(82vh - 62px);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
 
 /* --- warehouse map --- */
 .map-wrap { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
