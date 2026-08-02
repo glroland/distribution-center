@@ -22,14 +22,21 @@ class Settings(BaseSettings):
     SUPERVISOR_API_URL: str = "http://localhost:8003"
     PO_INGEST_API_URL: str = "http://localhost:8000"
 
-    # Comma-separated directories (relative paths resolve against this project's
-    # parent directory) to search for demo PO PDFs, e.g. those produced by
-    # `make generate-pos` or already checked into test-po-generator/output.
+    # Sample PO PDFs baked into this service's own image (see data/pos/ and its
+    # COPY in the Containerfile) -- always searched first, in every environment,
+    # so the dashboard has something to pick from even with no PO_DIRS override.
+    PACKAGED_PO_DIR: Path = _PROJECT_ROOT / "data" / "pos"
+
+    # Comma-separated additional directories (relative paths resolve against this
+    # project's parent directory) to search for demo PO PDFs, e.g. those produced by
+    # `make generate-pos` or already checked into test-po-generator/output. These are
+    # local-dev conveniences only -- unlike PACKAGED_PO_DIR they aren't copied into
+    # the container image.
     PO_DIRS: str = "target/pos,test-po-generator/output"
 
     def po_dirs(self) -> list[Path]:
         repo_root = _PROJECT_ROOT.parent
-        dirs = []
+        dirs = [self.PACKAGED_PO_DIR]
         for raw in self.PO_DIRS.split(","):
             raw = raw.strip()
             if not raw:

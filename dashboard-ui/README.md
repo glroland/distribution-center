@@ -37,9 +37,15 @@ grid, shipments, open help requests).
 
 Needs `po-ingest-api`, `local-wms-api`, `local-inventory-robot-api`,
 `supervisor-api`, `local-shipping-api`, and `local-dc-agent` all running
-first (see the root README/Makefile), plus at least one PO PDF on disk -
-either pre-generated ones already in `test-po-generator/output/`, or fresh
-ones via `make generate-pos` (written to `target/pos/`).
+first (see the root README/Makefile). A handful of sample PO PDFs are
+checked into `data/pos/` and packaged into this service's own container
+image (`COPY data ./data` in the Containerfile), so there's always
+something to pick from out of the box - including in Kubernetes, where
+`test-po-generator/output/` and `target/pos/` don't exist. For local dev,
+you can still add more by dropping pre-generated ones into
+`test-po-generator/output/`, or generating fresh ones via `make
+generate-pos` (written to `target/pos/`); both are searched in addition to
+the packaged set.
 
 ```bash
 cd dashboard-ui
@@ -58,7 +64,7 @@ Starts on `http://localhost:8090` - open that in a browser.
 | `PUBLIC_URL` | `http://localhost:8090` | Base URL other services use to reach this one (the dc-agent's progress webhook target) |
 | `SUPERVISOR_API_URL` | `http://localhost:8003` | Base URL of `supervisor-api` |
 | `PO_INGEST_API_URL` | `http://localhost:8000` | Base URL of `po-ingest-api` (currently unused directly, reserved) |
-| `PO_DIRS` | `target/pos,test-po-generator/output` | Comma-separated directories (relative to the repo root) to look for demo PO PDFs |
+| `PO_DIRS` | `target/pos,test-po-generator/output` | Comma-separated *additional* directories (relative to the repo root) to look for demo PO PDFs, on top of the packaged `data/pos/` (always searched, not configurable) |
 
 ## Distribution centers
 
