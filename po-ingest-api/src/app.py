@@ -6,13 +6,12 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from .conversion import convert_pdf
 from .mcp_server import mcp_server
 from .models import ConversionResult
-from .settings import settings
 from .tracing import configure_tracing
 
 logger = logging.getLogger(__name__)
 
 configure_tracing()
-mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", host=settings.HOST)
+mcp_app = mcp_server.streamable_http_app()
 
 
 @asynccontextmanager

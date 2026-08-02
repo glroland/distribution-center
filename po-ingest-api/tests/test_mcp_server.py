@@ -22,6 +22,6 @@ def test_convert_pdf_to_markdown_tool() -> None:
             "convert_pdf_to_markdown", {"pdf_base64": pdf_b64, "filename": "sample.pdf"}
         )
     )
-    assert not result.is_error
-    text = "".join(part.text for part in result.content if hasattr(part, "text"))
+    content, _structured = result
+    text = "".join(part.text for part in content if hasattr(part, "text"))
     assert "Purchase Order" in text

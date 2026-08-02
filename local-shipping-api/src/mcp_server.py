@@ -1,5 +1,6 @@
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP as MCPServer
 
+from .settings import settings
 from .shipping import Shipment, ShippingStore
 from .tracing import configure_tracing, tool_trace
 
@@ -37,6 +38,8 @@ def build_mcp_server(store: ShippingStore) -> MCPServer:
             "track_shipment or get_shipment afterward to look up a shipment's "
             "tracking details."
         ),
+        host=settings.HOST,
+        streamable_http_path="/",
     )
 
     @mcp_server.tool()

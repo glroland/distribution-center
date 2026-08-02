@@ -1,5 +1,6 @@
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP as MCPServer
 
+from .settings import settings
 from .store import HelpRequest, SupervisorStore, TransferRequest
 from .tracing import configure_tracing, tool_trace
 
@@ -49,6 +50,8 @@ def build_mcp_server(store: SupervisorStore) -> MCPServer:
             "everywhere else too, in which case status is 'unavailable' and the "
             "agent should fall back to request_help."
         ),
+        host=settings.HOST,
+        streamable_http_path="/",
     )
 
     @mcp_server.tool()

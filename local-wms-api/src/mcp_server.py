@@ -1,6 +1,7 @@
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP as MCPServer
 
 from .inventory import InventoryItem, InventoryStore
+from .settings import settings
 from .tracing import configure_tracing, tool_trace
 
 configure_tracing()
@@ -27,6 +28,8 @@ def build_mcp_server(store: InventoryStore) -> MCPServer:
             "adjust_inventory to receive or ship stock for a SKU, and reset_inventory "
             "to restore the demo data to its starting state."
         ),
+        host=settings.HOST,
+        streamable_http_path="/",
     )
 
     @mcp_server.tool()

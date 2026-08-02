@@ -1,6 +1,7 @@
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP as MCPServer
 
 from .robot import InventoryRobot, RobotStatus
+from .settings import settings
 from .tracing import configure_tracing, tool_trace
 
 configure_tracing()
@@ -52,6 +53,8 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
             "is the normal way to fulfil a pick run. Call reset_robot to restore "
             "the demo to its starting state."
         ),
+        host=settings.HOST,
+        streamable_http_path="/",
     )
 
     @mcp_server.tool()

@@ -2,7 +2,7 @@ import asyncio
 import json
 
 import pytest
-from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.fastmcp.exceptions import ToolError
 
 from src.app import mcp_server, store
 
@@ -16,7 +16,7 @@ def _reset_store():
 
 def _call(tool: str, args: dict) -> dict:
     result = asyncio.run(mcp_server.call_tool(tool, args))
-    text = "".join(part.text for part in result.content if hasattr(part, "text"))
+    text = "".join(part.text for part in result if hasattr(part, "text"))
     return json.loads(text)
 
 
