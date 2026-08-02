@@ -112,7 +112,7 @@ start-all:
 		port=$${rest%%:*}; rest=$${rest#*:}; \
 		pid=$${rest%%:*}; logfile=$${rest#*:}; \
 		up=0; \
-		for i in $$(seq 1 40); do \
+		for i in $$(seq 1 90); do \
 			if ! kill -0 "$$pid" 2>/dev/null; then break; fi; \
 			if grep -q 'Uvicorn running on' "$$logfile" 2>/dev/null; then up=1; break; fi; \
 			sleep 0.5; \

@@ -28,7 +28,7 @@ _TOOL_SCHEMA = {
                     "items": {
                         "type": "object",
                         "properties": {
-                            "sku": {"type": "string"},
+                            "sku": {"type": "string", "description": "The SKU or item/product code for this line item, if listed."},
                             "description": {"type": "string"},
                             "quantity": {"type": "number"},
                             "unit_price": {"type": "number"},
