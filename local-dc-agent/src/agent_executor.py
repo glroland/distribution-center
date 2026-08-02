@@ -91,6 +91,12 @@ class ProcessOrderAgentExecutor(AgentExecutor):
                 new_agent_text_message(f"Failed to fulfill order: {exc}", task.context_id, task.id)
             )
             return
+        except Exception as exc:  # noqa: BLE001 - surface as a failed task, not a hung request
+            logger.exception("Task %s: unexpected error processing %s", task.id, filename)
+            await updater.failed(
+                new_agent_text_message(f"Unexpected error processing order: {exc}", task.context_id, task.id)
+            )
+            return
 
         logger.info("Task %s: completed processing %s", task.id, filename)
         await updater.add_artifact(

@@ -69,6 +69,9 @@ class OrderWorker:
             except (IngestError, ExtractionError, FulfillmentError) as exc:
                 logger.exception("Job failed: %s", job.filename)
                 job.future.set_exception(exc)
+            except Exception as exc:  # noqa: BLE001 - one bad job must not wedge the queue forever
+                logger.exception("Unexpected error processing job: %s", job.filename)
+                job.future.set_exception(exc)
             finally:
                 self._queue.task_done()
 

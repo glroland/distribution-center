@@ -13,7 +13,7 @@ class _FakeTextContent:
 @dataclass
 class _FakeCallToolResult:
     content: list
-    is_error: bool = False
+    isError: bool = False
 
 
 @dataclass
@@ -57,7 +57,7 @@ async def test_call_raises_on_unknown_server() -> None:
 @pytest.mark.asyncio
 async def test_call_raises_tool_call_error_on_error_result() -> None:
     session = _FakeSession(
-        response=_FakeCallToolResult(content=[_FakeTextContent(text="SKU not found")], is_error=True)
+        response=_FakeCallToolResult(content=[_FakeTextContent(text="SKU not found")], isError=True)
     )
     router = _router_with_servers(wms=(session, None))
 

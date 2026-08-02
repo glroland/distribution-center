@@ -85,7 +85,7 @@ class McpToolRouter:
 
         result = await server.session.call_tool(tool_name, arguments)
         text = "".join(part.text for part in result.content if hasattr(part, "text"))
-        if result.is_error:
+        if result.isError:
             logger.warning("MCP tool %s reported an error: %s", name, text)
             raise ToolCallError(text or f"Tool '{name}' failed")
         return text
