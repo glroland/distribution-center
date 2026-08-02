@@ -8,7 +8,8 @@
 global:
   # Prefix applied to every image repository below, e.g. an OpenShift
   # internal registry: image-registry.openshift-image-registry.svc:5000/my-project
-  imageRegistry: ""
+  imageRegistry: "registry.home.glroland.com/distribution-center"
+  imageTag: 2
   imagePullPolicy: IfNotPresent
   imagePullSecrets: []
   # Left empty so OpenShift's restricted-v2 SCC assigns a UID/fsGroup from
@@ -29,12 +30,12 @@ global:
     # Leave apiKey empty and set existingSecret to use a pre-created secret
     # instead of storing the key in values.
     apiKey: ""
-    model: gpt-5
+    model: gemma-4
     # Set to point dc-agent at an OpenAI-compatible endpoint (e.g. a local
     # or self-hosted model server) instead of the real OpenAI API. Leave
     # empty to use OpenAI's default endpoint.
-    baseUrl: ""
-    existingSecret: ""
+    baseUrl: "https://maas.apps.ocp.home.glroland.com/sandbox/gemma-4/v1"
+    existingSecret: "distribution-center-credentials"
     existingSecretKey: OPENAI_API_KEY
 
   # Ports of the two global services below, mirrored here so the
@@ -54,7 +55,6 @@ poIngestApi:
   enabled: true
   image:
     repository: po-ingest-api
-    tag: latest
   replicaCount: 1
   resources:
     requests:
@@ -70,7 +70,6 @@ supervisorApi:
   enabled: true
   image:
     repository: supervisor-api
-    tag: latest
   replicaCount: 1
   resources:
     requests:
@@ -99,7 +98,6 @@ distributionCenter:
       dcAgent:
         image:
           repository: local-dc-agent
-          tag: latest
         port: 9100
         maxFulfillmentTurns: 1000
         resources:
@@ -115,7 +113,6 @@ distributionCenter:
       wmsApi:
         image:
           repository: local-wms-api
-          tag: latest
         port: 8001
         resources:
           requests:
@@ -150,7 +147,6 @@ distributionCenter:
       robotApi:
         image:
           repository: local-inventory-robot-api
-          tag: latest
         port: 8002
         grid:
           width: 10
@@ -192,7 +188,6 @@ distributionCenter:
       shippingApi:
         image:
           repository: local-shipping-api
-          tag: latest
         port: 8004
         resources:
           requests:

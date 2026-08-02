@@ -51,6 +51,26 @@ def test_find_item_tool_unknown_sku_returns_empty() -> None:
     assert body["locations"] == []
 
 
+def test_get_warehouse_map_tool() -> None:
+    body = _call("get_warehouse_map", {})
+    assert body["grid_width"] == 10
+    assert body["grid_height"] == 10
+    assert body["dock"] == {"x": 0, "y": 0}
+    assert body["robot"] == {"x": 0, "y": 0, "carrying": {}}
+    shelves = {(cell["x"], cell["y"]): cell["stock"] for cell in body["shelves"]}
+    assert shelves[(1, 1)] == {"SKU-1001": 50}
+    assert shelves[(3, 1)] == {"SKU-1002": 20}
+
+
+def test_get_warehouse_map_reflects_state_after_moves_and_picks() -> None:
+    _goto(1, 1)
+    _call("fetch_item", {"sku": "SKU-1001", "qty": 10})
+    body = _call("get_warehouse_map", {})
+    assert body["robot"] == {"x": 1, "y": 1, "carrying": {"SKU-1001": 10}}
+    shelves = {(cell["x"], cell["y"]): cell["stock"] for cell in body["shelves"]}
+    assert shelves[(1, 1)] == {"SKU-1001": 40}
+
+
 def test_get_shelf_inventory_at_location() -> None:
     body = _call("get_shelf_inventory", {"x": 3, "y": 1})
     assert body == {"location_x": 3, "location_y": 1, "stock": {"SKU-1002": 20}}

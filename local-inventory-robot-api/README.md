@@ -113,6 +113,7 @@ fetch inventory:
 | Tool | Args | Description |
 |---|---|---|
 | `get_robot_status` | - | Current location, carried items, and capacity |
+| `get_warehouse_map` | - | Full snapshot: grid dimensions, dock, capacity, the robot's current position/carry, and every occupied shelf cell with its contents - the whole grid at once, for route planning |
 | `find_item` | `sku: str` | Shelf locations stocking `sku`, with on-hand quantity at each |
 | `get_shelf_inventory` | `x: int \| None`, `y: int \| None` | Everything stocked at `(x, y)`, or the robot's current location if omitted |
 | `move_robot` | `x: int`, `y: int` | Walk the robot to `(x, y)` one cell at a time; fails if the path there crosses a cell holding product - route around it via a waypoint |
@@ -121,11 +122,13 @@ fetch inventory:
 | `deliver_items` | - | Drop everything carried, at the dock only |
 | `reset_robot` | - | Reload shelf stock and return the robot to the dock, empty-handed |
 
-A typical agent workflow: `find_item` to locate a SKU, `move_robot` to that
-shelf, `fetch_item` to pick it up, `move_robot` back to the dock, then
-`deliver_items`. When a shortfall is resolved via an inter-DC transfer
-(`supervisor-api`'s `request_transfer` tool), `restock_shelf` places the
-arriving stock before it's picked and delivered the normal way.
+A typical agent workflow: `get_warehouse_map` once to see every occupied
+shelf cell and plan a route, then per item `find_item` to confirm its SKU's
+shelf location, `move_robot` there, `fetch_item` to pick it up, `move_robot`
+back to the dock, then `deliver_items`. When a shortfall is resolved via an
+inter-DC transfer (`supervisor-api`'s `request_transfer` tool),
+`restock_shelf` places the arriving stock before it's picked and delivered
+the normal way.
 
 Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
 Python SDK's `mcp.client.streamable_http.streamable_http_client`.

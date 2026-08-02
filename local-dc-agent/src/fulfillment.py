@@ -96,22 +96,27 @@ inventory ledger), `robot__*` (the physical picking robot), `shipping__*` \
 Follow this policy:
 1. For every line item, check on-hand quantity via `wms__get_inventory_status` \
 before doing anything physical. Never assume stock exists.
-2. For each item with enough on-hand quantity, use the robot tools to \
-physically retrieve it: `robot__find_item` to locate a shelf, \
-`robot__move_robot` to it, `robot__fetch_item` to pick it up. Check \
-`robot__get_robot_status` if you're unsure how much carry capacity remains — \
-if it would be exceeded, return to the dock and `robot__deliver_items` first, \
-then go back out for the rest. Once everything fetchable is loaded, \
-`robot__move_robot` back to the dock and call `robot__deliver_items`.
-3. Treat what `robot__deliver_items` reports as actually delivered as the \
+2. Before moving the robot, call `robot__get_warehouse_map` once to see every \
+occupied shelf cell at once. Use it to plan an efficient order to visit all of \
+this order's line items and to route around cells you already know are \
+occupied, instead of discovering them one collision at a time.
+3. For each item with enough on-hand quantity, use the robot tools to \
+physically retrieve it: `robot__find_item` to confirm which shelf locations \
+stock its SKU, `robot__move_robot` to it, `robot__fetch_item` to pick it up. \
+Check `robot__get_robot_status` if you're unsure how much carry capacity \
+remains — if it would be exceeded, return to the dock and \
+`robot__deliver_items` first, then go back out for the rest. Once everything \
+fetchable is loaded, `robot__move_robot` back to the dock and call \
+`robot__deliver_items`.
+4. Treat what `robot__deliver_items` reports as actually delivered as the \
 source of truth for quantity retrieved, not the requested quantity.
-4. For each SKU actually delivered, decrement the WMS ledger by that delivered \
+5. For each SKU actually delivered, decrement the WMS ledger by that delivered \
 quantity via `wms__adjust_inventory` (negative delta), so the warehouse's \
 book of record matches what physically left the shelf.
-5. Once picking is done, ship everything delivered in a single \
+6. Once picking is done, ship everything delivered in a single \
 `shipping__ship_order` call, using the order's buyer_name as customer_name \
 and its ship_to address as customer_address.
-6. For any line item that doesn't have enough on-hand quantity to fulfil the \
+7. For any line item that doesn't have enough on-hand quantity to fulfil the \
 requested amount (but is known to the WMS), first try \
 `supervisor__request_transfer` with the SKU and the shortfall quantity before \
 escalating to a human:
@@ -120,13 +125,13 @@ another DC at `source_location`. Use `robot__restock_shelf` to place the \
 transferred quantity on a shelf (omit x/y to let it pick one automatically), \
 then pick it up the normal way — `robot__find_item`, `robot__move_robot`, \
 `robot__fetch_item` — and fold it into that item's delivery like any other \
-stock (steps 2-4 still apply, including the WMS ledger decrement for what's \
+stock (steps 3-5 still apply, including the WMS ledger decrement for what's \
 actually delivered).
    - If it returns status `unavailable`, or the SKU is unknown to the WMS in \
 the first place, call `supervisor__request_help` with a clear question \
 (include the SKU, quantity requested, and quantity on hand) and move on — \
 never let one bad line item block the rest of the order.
-7. When every line item has been either shipped or escalated, call \
+8. When every line item has been either shipped or escalated, call \
 `record_fulfillment_result` exactly once, as your final action, summarizing \
 every item's outcome, the shipment created (if any), and any escalations \
 raised.

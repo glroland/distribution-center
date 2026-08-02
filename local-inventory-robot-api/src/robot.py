@@ -120,6 +120,24 @@ class InventoryRobot:
         loc = location if location is not None else (self._x, self._y)
         return dict(self._shelves.get(loc, {}))
 
+    def snapshot(self) -> dict:
+        """A full picture of the warehouse: grid dimensions, dock, capacity, the
+        robot's current position/carry, and every occupied shelf cell with its
+        contents. Unlike `get_shelf_stock`, this returns every stocked cell at
+        once so a caller can plan a whole route instead of probing cell by cell."""
+        return {
+            "grid_width": self._grid_width,
+            "grid_height": self._grid_height,
+            "dock": {"x": self._dock[0], "y": self._dock[1]},
+            "capacity": self._capacity,
+            "robot": {"x": self._x, "y": self._y, "carrying": dict(self._carrying)},
+            "shelves": [
+                {"x": x, "y": y, "stock": dict(stock)}
+                for (x, y), stock in sorted(self._shelves.items())
+                if stock
+            ],
+        }
+
     def find_item(self, sku: str) -> list[tuple[Coordinate, int]]:
         """Every shelf location that stocks the given SKU, paired with its on-hand quantity."""
         return [

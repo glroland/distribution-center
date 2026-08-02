@@ -53,13 +53,14 @@ A2A message (PDF)
    - [`local-wms-api`](../local-wms-api) — check on-hand quantity for each
      SKU before doing anything physical, and decrement it once stock has
      actually been picked.
-   - [`local-inventory-robot-api`](../local-inventory-robot-api) — locate
-     each SKU's shelf, drive the robot there, pick it up, and deliver
-     everything to the dock. What `deliver_items` reports as actually
-     delivered — not the requested quantity — is what gets shipped and
-     what decrements the WMS ledger. Stock arriving via an approved
-     inter-DC transfer is placed on a shelf with `restock_shelf` before
-     being picked and delivered the normal way.
+   - [`local-inventory-robot-api`](../local-inventory-robot-api) — call
+     `get_warehouse_map` once to see every occupied shelf cell and plan a
+     route, then locate each SKU's shelf, drive the robot there, pick it
+     up, and deliver everything to the dock. What `deliver_items` reports
+     as actually delivered — not the requested quantity — is what gets
+     shipped and what decrements the WMS ledger. Stock arriving via an
+     approved inter-DC transfer is placed on a shelf with `restock_shelf`
+     before being picked and delivered the normal way.
    - [`local-shipping-api`](../local-shipping-api) — ship whatever was
      delivered in one carrier handoff, returning a tracking number.
    - [`supervisor-api`](../supervisor-api) — for a SKU that's short, first

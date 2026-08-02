@@ -242,6 +242,38 @@ def test_restock_raises_when_grid_has_no_empty_cell() -> None:
         robot.restock("SKU-9999", 1)
 
 
+def test_snapshot_reports_grid_dock_and_all_occupied_shelves() -> None:
+    robot = _robot()
+    snapshot = robot.snapshot()
+    assert snapshot["grid_width"] == 10
+    assert snapshot["grid_height"] == 10
+    assert snapshot["dock"] == {"x": 0, "y": 0}
+    assert snapshot["capacity"] == 100
+    assert snapshot["robot"] == {"x": 0, "y": 0, "carrying": {}}
+    shelves = {(cell["x"], cell["y"]): cell["stock"] for cell in snapshot["shelves"]}
+    assert shelves[(1, 1)] == {"SKU-1001": 50}
+    assert shelves[(3, 1)] == {"SKU-1002": 20}
+    assert (4, 4) not in shelves
+
+
+def test_snapshot_reflects_current_position_and_carrying() -> None:
+    robot = _robot()
+    asyncio.run(_goto(robot, (1, 1)))
+    robot.pick("SKU-1001", 10)
+    snapshot = robot.snapshot()
+    assert snapshot["robot"] == {"x": 1, "y": 1, "carrying": {"SKU-1001": 10}}
+    shelves = {(cell["x"], cell["y"]): cell["stock"] for cell in snapshot["shelves"]}
+    assert shelves[(1, 1)] == {"SKU-1001": 40}
+
+
+def test_snapshot_omits_emptied_cells() -> None:
+    robot = _robot()
+    asyncio.run(_goto(robot, (1, 1)))
+    robot.pick("SKU-1001", 50)
+    shelves = {(cell["x"], cell["y"]): cell["stock"] for cell in robot.snapshot()["shelves"]}
+    assert (1, 1) not in shelves
+
+
 def test_reset_restores_shelves_and_robot_state() -> None:
     robot = _robot()
     asyncio.run(_goto(robot, (1, 1)))

@@ -316,6 +316,7 @@ const TOOL_LABELS = {
   wms__adjust_inventory: ["📦", (a) => `Adjusted ${a.sku} by ${a.delta > 0 ? "+" : ""}${a.delta}`],
   wms__reset_inventory: ["🔄", () => "Reset inventory ledger"],
   robot__get_robot_status: ["🤖", () => "Checked robot status"],
+  robot__get_warehouse_map: ["🗺️", () => "Scanned the full warehouse map"],
   robot__find_item: ["📍", (a) => `Located shelves stocking ${a.sku}`],
   robot__get_shelf_inventory: ["🗺️", (a) => `Inspected shelf (${a.x ?? "cur"}, ${a.y ?? "cur"})`],
   robot__move_robot: ["🚚", (a) => `Robot moving to (${a.x}, ${a.y})`],
@@ -367,6 +368,13 @@ function applyToolResult(name, args, result) {
     case "robot__get_shelf_inventory":
       state.shelfStock[`${result.location_x},${result.location_y}`] = result.stock;
       updateShelfCellDisplay(result.location_x, result.location_y);
+      break;
+    case "robot__get_warehouse_map":
+      for (const cell of result.shelves || []) {
+        state.shelfStock[`${cell.x},${cell.y}`] = cell.stock;
+        updateShelfCellDisplay(cell.x, cell.y);
+      }
+      if (result.robot) updateRobotState(result.robot);
       break;
 
     case "shipping__ship_order":

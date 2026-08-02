@@ -12,7 +12,6 @@ centers:
     dcAgent:
       image:
         repository: local-dc-agent
-        tag: latest
       port: 9100
       maxFulfillmentTurns: 1000
       resources:
@@ -28,7 +27,6 @@ centers:
     wmsApi:
       image:
         repository: local-wms-api
-        tag: latest
       port: 8001
       resources:
         requests:
@@ -48,7 +46,6 @@ centers:
     robotApi:
       image:
         repository: local-inventory-robot-api
-        tag: latest
       port: 8002
       grid:
         width: 10
@@ -77,7 +74,6 @@ centers:
     shippingApi:
       image:
         repository: local-shipping-api
-        tag: latest
       port: 8004
       resources:
         requests:

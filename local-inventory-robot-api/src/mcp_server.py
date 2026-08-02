@@ -27,11 +27,15 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
             f"robot's dock is at ({dock_x}, {dock_y}); it can only carry "
             f"{robot.get_status().capacity} total units at once and can only "
             "deliver what it's carrying once it's back at the dock. Typical "
-            "workflow: call find_item to see which shelf locations stock a SKU, "
+            "workflow: call get_warehouse_map once at the start of a multi-item "
+            "pick run to see every occupied shelf cell at once, so you can plan an "
+            "efficient visiting order and route around known-occupied cells up "
+            "front instead of discovering them one collision at a time; then for "
+            "each item, find_item to confirm which shelf locations stock its SKU, "
             "move_robot there, fetch_item to pick it off the shelf, move_robot "
             "back to the dock, then deliver_items. Use get_robot_status any time "
             "to check current location and what's currently loaded, and "
-            "get_shelf_inventory to see everything stocked at a location. Use "
+            "get_shelf_inventory to see everything stocked at a single location. Use "
             "restock_shelf when new stock physically arrives (e.g. from an inter-DC "
             "transfer) and needs to be placed on a shelf before it can be found and "
             "fetched like any other stock; omit x/y to let it pick a sensible cell "
@@ -61,6 +65,17 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
                 for (x, y), qty in robot.find_item(sku)
             ]
         }
+
+    @mcp_server.tool()
+    def get_warehouse_map() -> dict:
+        """Get a full snapshot of the warehouse: grid dimensions, dock location,
+        carry capacity, the robot's current position and what it's carrying, and
+        every occupied shelf cell with its full contents. Unlike
+        get_shelf_inventory (one cell at a time), this returns the whole grid at
+        once, so it's the right first call before planning a route to pick
+        multiple line items - use it to work out a visiting order and to spot
+        cells you'll need to route around, without probing cell by cell."""
+        return robot.snapshot()
 
     @mcp_server.tool()
     def get_shelf_inventory(x: int | None = None, y: int | None = None) -> dict:
