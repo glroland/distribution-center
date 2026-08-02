@@ -1,15 +1,15 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: ai-distribution-center
+  name: distribution-center
 spec:
   destination:
     name: in-cluster
-    namespace: ai-distribution-center
+    namespace: distribution-center
     server: https://kubernetes.default.svc
   source:
     path: deploy/helm
-    repoURL: https://github.com/glroland/dc-agent.git
+    repoURL: https://github.com/glroland/distribution-center.git
     targetRevision: HEAD
     helm:
       valueFiles:
