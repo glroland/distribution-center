@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM registry.access.redhat.com/rhai/base-image-cpu-rhel9:3.0.2-1782929133
 
 WORKDIR /app
 
