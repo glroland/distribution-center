@@ -35,9 +35,9 @@ REQUIREMENTS := $(shell find . \
 	-not -path './.git/*' \
 	-not -path './$(TARGET_DIR)/*' \
 	-not -path '*/.venv/*' \
-	-name 'requirements.txt')
+	-name 'requirements*.txt')
 
-.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-dashboard start-all kill-all restart-all status-all clean
+.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-dashboard start-all kill-all restart-all status-all clean test
 
 help:
 	@echo "Targets:"
@@ -55,6 +55,7 @@ help:
 	@echo "  restart-all                  Stop then start every service (kill-all + start-all)"
 	@echo "  status-all                   Show which start-all services are up"
 	@echo "  clean                        Remove the $(TARGET_DIR) directory"
+	@echo "  test                         Unit test the application"
 
 install:
 	@echo "Using: $(PIP)"
@@ -161,3 +162,11 @@ status-all:
 
 clean:
 	rm -rf $(TARGET_DIR)
+
+test:
+	cd local-dc-agent && PYTHONPATH=src python3 -m pytest tests
+	cd local-inventory-robot-api && PYTHONPATH=src python3 -m pytest tests
+	cd local-shipping-api && PYTHONPATH=src python3 -m pytest tests
+	cd local-wms-api && PYTHONPATH=src python3 -m pytest tests
+	cd po-ingest-api && PYTHONPATH=src python3 -m pytest tests
+	cd supervisor-api && PYTHONPATH=src python3 -m pytest tests
