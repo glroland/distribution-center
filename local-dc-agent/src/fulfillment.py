@@ -1,4 +1,5 @@
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from openai import OpenAI
@@ -7,6 +8,8 @@ from pydantic import ValidationError
 from .mcp_tools import McpToolRouter, ToolCallError
 from .models import Escalation, FulfillmentItemResult, FulfillmentResult, ProcessOrderResult
 from .settings import settings
+
+OnEvent = Callable[[str, dict], Awaitable[None]]
 
 _FINISH_TOOL_NAME = "record_fulfillment_result"
 
@@ -141,7 +144,9 @@ def _order_message(order: ProcessOrderResult) -> str:
     return json.dumps(payload)
 
 
-async def fulfill_order(order: ProcessOrderResult, tools: McpToolRouter) -> FulfillmentResult:
+async def fulfill_order(
+    order: ProcessOrderResult, tools: McpToolRouter, on_event: OnEvent | None = None
+) -> FulfillmentResult:
     if not settings.OPENAI_API_KEY:
         raise FulfillmentError("OPENAI_API_KEY is not configured")
 
@@ -185,28 +190,42 @@ async def fulfill_order(order: ProcessOrderResult, tools: McpToolRouter) -> Fulf
 
         for tool_call in tool_calls:
             if tool_call.function.name == _FINISH_TOOL_NAME:
-                return _parse_finish_call(tool_call.function.arguments)
+                finish_result = _parse_finish_call(tool_call.function.arguments)
+                if on_event:
+                    await on_event("fulfillment_result", finish_result.model_dump())
+                return finish_result
 
             messages.append(
                 {
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "content": await _run_tool_call(tools, tool_call),
+                    "content": await _run_tool_call(tools, tool_call, on_event),
                 }
             )
 
-    return await _escalate_timeout(order, tools)
+    return await _escalate_timeout(order, tools, on_event)
 
 
-async def _run_tool_call(tools: McpToolRouter, tool_call: Any) -> str:
+async def _run_tool_call(tools: McpToolRouter, tool_call: Any, on_event: OnEvent | None = None) -> str:
+    name = tool_call.function.name
     try:
         arguments = json.loads(tool_call.function.arguments or "{}")
     except json.JSONDecodeError as exc:
-        return json.dumps({"error": f"Invalid tool arguments: {exc}"})
+        error = f"Invalid tool arguments: {exc}"
+        if on_event:
+            await on_event("tool_call", {"name": name, "arguments": {}, "ok": False, "result": error})
+        return json.dumps({"error": error})
 
     try:
-        return await tools.call(tool_call.function.name, arguments)
+        result = await tools.call(name, arguments)
+        if on_event:
+            await on_event("tool_call", {"name": name, "arguments": arguments, "ok": True, "result": result})
+        return result
     except ToolCallError as exc:
+        if on_event:
+            await on_event(
+                "tool_call", {"name": name, "arguments": arguments, "ok": False, "result": str(exc)}
+            )
         return json.dumps({"error": str(exc)})
 
 
@@ -222,21 +241,38 @@ def _parse_finish_call(arguments_json: str) -> FulfillmentResult:
         raise FulfillmentError(f"{_FINISH_TOOL_NAME} arguments failed schema validation: {exc}") from exc
 
 
-async def _escalate_timeout(order: ProcessOrderResult, tools: McpToolRouter) -> FulfillmentResult:
+async def _escalate_timeout(
+    order: ProcessOrderResult, tools: McpToolRouter, on_event: OnEvent | None = None
+) -> FulfillmentResult:
     """Fallback when the model never finishes: escalate directly and degrade gracefully
     rather than failing the whole PO."""
     question = (
         f"Fulfillment agent exceeded {settings.MAX_FULFILLMENT_TURNS} tool-call turns while "
         f"processing PO {order.po_number} and did not finish. Manual review needed."
     )
+    arguments = {"question": question, "context": order.po_number}
     help_request_id = None
     try:
-        raw = await tools.call("supervisor__request_help", {"question": question, "context": order.po_number})
+        raw = await tools.call("supervisor__request_help", arguments)
+        if on_event:
+            await on_event(
+                "tool_call",
+                {"name": "supervisor__request_help", "arguments": arguments, "ok": True, "result": raw},
+            )
         help_request_id = json.loads(raw).get("id")
-    except ToolCallError:
-        pass
+    except ToolCallError as exc:
+        if on_event:
+            await on_event(
+                "tool_call",
+                {
+                    "name": "supervisor__request_help",
+                    "arguments": arguments,
+                    "ok": False,
+                    "result": str(exc),
+                },
+            )
 
-    return FulfillmentResult(
+    result = FulfillmentResult(
         items=[
             FulfillmentItemResult(
                 sku=item.sku,
@@ -253,3 +289,6 @@ async def _escalate_timeout(order: ProcessOrderResult, tools: McpToolRouter) -> 
         order_status="escalated",
         summary=question,
     )
+    if on_event:
+        await on_event("fulfillment_result", result.model_dump())
+    return result

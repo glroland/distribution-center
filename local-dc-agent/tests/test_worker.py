@@ -19,7 +19,7 @@ def _stub_pipeline(monkeypatch, extract_log: list, filename_as_po_number: bool =
             line_items=[LineItem(description="Widget", quantity=1, unit_price=1.0)],
         )
 
-    async def fake_fulfill(order, tools) -> FulfillmentResult:
+    async def fake_fulfill(order, tools, on_event=None) -> FulfillmentResult:
         return FulfillmentResult(items=[], order_status="shipped", summary="done")
 
     monkeypatch.setattr(worker_module, "convert_pdf_to_markdown", fake_convert)
@@ -43,6 +43,29 @@ async def test_worker_is_idle_until_a_job_is_submitted(monkeypatch) -> None:
         assert extract_log == ["# markdown"]
         assert result.po_number == "# markdown"
         assert result.fulfillment.order_status == "shipped"
+    finally:
+        run_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await run_task
+
+
+@pytest.mark.asyncio
+async def test_on_event_fires_for_each_pipeline_stage(monkeypatch) -> None:
+    extract_log: list = []
+    _stub_pipeline(monkeypatch, extract_log)
+
+    events: list[tuple[str, dict]] = []
+
+    async def on_event(event_type: str, data: dict) -> None:
+        events.append((event_type, data))
+
+    worker = OrderWorker()
+    run_task = asyncio.create_task(worker._run())
+    try:
+        await worker.submit(b"%PDF-fake", "po.pdf", on_event=on_event)
+
+        assert [event_type for event_type, _ in events] == ["ingested", "extracted", "processed"]
+        assert events[1][1]["po_number"] == "# markdown"
     finally:
         run_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):

@@ -151,6 +151,48 @@ async def test_happy_path_ships_and_returns_tracking_number(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
+async def test_on_event_fires_for_tool_calls_and_final_result(monkeypatch) -> None:
+    tool_call = _FakeToolCall(
+        id="call_0", function=_FakeFunctionCall(name="wms__get_inventory_status", arguments=json.dumps({"sku": "SKU-1001"}))
+    )
+    responses = [
+        _FakeMessage(tool_calls=[tool_call]),
+        _FakeMessage(
+            tool_calls=[
+                _finish_call(
+                    shipment={
+                        "carrier": "UPS",
+                        "tracking_number": "1Z999",
+                        "estimated_delivery": "2026-08-05",
+                    }
+                )
+            ]
+        ),
+    ]
+    fake_client = _FakeOpenAIClient(responses)
+    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key: fake_client)
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
+
+    tools = _FakeTools(tool_results={"wms__get_inventory_status": json.dumps({"on_hand_qty": 120})})
+    events: list[tuple[str, dict]] = []
+
+    async def on_event(event_type: str, data: dict) -> None:
+        events.append((event_type, data))
+
+    result = await fulfill_order(_order(), tools, on_event=on_event)
+
+    assert result.order_status == "shipped"
+    assert [event_type for event_type, _ in events] == ["tool_call", "fulfillment_result"]
+    assert events[0][1] == {
+        "name": "wms__get_inventory_status",
+        "arguments": {"sku": "SKU-1001"},
+        "ok": True,
+        "result": json.dumps({"on_hand_qty": 120}),
+    }
+    assert events[1][1]["order_status"] == "shipped"
+
+
+@pytest.mark.asyncio
 async def test_escalation_path_records_supervisor_request(monkeypatch) -> None:
     tool_call = _FakeToolCall(
         id="call_0",

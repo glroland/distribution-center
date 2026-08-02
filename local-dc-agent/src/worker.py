@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from .fulfillment import FulfillmentError, fulfill_order
@@ -8,12 +9,15 @@ from .models import ProcessOrderResult
 from .order_extraction import ExtractionError, extract_order
 from .order_processing import process_order
 
+OnEvent = Callable[[str, dict], Awaitable[None]]
+
 
 @dataclass
 class ProcessingJob:
     pdf_bytes: bytes
     filename: str
     future: asyncio.Future[ProcessOrderResult]
+    on_event: OnEvent | None = None
 
 
 class OrderWorker:
@@ -36,9 +40,13 @@ class OrderWorker:
             self._task = None
         await self._router.close()
 
-    async def submit(self, pdf_bytes: bytes, filename: str) -> ProcessOrderResult:
+    async def submit(
+        self, pdf_bytes: bytes, filename: str, on_event: OnEvent | None = None
+    ) -> ProcessOrderResult:
         future: asyncio.Future[ProcessOrderResult] = asyncio.get_running_loop().create_future()
-        await self._queue.put(ProcessingJob(pdf_bytes=pdf_bytes, filename=filename, future=future))
+        await self._queue.put(
+            ProcessingJob(pdf_bytes=pdf_bytes, filename=filename, future=future, on_event=on_event)
+        )
         return await future
 
     async def _run(self) -> None:
@@ -53,8 +61,36 @@ class OrderWorker:
                 self._queue.task_done()
 
     async def _process(self, job: ProcessingJob) -> ProcessOrderResult:
+        on_event = job.on_event
+
         markdown = await convert_pdf_to_markdown(job.pdf_bytes, job.filename)
+        if on_event:
+            await on_event("ingested", {"filename": job.filename, "markdown_length": len(markdown)})
+
         extracted = await asyncio.to_thread(extract_order, markdown)
+        if on_event:
+            await on_event(
+                "extracted",
+                {
+                    "po_number": extracted.po_number,
+                    "vendor_name": extracted.vendor_name,
+                    "buyer_name": extracted.buyer_name,
+                    "ship_to": extracted.ship_to,
+                    "line_items": [item.model_dump() for item in extracted.line_items],
+                },
+            )
+
         result = process_order(extracted)
-        fulfillment = await fulfill_order(result, self._router)
+        if on_event:
+            await on_event(
+                "processed",
+                {
+                    "dc_order_id": result.dc_order_id,
+                    "computed_subtotal": result.computed_subtotal,
+                    "stated_total": result.stated_total,
+                    "totals_mismatch": result.totals_mismatch,
+                },
+            )
+
+        fulfillment = await fulfill_order(result, self._router, on_event=on_event)
         return result.model_copy(update={"fulfillment": fulfillment})

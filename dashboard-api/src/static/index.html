@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Distribution Center Control Room</title>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <div>
+        <h1>Distribution Center Control Room</h1>
+        <p id="dc-subtitle" class="subtitle">Loading distribution centers…</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <label class="field">
+        <span>Distribution Center</span>
+        <select id="dc-select"></select>
+      </label>
+      <button id="reset-btn" class="btn btn-ghost" title="Reset inventory, robot, and shipments to seed data">Reset Demo Data</button>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <section class="panel panel-po" id="po-panel">
+      <div class="panel-head">
+        <h2>1 · Choose a Purchase Order</h2>
+      </div>
+      <div class="po-picker">
+        <select id="po-select" size="8"></select>
+        <div class="po-preview">
+          <iframe id="po-preview-frame" title="PO preview"></iframe>
+          <div id="po-preview-empty" class="po-preview-empty">Select a PO to preview the document</div>
+        </div>
+      </div>
+      <button id="send-btn" class="btn btn-primary" disabled>Send to Distribution Center →</button>
+    </section>
+
+    <section class="panel panel-pipeline" id="pipeline-panel">
+      <div class="panel-head">
+        <h2>2 · Pipeline</h2>
+        <span id="run-status-badge" class="badge badge-idle">Idle</span>
+      </div>
+      <ol class="stepper" id="stepper">
+        <li data-step="sent"><span class="step-dot"></span><div><strong>PO Sent</strong><small>Handed to the DC agent</small></div></li>
+        <li data-step="reading"><span class="step-dot"></span><div><strong>Reading &amp; Understanding</strong><small>Docling ingest + LLM field extraction</small></div></li>
+        <li data-step="fulfilling"><span class="step-dot"></span><div><strong>Fulfilling</strong><small>Checking stock, picking, shipping</small></div></li>
+        <li data-step="done"><span class="step-dot"></span><div><strong>Complete</strong><small>Tracking numbers &amp; summary</small></div></li>
+      </ol>
+      <div class="activity-feed" id="activity-feed">
+        <div class="activity-empty">Activity from the AI agent will appear here once a PO is sent.</div>
+      </div>
+    </section>
+
+    <section class="panel panel-map" id="map-panel">
+      <div class="panel-head">
+        <h2>3 · Warehouse Floor</h2>
+        <span class="hint">Robot position &amp; shelf stock, live</span>
+      </div>
+      <div class="map-wrap">
+        <svg id="warehouse-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="map-legend">
+        <span><i class="swatch swatch-dock"></i>Dock</span>
+        <span><i class="swatch swatch-shelf"></i>Shelf w/ stock</span>
+        <span><i class="swatch swatch-empty"></i>Empty shelf</span>
+        <span><i class="swatch swatch-robot"></i>Robot</span>
+        <span><i class="swatch swatch-visit"></i>Visited this run</span>
+      </div>
+    </section>
+
+    <section class="panel panel-lines" id="lines-panel">
+      <div class="panel-head">
+        <h2>4 · PO Lines &amp; Fulfillment</h2>
+      </div>
+      <div id="po-header" class="po-header"></div>
+      <table class="lines-table">
+        <thead>
+          <tr><th>SKU</th><th>Description</th><th>Req.</th><th>Fulfilled</th><th>Status</th></tr>
+        </thead>
+        <tbody id="lines-body">
+          <tr><td colspan="5" class="empty-row">No PO in flight</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel panel-inventory" id="inventory-panel">
+      <div class="panel-head">
+        <h2>5 · Inventory Ledger (WMS)</h2>
+      </div>
+      <div class="ledger" id="ledger-body"></div>
+    </section>
+
+    <section class="panel panel-shipping" id="shipping-panel">
+      <div class="panel-head">
+        <h2>6 · Shipments &amp; Tracking</h2>
+      </div>
+      <div id="shipments-body" class="shipments-body">
+        <div class="empty-row">No shipments yet</div>
+      </div>
+    </section>
+
+    <section class="panel panel-hitl" id="hitl-panel">
+      <div class="panel-head">
+        <h2>7 · Human-in-the-Loop</h2>
+        <span id="hitl-badge" class="badge badge-idle">No escalations</span>
+      </div>
+      <div id="hitl-body" class="hitl-body">
+        <div class="empty-row">The agent hasn't asked for help yet.</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<template id="tpl-activity-item">
+  <div class="activity-item">
+    <span class="activity-icon"></span>
+    <div class="activity-text">
+      <div class="activity-title"></div>
+      <div class="activity-detail"></div>
+    </div>
+    <span class="activity-time"></span>
+  </div>
+</template>
+
+<template id="tpl-help-request">
+  <div class="help-card">
+    <div class="help-question"></div>
+    <div class="help-context"></div>
+    <form class="help-form">
+      <input type="text" placeholder="Type the supervisor's answer…" required />
+      <button type="submit" class="btn btn-small">Resolve</button>
+    </form>
+    <div class="help-resolution"></div>
+  </div>
+</template>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

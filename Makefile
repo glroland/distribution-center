@@ -14,7 +14,7 @@ REQUIREMENTS := $(shell find . \
 	-not -path '*/.venv/*' \
 	-name 'requirements.txt')
 
-.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api clean
+.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-dashboard clean
 
 help:
 	@echo "Targets:"
@@ -26,6 +26,7 @@ help:
 	@echo "  run-local-inventory-robot-api Run the local inventory robot API (http://localhost:8002)"
 	@echo "  run-supervisor-api           Run the local supervisor API (http://localhost:8003)"
 	@echo "  run-local-shipping-api       Run the local shipping API (http://localhost:8004)"
+	@echo "  run-dashboard                Run the demo control room UI (http://localhost:8090)"
 	@echo "  clean                        Remove the $(TARGET_DIR) directory"
 
 install:
@@ -56,6 +57,9 @@ run-supervisor-api:
 
 run-local-shipping-api:
 	cd local-shipping-api && python3 -m src
+
+run-dashboard:
+	cd dashboard-api && python3 -m src
 
 clean:
 	rm -rf $(TARGET_DIR)

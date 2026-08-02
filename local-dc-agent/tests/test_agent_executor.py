@@ -29,9 +29,11 @@ class _FakeWorker:
         self.result = result
         self.error = error
         self.calls: list[tuple[bytes, str]] = []
+        self.on_events: list = []
 
-    async def submit(self, pdf_bytes: bytes, filename: str) -> ProcessOrderResult:
+    async def submit(self, pdf_bytes: bytes, filename: str, on_event=None) -> ProcessOrderResult:
         self.calls.append((pdf_bytes, filename))
+        self.on_events.append(on_event)
         if self.error is not None:
             raise self.error
         assert self.result is not None
@@ -87,6 +89,65 @@ async def test_process_purchase_order_success() -> None:
 
     assert status_events[-1].status.state == TaskState.completed
     assert len(worker.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_no_progress_webhook_means_no_on_event_hook() -> None:
+    worker = _FakeWorker(result=_sample_result())
+    context = RequestContext(request=MessageSendParams(message=_message([_pdf_part()])))
+    queue = EventQueue()
+
+    await ProcessOrderAgentExecutor(worker).execute(context, queue)
+
+    assert worker.on_events == [None]
+
+
+@pytest.mark.asyncio
+async def test_progress_webhook_metadata_posts_each_event(monkeypatch) -> None:
+    posted: list[tuple[str, dict]] = []
+
+    class _FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _FakeAsyncClient:
+        def __init__(self, timeout: float) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self) -> "_FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, *exc_info) -> None:
+            return None
+
+        async def post(self, url: str, json: dict) -> _FakeResponse:
+            posted.append((url, json))
+            return _FakeResponse()
+
+    import src.agent_executor as agent_executor_module
+
+    monkeypatch.setattr(agent_executor_module.httpx, "AsyncClient", _FakeAsyncClient)
+
+    worker = _FakeWorker(result=_sample_result())
+    message = Message(
+        message_id="m1",
+        role=Role.user,
+        parts=[_pdf_part()],
+        kind="message",
+        metadata={"progress_webhook": "http://dashboard.local/events/run-1"},
+    )
+    context = RequestContext(request=MessageSendParams(message=message))
+    queue = EventQueue()
+
+    await ProcessOrderAgentExecutor(worker).execute(context, queue)
+
+    (on_event,) = worker.on_events
+    assert on_event is not None
+    await on_event("tool_call", {"name": "wms__get_inventory_status"})
+
+    assert posted == [
+        ("http://dashboard.local/events/run-1", {"type": "tool_call", "data": {"name": "wms__get_inventory_status"}})
+    ]
 
 
 @pytest.mark.asyncio

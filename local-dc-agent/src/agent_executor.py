@@ -4,7 +4,15 @@ import httpx
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
-from a2a.types import DataPart, FileWithBytes, FileWithUri, Part, TextPart, UnsupportedOperationError
+from a2a.types import (
+    DataPart,
+    FileWithBytes,
+    FileWithUri,
+    Message,
+    Part,
+    TextPart,
+    UnsupportedOperationError,
+)
 from a2a.utils import get_file_parts, new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 
@@ -55,9 +63,10 @@ class ProcessOrderAgentExecutor(AgentExecutor):
             return
 
         filename = pdf_file.name or "purchase_order.pdf"
+        on_event = _build_progress_hook(context.message)
 
         try:
-            result = await self.worker.submit(pdf_bytes, filename)
+            result = await self.worker.submit(pdf_bytes, filename, on_event=on_event)
         except IngestError as exc:
             await updater.failed(
                 new_agent_text_message(f"Failed to ingest PDF: {exc}", task.context_id, task.id)
@@ -85,6 +94,25 @@ class ProcessOrderAgentExecutor(AgentExecutor):
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         raise ServerError(error=UnsupportedOperationError())
+
+
+def _build_progress_hook(message: Message | None):
+    """Builds an on_event callback that POSTs each processing event to a caller-supplied
+    webhook URL, if the inbound message opted in via `metadata.progress_webhook`. This is
+    purely additive: with no webhook configured, processing behaves exactly as before."""
+    metadata = getattr(message, "metadata", None) or {}
+    webhook_url = metadata.get("progress_webhook")
+    if not webhook_url:
+        return None
+
+    async def _emit(event_type: str, data: dict) -> None:
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                await client.post(webhook_url, json={"type": event_type, "data": data})
+        except Exception:
+            pass  # a dashboard being slow or offline must never affect order processing
+
+    return _emit
 
 
 def _find_pdf_file(parts: list) -> FileWithBytes | FileWithUri | None:
