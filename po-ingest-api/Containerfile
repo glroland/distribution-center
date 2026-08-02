@@ -3,9 +3,8 @@ FROM registry.redhat.io/rhai/base-image-cuda-rhel9:3.0.2-1782929069
 WORKDIR /app
 
 # System deps for Docling (PDF/image handling via OpenCV etc.)
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+RUN dnf install -y mesa-libGL glib2 \
+    && dnf clean all
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
