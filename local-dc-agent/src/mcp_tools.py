@@ -61,7 +61,7 @@ class McpToolRouter:
                         "function": {
                             "name": f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}",
                             "description": tool.description or "",
-                            "parameters": tool.input_schema,
+                            "parameters": tool.inputSchema,
                         },
                     }
                 )
