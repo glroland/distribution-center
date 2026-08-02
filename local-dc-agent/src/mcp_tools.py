@@ -46,7 +46,7 @@ class McpToolRouter:
         }
         for label, base_url in server_urls.items():
             logger.info("Connecting to MCP server %s at %s", label, base_url)
-            read_stream, write_stream = await self._stack.enter_async_context(
+            read_stream, write_stream, _ = await self._stack.enter_async_context(
                 streamable_http_client(f"{base_url}/mcp")
             )
             session = await self._stack.enter_async_context(ClientSession(read_stream, write_stream))
