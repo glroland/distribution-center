@@ -27,7 +27,7 @@ def test_get_location_tool() -> None:
 
 def test_get_inventory_status_single_sku() -> None:
     body = _call("get_inventory_status", {"sku": "SKU-1001"})
-    assert body["on_hand_qty"] == 120
+    assert body["on_hand_qty"] == 60
 
 
 def test_get_inventory_status_all_skus() -> None:
@@ -42,12 +42,12 @@ def test_get_inventory_status_unknown_sku_raises() -> None:
 
 def test_adjust_inventory_positive_delta_receives_stock() -> None:
     body = _call("adjust_inventory", {"sku": "SKU-1001", "delta": 10})
-    assert body["on_hand_qty"] == 130
+    assert body["on_hand_qty"] == 70
 
 
 def test_adjust_inventory_negative_delta_ships_stock() -> None:
     body = _call("adjust_inventory", {"sku": "SKU-1001", "delta": -20})
-    assert body["on_hand_qty"] == 100
+    assert body["on_hand_qty"] == 40
 
 
 def test_adjust_inventory_overship_raises() -> None:
@@ -61,4 +61,4 @@ def test_reset_inventory_tool() -> None:
     assert body["status"] == "ok"
 
     status = _call("get_inventory_status", {"sku": "SKU-1001"})
-    assert status["on_hand_qty"] == 120
+    assert status["on_hand_qty"] == 60

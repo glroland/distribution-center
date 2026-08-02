@@ -14,14 +14,14 @@ def _store() -> InventoryStore:
 def test_loads_initial_inventory_from_csv() -> None:
     store = _store()
     item = store.get_item("SKU-1001")
-    assert item.on_hand_qty == 120
+    assert item.on_hand_qty == 60
     assert item.location_x == 3
     assert item.location_y == 5
 
 
 def test_get_quantity() -> None:
     store = _store()
-    assert store.get_quantity("SKU-1002") == 45
+    assert store.get_quantity("SKU-1002") == 20
 
 
 def test_get_quantity_unknown_sku_raises() -> None:
@@ -38,14 +38,14 @@ def test_get_location_name() -> None:
 def test_increment() -> None:
     store = _store()
     item = store.increment("SKU-1001", 10)
-    assert item.on_hand_qty == 130
-    assert store.get_quantity("SKU-1001") == 130
+    assert item.on_hand_qty == 70
+    assert store.get_quantity("SKU-1001") == 70
 
 
 def test_decrement() -> None:
     store = _store()
     item = store.decrement("SKU-1001", 20)
-    assert item.on_hand_qty == 100
+    assert item.on_hand_qty == 40
 
 
 def test_decrement_below_zero_raises() -> None:
@@ -53,7 +53,7 @@ def test_decrement_below_zero_raises() -> None:
     with pytest.raises(InsufficientQuantityError):
         store.decrement("SKU-1002", 1000)
     # the failed decrement must not have mutated state
-    assert store.get_quantity("SKU-1002") == 45
+    assert store.get_quantity("SKU-1002") == 20
 
 
 def test_increment_unknown_sku_raises() -> None:
@@ -73,8 +73,8 @@ def test_reset_restores_initial_state() -> None:
     store.increment("SKU-1001", 500)
     store.decrement("SKU-1002", 10)
     store.reset()
-    assert store.get_quantity("SKU-1001") == 120
-    assert store.get_quantity("SKU-1002") == 45
+    assert store.get_quantity("SKU-1001") == 60
+    assert store.get_quantity("SKU-1002") == 20
 
 
 def test_list_items_returns_all_skus() -> None:

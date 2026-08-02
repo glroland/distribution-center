@@ -38,7 +38,7 @@ def test_get_inventory_item() -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["sku"] == "SKU-1001"
-    assert body["on_hand_qty"] == 120
+    assert body["on_hand_qty"] == 60
 
 
 def test_get_inventory_item_not_found() -> None:
@@ -49,13 +49,13 @@ def test_get_inventory_item_not_found() -> None:
 def test_increment_inventory() -> None:
     resp = client.post("/inventory/SKU-1001/increment", json={"qty": 10})
     assert resp.status_code == 200
-    assert resp.json()["on_hand_qty"] == 130
+    assert resp.json()["on_hand_qty"] == 70
 
 
 def test_decrement_inventory() -> None:
     resp = client.post("/inventory/SKU-1001/decrement", json={"qty": 20})
     assert resp.status_code == 200
-    assert resp.json()["on_hand_qty"] == 100
+    assert resp.json()["on_hand_qty"] == 40
 
 
 def test_decrement_below_zero_returns_400() -> None:
@@ -80,4 +80,4 @@ def test_reset_inventory() -> None:
     assert resp.json()["status"] == "ok"
 
     resp = client.get("/inventory/SKU-1001")
-    assert resp.json()["on_hand_qty"] == 120
+    assert resp.json()["on_hand_qty"] == 60
