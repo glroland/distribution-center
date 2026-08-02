@@ -1,4 +1,4 @@
-# Dashboard API
+# Dashboard UI
 
 A single-page control room for running and watching the distribution center
 demo: pick a purchase order and a distribution center, send it, and watch it
@@ -42,7 +42,7 @@ either pre-generated ones already in `test-po-generator/output/`, or fresh
 ones via `make generate-pos` (written to `target/pos/`).
 
 ```bash
-cd dashboard-api
+cd dashboard-ui
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt

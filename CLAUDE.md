@@ -22,7 +22,7 @@ all at once via the root `Makefile`.
 | `local-inventory-robot-api` | 8002 | Simulated picking robot on a 2D shelf grid |
 | `supervisor-api` | 8003 | Human-in-the-loop escalation queue |
 | `local-shipping-api` | 8004 | Mock carrier handoff (tracking numbers, no real carrier) |
-| `dashboard-api` | 8090 | Backend-for-frontend + static UI that drives/watches a demo run |
+| `dashboard-ui` | 8090 | Backend-for-frontend + static UI that drives/watches a demo run |
 | `test-po-generator` | - | CLI, not a server; generates sample PO PDFs |
 
 Read a service's own `README.md` before working in it — each documents its
@@ -92,7 +92,7 @@ the same internal layout:
 CRUD-over-MCP service, and connects to the other five as an MCP *client*
 rather than hosting its own tools. See "The dc-agent pipeline" below.
 
-`dashboard-api` is also different: it owns no business state, just
+`dashboard-ui` is also different: it owns no business state, just
 orchestrates calls to the other services and serves a static UI
 (`src/static/`).
 
@@ -137,15 +137,15 @@ Results come back as an A2A artifact: a `DataPart` with the full structured
 `ProcessOrderResult` JSON (including the `fulfillment` block) plus a
 human-readable `TextPart` summary.
 
-### Live progress via webhook, not streaming (`dashboard-api`)
+### Live progress via webhook, not streaming (`dashboard-ui`)
 
 The dc-agent's `message/send` is a single blocking A2A call with
 `capabilities.streaming=False`. To watch a PO move through the pipeline
-live, `dashboard-api` passes a `progress_webhook` URL in the outbound
+live, `dashboard-ui` passes a `progress_webhook` URL in the outbound
 message's `metadata`. If present, the agent POSTs an event to it after
 ingest, after extraction, after totals processing, after *every* MCP tool
 call in the fulfillment loop (tool name, args, raw result), and once more
-with the final result. `dashboard-api` fans these out to the browser over
+with the final result. `dashboard-ui` fans these out to the browser over
 SSE (`GET /api/runs/{run_id}/stream`) and derives all UI state (inventory
 deltas, robot position, shipments, escalations) by parsing each tool call's
 result according to which service it came from — no polling during an
@@ -175,7 +175,7 @@ pick-and-ship path and the supervisor-escalation path in the same run.
 together). `values.yaml`'s `global` section is the only values shared
 automatically across subcharts (e.g. `global.poIngestApi.port` so a
 `distributionCenter` subchart's dc-agent can address the shared ingest
-service). `dashboard-api/src/settings.py`'s `DISTRIBUTION_CENTERS` list
+service). `dashboard-ui/src/settings.py`'s `DISTRIBUTION_CENTERS` list
 mirrors `values.yaml`'s `distributionCenters` list and must be kept in sync
 by hand when adding a DC. `deploy/Jenkinsfile` builds/archives a Docker
 image per service.

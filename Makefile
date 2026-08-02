@@ -18,7 +18,7 @@ SERVICES := \
 	local-inventory-robot-api:local-inventory-robot-api:ROBOT_API_PORT \
 	supervisor-api:supervisor-api:SUPERVISOR_API_PORT \
 	local-shipping-api:local-shipping-api:SHIPPING_API_PORT \
-	dashboard:dashboard-api:DASHBOARD_PORT
+	dashboard:dashboard-ui:DASHBOARD_PORT
 
 # Every make target shares the repo-root .env (falling back to .env.example)
 # instead of each submodule's own .env/.env.example. Exporting these makes
@@ -91,7 +91,7 @@ run-local-shipping-api:
 	cd local-shipping-api && PORT=$(SHIPPING_API_PORT) python3 -m src
 
 run-dashboard:
-	cd dashboard-api && PORT=$(DASHBOARD_PORT) python3 -m src
+	cd dashboard-ui && PORT=$(DASHBOARD_PORT) python3 -m src
 
 start-all:
 	@mkdir -p $(LOG_DIR) $(PID_DIR)
