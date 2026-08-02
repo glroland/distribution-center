@@ -48,25 +48,25 @@ generate-pos:
 	cd test-po-generator && python3 -m src --output-dir "../$(TARGET_DIR)/pos" $(ARGS)
 
 run-ingest-api:
-	cd po-ingest-api && python3 -m src
+	cd po-ingest-api && PORT=$(PO_INGEST_API_PORT) python3 -m src
 
 run-local-dc-agent:
-	cd local-dc-agent && python3 -m src
+	cd local-dc-agent && PORT=$(AGENT_PORT) python3 -m src
 
 run-local-wms-api:
-	cd local-wms-api && python3 -m src
+	cd local-wms-api && PORT=$(WMS_API_PORT) python3 -m src
 
 run-local-inventory-robot-api:
-	cd local-inventory-robot-api && python3 -m src
+	cd local-inventory-robot-api && PORT=$(ROBOT_API_PORT) python3 -m src
 
 run-supervisor-api:
-	cd supervisor-api && python3 -m src
+	cd supervisor-api && PORT=$(SUPERVISOR_API_PORT) python3 -m src
 
 run-local-shipping-api:
-	cd local-shipping-api && python3 -m src
+	cd local-shipping-api && PORT=$(SHIPPING_API_PORT) python3 -m src
 
 run-dashboard:
-	cd dashboard-api && python3 -m src
+	cd dashboard-api && PORT=$(DASHBOARD_PORT) python3 -m src
 
 clean:
 	rm -rf $(TARGET_DIR)
