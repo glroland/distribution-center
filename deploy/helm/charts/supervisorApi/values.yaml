@@ -6,7 +6,6 @@
 enabled: true
 image:
   repository: supervisor-api
-  tag: latest
 replicaCount: 1
 resources:
   requests:

@@ -20,15 +20,18 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 
 {{/*
 Full image reference: <fullNameOverride style="repository[:tag]">, prefixed
-with global.imageRegistry when set.
+with global.imageRegistry when set. The tag always comes from
+global.imageTag -- every image in this chart is built and tagged together,
+so components never carry their own independent tag.
 Usage: {{ include "adc.image" (dict "root" $ "image" .someComponent.image) }}
 */}}
 {{- define "adc.image" -}}
 {{- $registry := .root.Values.global.imageRegistry -}}
+{{- $tag := .root.Values.global.imageTag -}}
 {{- if $registry -}}
-{{ printf "%s/%s:%s" (trimSuffix "/" $registry) .image.repository .image.tag }}
+{{ printf "%s/%s:%v" (trimSuffix "/" $registry) .image.repository $tag }}
 {{- else -}}
-{{ printf "%s:%s" .image.repository .image.tag }}
+{{ printf "%s:%v" .image.repository $tag }}
 {{- end -}}
 {{- end -}}
 
