@@ -1,11 +1,16 @@
 {{/*
-Base name for the release.
+Base name used to prefix every resource this chart creates. Deliberately
+NOT derived from .Release.Name -- the Argo Application/Helm release is
+named "distribution-center" for readability, but OpenShift Route hostnames
+(<route-name>-<namespace>.<router-suffix>) blow past the 63-character DNS
+label limit if every resource name starts with that. Defaults to the short
+"adc" instead; override via fullnameOverride if you need something else.
 */}}
 {{- define "adc.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{ .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else -}}
-{{ .Release.Name | trunc 63 | trimSuffix "-" }}
+adc
 {{- end -}}
 {{- end -}}
 
