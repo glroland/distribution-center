@@ -10,16 +10,20 @@ from .models import (
     MoveRequest,
     PickRequest,
     ResetResponse,
+    RestockRequest,
     RobotStatusResponse,
     ShelfStockResponse,
 )
 from .robot import (
     CapacityExceededError,
+    CollisionError,
     InsufficientQuantityError,
+    InvalidRestockLocationError,
     InventoryRobot,
     NotAtDockError,
     OutOfBoundsError,
     RobotStatus,
+    ShelfSpaceExhaustedError,
     SkuNotAtLocationError,
 )
 from .settings import settings
@@ -30,6 +34,7 @@ robot = InventoryRobot(
     settings.GRID_HEIGHT,
     (settings.DOCK_X, settings.DOCK_Y),
     settings.CARRY_CAPACITY,
+    move_step_delay=settings.MOVE_STEP_DELAY_SECONDS,
 )
 mcp_server = build_mcp_server(robot)
 mcp_app = mcp_server.streamable_http_app(streamable_http_path="/")
@@ -73,10 +78,10 @@ def get_status() -> RobotStatusResponse:
 
 
 @app.post("/move", response_model=RobotStatusResponse)
-def move(body: MoveRequest) -> RobotStatusResponse:
+async def move(body: MoveRequest) -> RobotStatusResponse:
     try:
-        status = robot.move_to((body.x, body.y))
-    except OutOfBoundsError as exc:
+        status = await robot.move_to((body.x, body.y))
+    except (OutOfBoundsError, CollisionError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     return _to_status_response(status)
 
@@ -109,6 +114,20 @@ def pick(body: PickRequest) -> RobotStatusResponse:
     except (InsufficientQuantityError, CapacityExceededError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     return _to_status_response(status)
+
+
+@app.post("/restock", response_model=ShelfStockResponse)
+def restock(body: RestockRequest) -> ShelfStockResponse:
+    if (body.x is None) != (body.y is None):
+        raise HTTPException(status_code=400, detail="x and y must both be given, or both omitted")
+    location = (body.x, body.y) if body.x is not None and body.y is not None else None
+    try:
+        loc_x, loc_y = robot.restock(body.sku, body.qty, location)
+    except InvalidRestockLocationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except ShelfSpaceExhaustedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    return ShelfStockResponse(location_x=loc_x, location_y=loc_y, stock=robot.get_shelf_stock((loc_x, loc_y)))
 
 
 @app.post("/deliver", response_model=DeliverResponse)

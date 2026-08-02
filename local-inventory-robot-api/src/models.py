@@ -36,6 +36,13 @@ class PickRequest(BaseModel):
     qty: int = Field(gt=0)
 
 
+class RestockRequest(BaseModel):
+    sku: str
+    qty: int = Field(gt=0)
+    x: int | None = None
+    y: int | None = None
+
+
 class DeliverResponse(BaseModel):
     delivered: dict[str, int]
     status: RobotStatusResponse

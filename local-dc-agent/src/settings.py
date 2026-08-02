@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-5"
     OPENAI_BASE_URL: str | None = None
-    MAX_FULFILLMENT_TURNS: int = 20
+    MAX_FULFILLMENT_TURNS: int = 1000
     HOST: str = "0.0.0.0"
     PORT: int = 9100
     AGENT_URL: str | None = None

@@ -9,8 +9,23 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def _reset_robot():
     robot.reset()
+    robot._move_step_delay = 0
     yield
     robot.reset()
+
+
+def _goto(x: int, y: int) -> None:
+    """Walk the robot to (x, y) one grid cell at a time via POST /move, so the
+    route never crosses (only ever lands on) a cell holding product."""
+    location = client.get("/location").json()
+    cx, cy = location["x"], location["y"]
+    while (cx, cy) != (x, y):
+        if cx != x:
+            cx += 1 if x > cx else -1
+        else:
+            cy += 1 if y > cy else -1
+        resp = client.post("/move", json={"x": cx, "y": cy})
+        assert resp.status_code == 200
 
 
 def test_health() -> None:
@@ -36,10 +51,11 @@ def test_get_status() -> None:
 
 
 def test_move() -> None:
-    resp = client.post("/move", json={"x": 3, "y": 5})
+    # x = 9 is never stocked, so this is a plain, unobstructed move.
+    resp = client.post("/move", json={"x": 9, "y": 3})
     assert resp.status_code == 200
-    assert resp.json()["x"] == 3
-    assert resp.json()["y"] == 5
+    assert resp.json()["x"] == 9
+    assert resp.json()["y"] == 3
 
 
 def test_move_out_of_bounds_returns_400() -> None:
@@ -47,17 +63,25 @@ def test_move_out_of_bounds_returns_400() -> None:
     assert resp.status_code == 400
 
 
+def test_move_blocked_by_product_returns_400() -> None:
+    # the straight path from the dock to (1, 5) crosses (1, 1), which stocks
+    # SKU-1001 - the move should be rejected rather than driving through it
+    resp = client.post("/move", json={"x": 1, "y": 5})
+    assert resp.status_code == 400
+    assert client.get("/location").json() == {"x": 0, "y": 0}
+
+
 def test_get_shelf_at_location() -> None:
-    resp = client.get("/shelf", params={"x": 3, "y": 5})
+    resp = client.get("/shelf", params={"x": 1, "y": 1})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["location_x"] == 3
-    assert body["location_y"] == 5
+    assert body["location_x"] == 1
+    assert body["location_y"] == 1
     assert body["stock"] == {"SKU-1001": 50}
 
 
 def test_get_shelf_at_current_location() -> None:
-    client.post("/move", json={"x": 7, "y": 2})
+    _goto(3, 1)
     resp = client.get("/shelf")
     assert resp.status_code == 200
     assert resp.json()["stock"] == {"SKU-1002": 20}
@@ -72,7 +96,7 @@ def test_find_item() -> None:
     resp = client.get("/find/SKU-1001")
     assert resp.status_code == 200
     locations = {(loc["location_x"], loc["location_y"]): loc["qty"] for loc in resp.json()}
-    assert locations == {(3, 5): 50, (6, 6): 10}
+    assert locations == {(1, 1): 50, (5, 9): 10}
 
 
 def test_find_item_unknown_sku_returns_empty_list() -> None:
@@ -82,12 +106,12 @@ def test_find_item_unknown_sku_returns_empty_list() -> None:
 
 
 def test_pick_and_deliver_round_trip() -> None:
-    client.post("/move", json={"x": 3, "y": 5})
+    _goto(1, 1)
     resp = client.post("/pick", json={"sku": "SKU-1001", "qty": 10})
     assert resp.status_code == 200
     assert resp.json()["carrying"] == {"SKU-1001": 10}
 
-    client.post("/move", json={"x": 0, "y": 0})
+    _goto(0, 0)
     resp = client.post("/deliver")
     assert resp.status_code == 200
     body = resp.json()
@@ -96,36 +120,78 @@ def test_pick_and_deliver_round_trip() -> None:
 
 
 def test_pick_unknown_sku_returns_404() -> None:
-    client.post("/move", json={"x": 3, "y": 5})
+    _goto(1, 1)
     resp = client.post("/pick", json={"sku": "does-not-exist", "qty": 1})
     assert resp.status_code == 404
 
 
 def test_pick_insufficient_quantity_returns_400() -> None:
-    client.post("/move", json={"x": 7, "y": 2})
+    _goto(3, 1)
     resp = client.post("/pick", json={"sku": "SKU-1002", "qty": 10000})
     assert resp.status_code == 400
 
 
 def test_pick_rejects_non_positive_qty() -> None:
-    client.post("/move", json={"x": 3, "y": 5})
+    _goto(1, 1)
     resp = client.post("/pick", json={"sku": "SKU-1001", "qty": 0})
     assert resp.status_code == 422
 
 
 def test_deliver_away_from_dock_returns_400() -> None:
-    client.post("/move", json={"x": 3, "y": 5})
+    _goto(1, 1)
     client.post("/pick", json={"sku": "SKU-1001", "qty": 5})
     resp = client.post("/deliver")
     assert resp.status_code == 400
 
 
+def test_restock_at_explicit_location() -> None:
+    resp = client.post("/restock", json={"sku": "SKU-9999", "qty": 12, "x": 4, "y": 4})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body == {"location_x": 4, "location_y": 4, "stock": {"SKU-9999": 12}}
+
+
+def test_restock_without_location_prefers_existing_sku_location() -> None:
+    resp = client.post("/restock", json={"sku": "SKU-1002", "qty": 5})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body == {"location_x": 3, "location_y": 1, "stock": {"SKU-1002": 25}}
+
+
+def test_restock_then_pick_round_trip() -> None:
+    client.post("/restock", json={"sku": "SKU-9999", "qty": 8, "x": 4, "y": 4})
+    _goto(4, 4)
+    resp = client.post("/pick", json={"sku": "SKU-9999", "qty": 8})
+    assert resp.status_code == 200
+    assert resp.json()["carrying"] == {"SKU-9999": 8}
+
+
+def test_restock_requires_both_coordinates() -> None:
+    resp = client.post("/restock", json={"sku": "SKU-9999", "qty": 1, "x": 4})
+    assert resp.status_code == 400
+
+
+def test_restock_at_dock_returns_400() -> None:
+    resp = client.post("/restock", json={"sku": "SKU-9999", "qty": 1, "x": 0, "y": 0})
+    assert resp.status_code == 400
+
+
+def test_restock_out_of_bounds_returns_400() -> None:
+    resp = client.post("/restock", json={"sku": "SKU-9999", "qty": 1, "x": 99, "y": 0})
+    assert resp.status_code == 400
+
+
+def test_restock_rejects_non_positive_qty() -> None:
+    resp = client.post("/restock", json={"sku": "SKU-9999", "qty": 0, "x": 4, "y": 4})
+    assert resp.status_code == 422
+
+
 def test_reset() -> None:
-    client.post("/move", json={"x": 3, "y": 5})
+    _goto(1, 1)
     client.post("/pick", json={"sku": "SKU-1001", "qty": 10})
     resp = client.post("/reset")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
 
     assert client.get("/location").json() == {"x": 0, "y": 0}
-    assert client.get("/shelf", params={"x": 3, "y": 5}).json()["stock"] == {"SKU-1001": 50}
+    assert client.get("/shelf", params={"x": 1, "y": 1}).json()["stock"] == {"SKU-1001": 50}

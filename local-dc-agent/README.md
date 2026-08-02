@@ -57,11 +57,16 @@ A2A message (PDF)
      each SKU's shelf, drive the robot there, pick it up, and deliver
      everything to the dock. What `deliver_items` reports as actually
      delivered — not the requested quantity — is what gets shipped and
-     what decrements the WMS ledger.
+     what decrements the WMS ledger. Stock arriving via an approved
+     inter-DC transfer is placed on a shelf with `restock_shelf` before
+     being picked and delivered the normal way.
    - [`local-shipping-api`](../local-shipping-api) — ship whatever was
      delivered in one carrier handoff, returning a tracking number.
-   - [`supervisor-api`](../supervisor-api) — escalate any SKU that's
-     unknown or short, without blocking the rest of the order.
+   - [`supervisor-api`](../supervisor-api) — for a SKU that's short, first
+     try sourcing the shortfall from another DC via `request_transfer`; if
+     that comes back unavailable (or the SKU is unknown to the WMS at all),
+     escalate to a human via `request_help`, without blocking the rest of
+     the order.
 
    The four servers' MCP tools are connected once (`src/mcp_tools.py`) and
    reused for the worker's lifetime, name-prefixed by service
@@ -132,7 +137,7 @@ Starts the agent on `http://localhost:9100`. The agent card is served at
 | `SHIPPING_API_URL` | `http://localhost:8004` | Base URL of `local-shipping-api` |
 | `OPENAI_API_KEY` | *(none)* | Required to run extraction and fulfillment |
 | `OPENAI_MODEL` | `gpt-5` | Model used for both extraction and fulfillment |
-| `MAX_FULFILLMENT_TURNS` | `20` | Tool-call turns before the fulfillment loop auto-escalates and gives up |
+| `MAX_FULFILLMENT_TURNS` | `1000` | Tool-call turns before the fulfillment loop auto-escalates and gives up |
 | `HOST` | `0.0.0.0` | Bind host |
 | `PORT` | `9100` | Bind port |
 | `AGENT_URL` | `http://localhost:{PORT}/` | URL advertised in the agent card |

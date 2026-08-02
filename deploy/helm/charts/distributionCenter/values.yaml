@@ -14,7 +14,7 @@ centers:
         repository: local-dc-agent
         tag: latest
       port: 9100
-      maxFulfillmentTurns: 20
+      maxFulfillmentTurns: 1000
       resources:
         requests:
           cpu: 100m

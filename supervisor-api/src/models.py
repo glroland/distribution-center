@@ -16,3 +16,14 @@ class HelpRequestResponse(BaseModel):
 
 class ResolveRequest(BaseModel):
     resolution: str = Field(min_length=1)
+
+
+class TransferRequestResponse(BaseModel):
+    id: int
+    agent_id: str | None
+    sku: str
+    quantity: int
+    context: str | None
+    status: str
+    source_location: str | None
+    created_at: datetime

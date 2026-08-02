@@ -3,10 +3,18 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from fastapi import FastAPI, HTTPException
 
 from .mcp_server import build_mcp_server
-from .models import HelpRequestResponse, ResolveRequest
-from .store import HelpRequest, HelpRequestAlreadyResolvedError, HelpRequestNotFoundError, SupervisorStore
+from .models import HelpRequestResponse, ResolveRequest, TransferRequestResponse
+from .settings import settings
+from .store import (
+    HelpRequest,
+    HelpRequestAlreadyResolvedError,
+    HelpRequestNotFoundError,
+    SupervisorStore,
+    TransferRequest,
+    TransferRequestNotFoundError,
+)
 
-store = SupervisorStore()
+store = SupervisorStore(unavailable_chance=settings.TRANSFER_UNAVAILABLE_CHANCE)
 mcp_server = build_mcp_server(store)
 mcp_app = mcp_server.streamable_http_app(streamable_http_path="/")
 
@@ -32,6 +40,19 @@ def _to_response(request: HelpRequest) -> HelpRequestResponse:
         created_at=request.created_at,
         resolved_at=request.resolved_at,
         resolution=request.resolution,
+    )
+
+
+def _to_transfer_response(request: TransferRequest) -> TransferRequestResponse:
+    return TransferRequestResponse(
+        id=request.id,
+        agent_id=request.agent_id,
+        sku=request.sku,
+        quantity=request.quantity,
+        context=request.context,
+        status=request.status,
+        source_location=request.source_location,
+        created_at=request.created_at,
     )
 
 
@@ -75,3 +96,21 @@ def resolve_help_request(request_id: int, body: ResolveRequest) -> HelpRequestRe
     except HelpRequestAlreadyResolvedError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     return _to_response(request)
+
+
+@app.get("/transfer-requests", response_model=list[TransferRequestResponse])
+def list_transfer_requests(status: str | None = None) -> list[TransferRequestResponse]:
+    if status is not None and status not in ("available", "unavailable"):
+        raise HTTPException(status_code=400, detail="status must be 'available' or 'unavailable'")
+    return [_to_transfer_response(r) for r in store.list_transfer_requests(status)]
+
+
+@app.get("/transfer-requests/{request_id}", response_model=TransferRequestResponse)
+def get_transfer_request(request_id: int) -> TransferRequestResponse:
+    try:
+        request = store.get_transfer_request(request_id)
+    except TransferRequestNotFoundError:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown transfer request: {request_id}"
+        ) from None
+    return _to_transfer_response(request)

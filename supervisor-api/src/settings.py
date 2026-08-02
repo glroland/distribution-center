@@ -8,5 +8,9 @@ class Settings(BaseSettings):
     PORT: int = 8003
     LOG_LEVEL: str = "INFO"
 
+    # Odds that a requested SKU turns out to be unavailable at every other
+    # distribution center when an agent asks for an inventory transfer.
+    TRANSFER_UNAVAILABLE_CHANCE: float = 1 / 3
+
 
 settings = Settings()

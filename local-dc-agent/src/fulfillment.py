@@ -111,11 +111,21 @@ book of record matches what physically left the shelf.
 5. Once picking is done, ship everything delivered in a single \
 `shipping__ship_order` call, using the order's buyer_name as customer_name \
 and its ship_to address as customer_address.
-6. For any line item that is unknown to the WMS, or doesn't have enough \
-on-hand quantity to fulfil the requested amount, call \
-`supervisor__request_help` with a clear question (include the SKU, quantity \
-requested, and quantity on hand) and move on — never let one bad line item \
-block the rest of the order.
+6. For any line item that doesn't have enough on-hand quantity to fulfil the \
+requested amount (but is known to the WMS), first try \
+`supervisor__request_transfer` with the SKU and the shortfall quantity before \
+escalating to a human:
+   - If it returns status `available`, the shortfall is inbound from \
+another DC at `source_location`. Use `robot__restock_shelf` to place the \
+transferred quantity on a shelf (omit x/y to let it pick one automatically), \
+then pick it up the normal way — `robot__find_item`, `robot__move_robot`, \
+`robot__fetch_item` — and fold it into that item's delivery like any other \
+stock (steps 2-4 still apply, including the WMS ledger decrement for what's \
+actually delivered).
+   - If it returns status `unavailable`, or the SKU is unknown to the WMS in \
+the first place, call `supervisor__request_help` with a clear question \
+(include the SKU, quantity requested, and quantity on hand) and move on — \
+never let one bad line item block the rest of the order.
 7. When every line item has been either shipped or escalated, call \
 `record_fulfillment_result` exactly once, as your final action, summarizing \
 every item's outcome, the shipment created (if any), and any escalations \

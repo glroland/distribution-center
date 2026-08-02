@@ -31,8 +31,19 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
             "move_robot there, fetch_item to pick it off the shelf, move_robot "
             "back to the dock, then deliver_items. Use get_robot_status any time "
             "to check current location and what's currently loaded, and "
-            "get_shelf_inventory to see everything stocked at a location. Call "
-            "reset_robot to restore the demo to its starting state."
+            "get_shelf_inventory to see everything stocked at a location. Use "
+            "restock_shelf when new stock physically arrives (e.g. from an inter-DC "
+            "transfer) and needs to be placed on a shelf before it can be found and "
+            "fetched like any other stock; omit x/y to let it pick a sensible cell "
+            "automatically. "
+            "move_robot physically drives the robot there one grid cell at a time "
+            "(it will not teleport), so it's fine to call it with any destination on "
+            "the grid - the robot itself is only rejected if the straight path there "
+            "would cross a cell that currently holds product; if that happens, retry "
+            "with a different route, e.g. move_robot to an intermediate waypoint "
+            "first and continue from there. Arriving exactly at a shelf's own "
+            "location (to fetch_item from it) is always allowed. Call reset_robot to "
+            "restore the demo to its starting state."
         ),
     )
 
@@ -64,9 +75,13 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         }
 
     @mcp_server.tool()
-    def move_robot(x: int, y: int) -> dict:
-        """Move the robot to grid location (x, y). Fails if the location is outside the grid."""
-        return _status_dict(robot.move_to((x, y)))
+    async def move_robot(x: int, y: int) -> dict:
+        """Move the robot to grid location (x, y), one grid cell at a time. Fails if
+        the location is outside the grid, or if the path there would cross a cell
+        that currently holds product - pick a different route (e.g. an intermediate
+        waypoint) and try again. Arriving exactly at a shelf's location to pick from
+        it is always fine."""
+        return _status_dict(await robot.move_to((x, y)))
 
     @mcp_server.tool()
     def fetch_item(sku: str, qty: int) -> dict:
@@ -74,6 +89,21 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         load them onto the robot. Fails if the SKU isn't stocked there, there isn't
         enough on hand, or it would exceed the robot's carry capacity."""
         return _status_dict(robot.pick(sku, qty))
+
+    @mcp_server.tool()
+    def restock_shelf(sku: str, qty: int, x: int | None = None, y: int | None = None) -> dict:
+        """Place `qty` newly arrived units of `sku` onto a shelf, e.g. after a
+        supervisor-approved inter-DC transfer. If x and y are omitted, prefers a
+        cell already stocking that SKU, otherwise picks the first empty cell.
+        Fails if qty isn't positive, or if an explicit (x, y) is out of bounds or
+        is the dock. Returns the resulting stock at the location used."""
+        location = (x, y) if x is not None and y is not None else None
+        loc_x, loc_y = robot.restock(sku, qty, location)
+        return {
+            "location_x": loc_x,
+            "location_y": loc_y,
+            "stock": robot.get_shelf_stock((loc_x, loc_y)),
+        }
 
     @mcp_server.tool()
     def deliver_items() -> dict:
