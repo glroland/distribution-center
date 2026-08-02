@@ -142,6 +142,7 @@ Starts the agent on `http://localhost:9100`. The agent card is served at
 | `HOST` | `0.0.0.0` | Bind host |
 | `PORT` | `9100` | Bind port |
 | `AGENT_URL` | `http://localhost:{PORT}/` | URL advertised in the agent card |
+| `MLFLOW_TRACKING_URI` | unset | MLflow tracking server URL. When set, every order gets one MLflow trace covering ingest/extraction/fulfillment, with the extraction and fulfillment OpenAI calls (auto-instrumented via `mlflow.openai.autolog()`) and every outbound MCP tool call nested inside it (see [`src/tracing.py`](src/tracing.py)); left unset, tracing is disabled outright. MLflow's own env vars (`MLFLOW_EXPERIMENT_NAME`, `MLFLOW_WORKSPACE`, `MLFLOW_TRACKING_TOKEN`, `MLFLOW_TRACKING_AUTH`, ...) are read natively by the `mlflow` package alongside this one |
 
 ## Usage
 

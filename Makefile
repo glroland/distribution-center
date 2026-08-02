@@ -6,6 +6,10 @@ TARGET_DIR := target
 LOG_DIR := $(TARGET_DIR)/logs
 PID_DIR := $(TARGET_DIR)/pids
 
+MLFLOW_TRACKING_URI := hhttps://rh-ai.apps.ocp.home.glroland.com/mlflow
+MLFLOW_WORKSPACE := distribution-center
+MLFLOW_TRACKING_TOKEN := $(shell oc whoami --show-token)
+
 # name:subdir:port-env-var for every service start-all/kill-all manage.
 SERVICES := \
 	ingest-api:po-ingest-api:PO_INGEST_API_PORT \

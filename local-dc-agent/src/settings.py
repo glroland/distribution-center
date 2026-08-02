@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     PORT: int = 9100
     AGENT_URL: str | None = None
     LOG_LEVEL: str = "INFO"
+    MLFLOW_TRACKING_URI: str | None = None
 
     @model_validator(mode="after")
     def _default_agent_url(self) -> "Settings":

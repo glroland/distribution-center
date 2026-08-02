@@ -90,3 +90,55 @@ capabilities:
 seccompProfile:
   type: RuntimeDefault
 {{- end -}}
+
+{{/*
+Name of the shared MLflow tracing ConfigMap (deploy/helm/templates/mlflow-configmap.yaml).
+*/}}
+{{- define "adc.mlflow.configMapName" -}}
+{{ include "adc.fullname" . }}-mlflow
+{{- end -}}
+
+{{/*
+Standard MLflow tracing env vars for a container, sourced from the shared
+ConfigMap. Include inside any container's `env:` list:
+`{{- include "adc.mlflow.envVars" $root | nindent 12 }}`.
+Renders nothing when global.mlflow.enabled is false.
+*/}}
+{{- define "adc.mlflow.envVars" -}}
+{{- if .Values.global.mlflow.enabled }}
+- name: MLFLOW_TRACKING_URI
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "adc.mlflow.configMapName" . }}
+      key: MLFLOW_TRACKING_URI
+- name: MLFLOW_WORKSPACE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "adc.mlflow.configMapName" . }}
+      key: MLFLOW_WORKSPACE
+- name: MLFLOW_EXPERIMENT_NAME
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "adc.mlflow.configMapName" . }}
+      key: MLFLOW_EXPERIMENT_NAME
+- name: MLFLOW_TRACKING_AUTH
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "adc.mlflow.configMapName" . }}
+      key: MLFLOW_TRACKING_AUTH
+{{- if .Values.global.mlflow.otlpEndpoint }}
+- name: OTEL_EXPORTER_OTLP_ENDPOINT
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "adc.mlflow.configMapName" . }}
+      key: OTEL_EXPORTER_OTLP_ENDPOINT
+{{- end }}
+{{- if .Values.global.mlflow.otlpHeaders }}
+- name: OTEL_EXPORTER_OTLP_HEADERS
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "adc.mlflow.configMapName" . }}
+      key: OTEL_EXPORTER_OTLP_HEADERS
+{{- end }}
+{{- end }}
+{{- end -}}

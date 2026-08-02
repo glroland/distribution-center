@@ -65,6 +65,31 @@ oc create secret generic my-openai-secret --from-literal=OPENAI_API_KEY=sk-...
 helm install adc deploy/helm --set global.openai.existingSecret=my-openai-secret
 ```
 
+## MLflow tracing
+
+Every service (the two global singletons and every `local-*` component in
+each distribution center) gets `MLFLOW_TRACKING_URI`, `MLFLOW_WORKSPACE`,
+`MLFLOW_EXPERIMENT_NAME`, and `MLFLOW_TRACKING_AUTH` from a single shared
+ConfigMap (`templates/mlflow-configmap.yaml`), controlled by
+`global.mlflow.*` in `values.yaml`:
+
+```sh
+helm install adc deploy/helm \
+  --set global.openai.apiKey="$OPENAI_API_KEY" \
+  --set global.mlflow.trackingUri=https://your-mlflow-server/
+```
+
+`global.mlflow.trackingAuth` defaults to `kubernetes-namespaced`, which
+relies on `mlflow[kubernetes]` (bundled in every service's
+`requirements.txt`) reading the pod's own service-account token and
+namespace automatically -- there's no token Secret to create, rotate, or
+pass in. Set it to `""` if your MLflow server doesn't authenticate that way.
+
+To also dual-export traces to a separate OTLP collector (e.g. Tempo/Jaeger)
+alongside MLflow, set `global.mlflow.otlpEndpoint` (and `otlpHeaders` if
+needed); leave both empty to skip OTLP entirely. Set
+`global.mlflow.enabled=false` to omit all of this and run without tracing.
+
 ## Adding a distribution center
 
 Copy the `distributionCenter.centers[0]` block in `values.yaml`, give it a

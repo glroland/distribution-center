@@ -3,12 +3,17 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+import mlflow
+
 from .fulfillment import FulfillmentError, fulfill_order
 from .ingest_client import IngestError, convert_pdf_to_markdown
 from .mcp_tools import McpToolRouter
 from .models import ProcessOrderResult
 from .order_extraction import ExtractionError, extract_order
 from .order_processing import process_order
+from .tracing import configure_tracing
+
+configure_tracing()
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +73,20 @@ class OrderWorker:
                 self._queue.task_done()
 
     async def _process(self, job: ProcessingJob) -> ProcessOrderResult:
+        with mlflow.start_span(name="process_purchase_order", span_type="CHAIN") as span:
+            span.set_inputs({"filename": job.filename, "pdf_bytes": len(job.pdf_bytes)})
+            mlflow.update_current_trace(tags={"po.filename": job.filename})
+            result = await self._process_traced(job)
+            span.set_outputs(
+                {
+                    "po_number": result.po_number,
+                    "dc_order_id": result.dc_order_id,
+                    "order_status": result.fulfillment.order_status if result.fulfillment else None,
+                }
+            )
+            return result
+
+    async def _process_traced(self, job: ProcessingJob) -> ProcessOrderResult:
         on_event = job.on_event
 
         markdown = await convert_pdf_to_markdown(job.pdf_bytes, job.filename)
@@ -83,6 +102,7 @@ class OrderWorker:
             "Extracted PO %s from %s: %d line item(s)",
             extracted.po_number, job.filename, len(extracted.line_items),
         )
+        mlflow.update_current_trace(tags={"po.number": extracted.po_number})
         if on_event:
             await on_event(
                 "extracted",
@@ -100,6 +120,7 @@ class OrderWorker:
             "Processed PO %s as %s (totals_mismatch=%s)",
             extracted.po_number, result.dc_order_id, result.totals_mismatch,
         )
+        mlflow.update_current_trace(tags={"po.dc_order_id": result.dc_order_id})
         if on_event:
             await on_event(
                 "processed",

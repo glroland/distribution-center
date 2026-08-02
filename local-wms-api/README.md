@@ -36,6 +36,7 @@ set environment variables directly (env vars take precedence over `.env`).
 | `PORT` | `8001` | Bind port |
 | `LOCATION_NAME` | `DC-VIRTUAL-01` | Name of the virtual location this instance manages |
 | `INVENTORY_CSV_PATH` | `data/inventory.csv` | Path to the seed CSV (relative paths resolve against the project root) |
+| `MLFLOW_TRACKING_URI` | unset | MLflow tracking server URL. When set, every MCP tool call is traced as an MLflow span (see [`src/tracing.py`](src/tracing.py)); left unset, tracing is disabled outright. MLflow's own env vars (`MLFLOW_EXPERIMENT_NAME`, `MLFLOW_WORKSPACE`, `MLFLOW_TRACKING_TOKEN`, `MLFLOW_TRACKING_AUTH`, ...) are read natively by the `mlflow` package alongside this one |
 
 ## Inventory data
 

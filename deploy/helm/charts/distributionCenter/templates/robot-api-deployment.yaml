@@ -62,6 +62,7 @@ spec:
               value: {{ $dc.robotApi.dock.y | quote }}
             - name: CARRY_CAPACITY
               value: {{ $dc.robotApi.carryCapacity | quote }}
+            {{- include "adc.mlflow.envVars" $root | nindent 12 }}
           volumeMounts:
             - name: shelves-data
               mountPath: /app/data/shelves.csv

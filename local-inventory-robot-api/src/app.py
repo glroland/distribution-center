@@ -27,7 +27,9 @@ from .robot import (
     SkuNotAtLocationError,
 )
 from .settings import settings
+from .tracing import configure_tracing
 
+configure_tracing()
 robot = InventoryRobot(
     settings.shelves_csv_path(),
     settings.GRID_WIDTH,

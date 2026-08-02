@@ -2,10 +2,14 @@ import logging
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 
+import mlflow
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from .settings import settings
+from .tracing import configure_tracing
+
+configure_tracing()
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +76,7 @@ class McpToolRouter:
     def server_instructions(self) -> dict[str, str]:
         return {label: server.instructions for label, server in self._servers.items() if server.instructions}
 
+    @mlflow.trace(span_type="TOOL", name="mcp_tool_call")
     async def call(self, name: str, arguments: dict) -> str:
         label, _, tool_name = name.partition(_TOOL_NAME_SEPARATOR)
         server = self._servers.get(label)

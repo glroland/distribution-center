@@ -82,6 +82,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "adc.openai.secretName" $root }}
                   key: {{ $root.Values.global.openai.existingSecretKey }}
+            {{- include "adc.mlflow.envVars" $root | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /.well-known/agent-card.json

@@ -54,6 +54,7 @@ spec:
               value: {{ $dc.locationName | quote }}
             - name: INVENTORY_CSV_PATH
               value: data/inventory.csv
+            {{- include "adc.mlflow.envVars" $root | nindent 12 }}
           volumeMounts:
             - name: inventory-data
               mountPath: /app/data/inventory.csv

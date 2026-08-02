@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     CARRY_CAPACITY: int = 100
     MOVE_STEP_DELAY_SECONDS: float = 0.25
     LOG_LEVEL: str = "INFO"
+    MLFLOW_TRACKING_URI: str | None = None
 
     def shelves_csv_path(self) -> Path:
         path = Path(self.SHELVES_CSV_PATH)

@@ -41,6 +41,7 @@ spec:
               value: "0.0.0.0"
             - name: PORT
               value: {{ .Values.global.poIngestApi.port | quote }}
+            {{- include "adc.mlflow.envVars" $ | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /health

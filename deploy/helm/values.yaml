@@ -47,6 +47,23 @@ global:
   supervisorApi:
     port: 8003
 
+  # MLflow tracing (see each service's src/tracing.py), consumed by every
+  # service below via the shared ConfigMap in templates/mlflow-configmap.yaml.
+  mlflow:
+    enabled: true
+    trackingUri: ""
+    workspace: "distribution-center"
+    experimentName: "distribution-center"
+    # kubernetes-namespaced auto-reads the pod's own service-account token and
+    # namespace (mlflow[kubernetes], bundled in every service's requirements.txt)
+    # for Authorization + X-MLFLOW-WORKSPACE -- no token Secret to manage or
+    # rotate. Set to "" to disable and fall back to no auth.
+    trackingAuth: "kubernetes-namespaced"
+    # Optional: dual-export traces to a separate OTLP collector (e.g. Tempo/Jaeger)
+    # alongside MLflow. Leave both empty to skip OTLP entirely.
+    otlpEndpoint: ""
+    otlpHeaders: ""
+
 # ---------------------------------------------------------------------------
 # Global (cluster-shared) services. Each is its own subchart under charts/.
 # ---------------------------------------------------------------------------

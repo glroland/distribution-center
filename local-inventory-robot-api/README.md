@@ -56,6 +56,7 @@ set environment variables directly (env vars take precedence over `.env`).
 | `DOCK_Y` | `0` | Dock y coordinate |
 | `CARRY_CAPACITY` | `100` | Max total units the robot can carry across all SKUs at once |
 | `MOVE_STEP_DELAY_SECONDS` | `0.25` | Pause between each single-grid-cell step of a move |
+| `MLFLOW_TRACKING_URI` | unset | MLflow tracking server URL. When set, every MCP tool call is traced as an MLflow span (see [`src/tracing.py`](src/tracing.py)); left unset, tracing is disabled outright. MLflow's own env vars (`MLFLOW_EXPERIMENT_NAME`, `MLFLOW_WORKSPACE`, `MLFLOW_TRACKING_TOKEN`, `MLFLOW_TRACKING_AUTH`, ...) are read natively by the `mlflow` package alongside this one |
 
 ## Shelf data
 

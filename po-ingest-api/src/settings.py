@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     LOG_LEVEL: str = "INFO"
+    MLFLOW_TRACKING_URI: str | None = None
 
 
 settings = Settings()

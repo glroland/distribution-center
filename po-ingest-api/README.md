@@ -36,6 +36,7 @@ precedence over `.env`).
 |---|---|---|
 | `HOST` | `0.0.0.0` | Bind host |
 | `PORT` | `8000` | Bind port |
+| `MLFLOW_TRACKING_URI` | unset | MLflow tracking server URL. When set, the `convert_pdf_to_markdown` MCP tool call is traced as an MLflow span (see [`src/tracing.py`](src/tracing.py)); left unset, tracing is disabled outright. MLflow's own env vars (`MLFLOW_EXPERIMENT_NAME`, `MLFLOW_WORKSPACE`, `MLFLOW_TRACKING_TOKEN`, `MLFLOW_TRACKING_AUTH`, ...) are read natively by the `mlflow` package alongside this one |
 
 > Docling downloads its layout/OCR models the first time it runs a
 > conversion. The first request (or first test run) will be slow and needs

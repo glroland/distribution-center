@@ -49,6 +49,7 @@ spec:
               value: "0.0.0.0"
             - name: PORT
               value: {{ $dc.shippingApi.port | quote }}
+            {{- include "adc.mlflow.envVars" $root | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /health

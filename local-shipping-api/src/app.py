@@ -11,7 +11,9 @@ from .shipping import (
     ShippingStore,
     TrackingNumberNotFoundError,
 )
+from .tracing import configure_tracing
 
+configure_tracing()
 store = ShippingStore()
 mcp_server = build_mcp_server(store)
 mcp_app = mcp_server.streamable_http_app(streamable_http_path="/")

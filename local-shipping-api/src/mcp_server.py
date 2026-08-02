@@ -1,6 +1,9 @@
 from mcp.server import MCPServer
 
 from .shipping import Shipment, ShippingStore
+from .tracing import configure_tracing, tool_trace
+
+configure_tracing()
 
 
 def _shipment_dict(shipment: Shipment) -> dict:
@@ -37,6 +40,7 @@ def build_mcp_server(store: ShippingStore) -> MCPServer:
     )
 
     @mcp_server.tool()
+    @tool_trace
     def ship_order(
         po_number: str, customer_name: str, customer_address: str, items: list[dict]
     ) -> dict:
@@ -52,21 +56,25 @@ def build_mcp_server(store: ShippingStore) -> MCPServer:
         return _shipment_dict(shipment)
 
     @mcp_server.tool()
+    @tool_trace
     def get_shipment(shipment_id: int) -> dict:
         """Look up a shipment by its id."""
         return _shipment_dict(store.get_shipment(shipment_id))
 
     @mcp_server.tool()
+    @tool_trace
     def track_shipment(tracking_number: str) -> dict:
         """Look up a shipment by its carrier tracking number."""
         return _shipment_dict(store.get_shipment_by_tracking(tracking_number))
 
     @mcp_server.tool()
+    @tool_trace
     def list_shipments(po_number: str | None = None) -> dict:
         """List shipments, optionally filtered to a single PO number."""
         return {"shipments": [_shipment_dict(s) for s in store.list_shipments(po_number)]}
 
     @mcp_server.tool()
+    @tool_trace
     def reset_shipments() -> dict:
         """Clear all shipments. Intended for demo/test reset."""
         store.reset()

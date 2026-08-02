@@ -13,7 +13,9 @@ from .store import (
     TransferRequest,
     TransferRequestNotFoundError,
 )
+from .tracing import configure_tracing
 
+configure_tracing()
 store = SupervisorStore(unavailable_chance=settings.TRANSFER_UNAVAILABLE_CHANCE)
 mcp_server = build_mcp_server(store)
 mcp_app = mcp_server.streamable_http_app(streamable_http_path="/")

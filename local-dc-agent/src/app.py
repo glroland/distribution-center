@@ -7,8 +7,10 @@ from starlette.applications import Starlette
 
 from .agent_card import AGENT_CARD
 from .agent_executor import ProcessOrderAgentExecutor
+from .tracing import configure_tracing
 from .worker import OrderWorker
 
+configure_tracing()
 worker = OrderWorker()
 
 

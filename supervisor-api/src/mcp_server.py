@@ -1,6 +1,9 @@
 from mcp.server import MCPServer
 
 from .store import HelpRequest, SupervisorStore, TransferRequest
+from .tracing import configure_tracing, tool_trace
+
+configure_tracing()
 
 
 def _request_dict(request: HelpRequest) -> dict:
@@ -49,6 +52,7 @@ def build_mcp_server(store: SupervisorStore) -> MCPServer:
     )
 
     @mcp_server.tool()
+    @tool_trace
     def request_help(question: str, agent_id: str | None = None, context: str | None = None) -> dict:
         """Ask a human supervisor for help when stuck. `question` should clearly
         state what's blocking progress; `context` can include any extra detail,
@@ -58,6 +62,7 @@ def build_mcp_server(store: SupervisorStore) -> MCPServer:
         return _request_dict(request)
 
     @mcp_server.tool()
+    @tool_trace
     def request_transfer(
         sku: str, quantity: int, agent_id: str | None = None, context: str | None = None
     ) -> dict:

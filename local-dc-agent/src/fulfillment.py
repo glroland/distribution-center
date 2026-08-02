@@ -3,12 +3,16 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import mlflow
 from openai import OpenAI
 from pydantic import ValidationError
 
 from .mcp_tools import McpToolRouter, ToolCallError
 from .models import Escalation, FulfillmentItemResult, FulfillmentResult, ProcessOrderResult
 from .settings import settings
+from .tracing import configure_tracing
+
+configure_tracing()
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +166,7 @@ def _order_message(order: ProcessOrderResult) -> str:
     return json.dumps(payload)
 
 
+@mlflow.trace(span_type="AGENT", name="fulfill_order")
 async def fulfill_order(
     order: ProcessOrderResult, tools: McpToolRouter, on_event: OnEvent | None = None
 ) -> FulfillmentResult:

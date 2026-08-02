@@ -36,6 +36,7 @@ set environment variables directly (env vars take precedence over `.env`).
 |---|---|---|
 | `HOST` | `0.0.0.0` | Bind host |
 | `PORT` | `8004` | Bind port |
+| `MLFLOW_TRACKING_URI` | unset | MLflow tracking server URL. When set, every MCP tool call is traced as an MLflow span (see [`src/tracing.py`](src/tracing.py)); left unset, tracing is disabled outright. MLflow's own env vars (`MLFLOW_EXPERIMENT_NAME`, `MLFLOW_WORKSPACE`, `MLFLOW_TRACKING_TOKEN`, `MLFLOW_TRACKING_AUTH`, ...) are read natively by the `mlflow` package alongside this one |
 
 ## Carriers
 

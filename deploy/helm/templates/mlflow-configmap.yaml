@@ -1,0 +1,23 @@
+{{- if .Values.global.mlflow.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "adc.mlflow.configMapName" . }}
+  labels:
+    {{- include "adc.commonLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow-tracing
+data:
+  MLFLOW_TRACKING_URI: {{ .Values.global.mlflow.trackingUri | quote }}
+  MLFLOW_WORKSPACE: {{ .Values.global.mlflow.workspace | quote }}
+  MLFLOW_EXPERIMENT_NAME: {{ .Values.global.mlflow.experimentName | quote }}
+  # kubernetes-namespaced reads the pod's own service-account token + namespace
+  # automatically (mlflow[kubernetes], installed in every service) -- no Secret
+  # needed. See mlflow's mlflow.tracking.request_auth.kubernetes_request_auth_provider.
+  MLFLOW_TRACKING_AUTH: {{ .Values.global.mlflow.trackingAuth | quote }}
+  {{- if .Values.global.mlflow.otlpEndpoint }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.global.mlflow.otlpEndpoint | quote }}
+  {{- end }}
+  {{- if .Values.global.mlflow.otlpHeaders }}
+  OTEL_EXPORTER_OTLP_HEADERS: {{ .Values.global.mlflow.otlpHeaders | quote }}
+  {{- end }}
+{{- end }}

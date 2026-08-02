@@ -2,11 +2,15 @@ import json
 import logging
 from typing import Any
 
+import mlflow
 from openai import OpenAI
 from pydantic import ValidationError
 
 from .settings import settings
 from .models import ExtractedOrder
+from .tracing import configure_tracing
+
+configure_tracing()
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +72,7 @@ class ExtractionError(Exception):
     """Raised when the LLM fails to return a valid, schema-conforming order."""
 
 
+@mlflow.trace(span_type="LLM", name="extract_order")
 def extract_order(markdown: str) -> ExtractedOrder:
     if not settings.OPENAI_API_KEY:
         raise ExtractionError("OPENAI_API_KEY is not configured")

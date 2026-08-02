@@ -1,6 +1,9 @@
 from mcp.server import MCPServer
 
 from .robot import InventoryRobot, RobotStatus
+from .tracing import configure_tracing, tool_trace
+
+configure_tracing()
 
 
 def _status_dict(status: RobotStatus) -> dict:
@@ -52,11 +55,13 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
     )
 
     @mcp_server.tool()
+    @tool_trace
     def get_robot_status() -> dict:
         """Get the robot's current grid location, what it's carrying, and its capacity."""
         return _status_dict(robot.get_status())
 
     @mcp_server.tool()
+    @tool_trace
     def find_item(sku: str) -> dict:
         """Find every shelf location that stocks a SKU, with the on-hand quantity at each."""
         return {
@@ -67,6 +72,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         }
 
     @mcp_server.tool()
+    @tool_trace
     def get_warehouse_map() -> dict:
         """Get a full snapshot of the warehouse: grid dimensions, dock location,
         carry capacity, the robot's current position and what it's carrying, and
@@ -78,6 +84,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         return robot.snapshot()
 
     @mcp_server.tool()
+    @tool_trace
     def get_shelf_inventory(x: int | None = None, y: int | None = None) -> dict:
         """Get every SKU and quantity stocked at grid location (x, y), or the
         robot's current location if x and y are omitted."""
@@ -90,6 +97,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         }
 
     @mcp_server.tool()
+    @tool_trace
     async def move_robot(x: int, y: int) -> dict:
         """Move the robot to grid location (x, y), one grid cell at a time. Fails if
         the location is outside the grid, or if the path there would cross a cell
@@ -99,6 +107,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         return _status_dict(await robot.move_to((x, y)))
 
     @mcp_server.tool()
+    @tool_trace
     def fetch_item(sku: str, qty: int) -> dict:
         """Pick `qty` units of `sku` off the shelf at the robot's current location and
         load them onto the robot. Fails if the SKU isn't stocked there, there isn't
@@ -106,6 +115,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         return _status_dict(robot.pick(sku, qty))
 
     @mcp_server.tool()
+    @tool_trace
     def restock_shelf(sku: str, qty: int, x: int | None = None, y: int | None = None) -> dict:
         """Place `qty` newly arrived units of `sku` onto a shelf, e.g. after a
         supervisor-approved inter-DC transfer. If x and y are omitted, prefers a
@@ -121,6 +131,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         }
 
     @mcp_server.tool()
+    @tool_trace
     def deliver_items() -> dict:
         """Drop everything the robot is carrying at the dock. Fails unless the robot
         is currently at the dock - move_robot there first."""
@@ -128,6 +139,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         return {"delivered": delivered, "status": _status_dict(status)}
 
     @mcp_server.tool()
+    @tool_trace
     def reset_robot() -> dict:
         """Reset shelf stock to the seed data and return the robot to the dock, empty-handed."""
         robot.reset()
