@@ -41,12 +41,13 @@ REQUIREMENTS := $(shell find . \
 	-not -path '*/.venv/*' \
 	-name 'requirements*.txt')
 
-.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-dashboard start-all kill-all restart-all status-all clean test
+.PHONY: help install generate-pos load-prompts run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-dashboard start-all kill-all restart-all status-all clean test
 
 help:
 	@echo "Targets:"
 	@echo "  install                      Install dependencies from every requirements.txt (via: $(PIP))"
 	@echo "  generate-pos                 Generate sample PO PDFs into $(TARGET_DIR)/pos (ARGS=\"--count 25\" to pass flags)"
+	@echo "  load-prompts                 Register prompt-registry/prompts.json into the MLflow Prompt Registry (ARGS=\"--dry-run\" to pass flags)"
 	@echo "  run-ingest-api               Run the PO ingest API (http://localhost:8000)"
 	@echo "  run-local-dc-agent           Run the distribution center A2A agent (http://localhost:9100)"
 	@echo "  run-local-wms-api            Run the local WMS inventory API (http://localhost:8001)"
@@ -71,6 +72,9 @@ install:
 generate-pos:
 	@mkdir -p $(TARGET_DIR)/pos
 	cd test-po-generator && python3 -m src --output-dir "../$(TARGET_DIR)/pos" $(ARGS)
+
+load-prompts:
+	cd prompt-registry && python3 -m src $(ARGS)
 
 run-ingest-api:
 	cd po-ingest-api && PORT=$(PO_INGEST_API_PORT) python3 -m src
