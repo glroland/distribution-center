@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 import httpx
@@ -11,6 +12,8 @@ from .po_catalog import PurchaseOrderNotFoundError, list_purchase_orders, resolv
 from .run_manager import run_manager, stream_events
 from .settings import DC_BY_NAME, DISTRIBUTION_CENTERS, settings
 from .warehouse_map import scan_shelf_grid
+
+logger = logging.getLogger(__name__)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -30,6 +33,7 @@ async def _proxy_get(url: str, params: dict | None = None) -> JSONResponse:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url, params=params)
     except httpx.HTTPError as exc:
+        logger.warning("Could not reach %s: %s", url, exc)
         raise HTTPException(status_code=502, detail=f"Could not reach {url}: {exc}") from None
     return JSONResponse(content=response.json(), status_code=response.status_code)
 
@@ -39,6 +43,7 @@ async def _proxy_post(url: str, json_body: dict | None = None) -> JSONResponse:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(url, json=json_body)
     except httpx.HTTPError as exc:
+        logger.warning("Could not reach %s: %s", url, exc)
         raise HTTPException(status_code=502, detail=f"Could not reach {url}: {exc}") from None
     return JSONResponse(content=response.json(), status_code=response.status_code)
 
@@ -145,6 +150,7 @@ async def create_run(request: Request) -> dict:
         raise HTTPException(status_code=404, detail=f"Unknown PO file: {filename}") from None
 
     run = run_manager.start_run(dc, filename)
+    logger.info("Run %s created for dc=%s, po=%s", run.id, dc_name, filename)
     return {"run_id": run.id}
 
 

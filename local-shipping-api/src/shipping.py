@@ -1,8 +1,11 @@
 import itertools
+import logging
 import random
 import string
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger(__name__)
 
 
 class InvalidShipmentError(ValueError):
@@ -87,6 +90,7 @@ class ShippingStore:
             raise InvalidShipmentError("items must not be empty")
         for sku, qty in items:
             if qty <= 0:
+                logger.warning("Rejected shipment for PO %s: non-positive qty %d for %s", po_number, qty, sku)
                 raise InvalidShipmentError(f"qty for {sku} must be positive")
 
         carrier = random.choice(list(_CARRIER_TRANSIT_DAYS))
@@ -107,6 +111,10 @@ class ShippingStore:
             estimated_delivery=estimated_delivery,
         )
         self._shipments.append(shipment)
+        logger.info(
+            "Created shipment %d for PO %s: %s, tracking %s, %d item line(s)",
+            shipment.id, po_number, carrier, shipment.tracking_number, len(shipment.items),
+        )
         return shipment
 
     def list_shipments(self, po_number: str | None = None) -> list[Shipment]:

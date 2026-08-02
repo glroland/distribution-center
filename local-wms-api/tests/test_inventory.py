@@ -80,4 +80,23 @@ def test_reset_restores_initial_state() -> None:
 def test_list_items_returns_all_skus() -> None:
     store = _store()
     skus = {item.sku for item in store.list_items()}
-    assert skus == {"SKU-1001", "SKU-1002", "SKU-1003", "SKU-1004", "SKU-1005"}
+    assert skus == {
+        "SKU-1001",
+        "SKU-1002",
+        "SKU-1003",
+        "SKU-1004",
+        "SKU-1005",
+        "SKU-1006",
+        "SKU-1007",
+        "SKU-1008",
+        "SKU-1009",
+        "SKU-1010",
+        "SKU-1011",
+        "SKU-1012",
+        "SKU-1013",
+        "SKU-1014",
+        "SKU-1015",
+        "SKU-1016",
+        "SKU-1017",
+        "SKU-1018",
+    }

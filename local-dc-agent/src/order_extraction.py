@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any
 
 from openai import OpenAI
@@ -6,6 +7,8 @@ from pydantic import ValidationError
 
 from .settings import settings
 from .models import ExtractedOrder
+
+logger = logging.getLogger(__name__)
 
 _TOOL_NAME = "record_purchase_order"
 
@@ -70,6 +73,7 @@ def extract_order(markdown: str) -> ExtractedOrder:
         raise ExtractionError("OPENAI_API_KEY is not configured")
 
     client = OpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.OPENAI_BASE_URL or None)
+    logger.info("Extracting order from %d chars of markdown via %s", len(markdown), settings.OPENAI_MODEL)
     try:
         response = client.chat.completions.create(
             model=settings.OPENAI_MODEL,
@@ -83,16 +87,22 @@ def extract_order(markdown: str) -> ExtractedOrder:
             ],
         )
     except Exception as exc:  # openai.APIError and friends
+        logger.exception("OpenAI API call failed during extraction")
         raise ExtractionError(f"OpenAI API call failed: {exc}") from exc
 
     tool_input = _find_tool_input(response.choices)
     if tool_input is None:
+        logger.error("Model did not return a record_purchase_order tool call")
         raise ExtractionError("Model did not return a record_purchase_order tool call")
 
     try:
-        return ExtractedOrder.model_validate(tool_input)
+        order = ExtractedOrder.model_validate(tool_input)
     except ValidationError as exc:
+        logger.error("Extracted order failed schema validation: %s", exc)
         raise ExtractionError(f"Model output failed schema validation: {exc}") from exc
+
+    logger.info("Extracted PO %s with %d line item(s)", order.po_number, len(order.line_items))
+    return order
 
 
 def _find_tool_input(choices: list[Any]) -> dict[str, Any] | None:

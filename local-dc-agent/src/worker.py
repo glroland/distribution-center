@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -8,6 +9,8 @@ from .mcp_tools import McpToolRouter
 from .models import ProcessOrderResult
 from .order_extraction import ExtractionError, extract_order
 from .order_processing import process_order
+
+logger = logging.getLogger(__name__)
 
 OnEvent = Callable[[str, dict], Awaitable[None]]
 
@@ -33,16 +36,19 @@ class OrderWorker:
     async def start(self) -> None:
         await self._router.connect()
         self._task = asyncio.create_task(self._run())
+        logger.info("Order worker started")
 
     async def stop(self) -> None:
         if self._task is not None:
             self._task.cancel()
             self._task = None
         await self._router.close()
+        logger.info("Order worker stopped")
 
     async def submit(
         self, pdf_bytes: bytes, filename: str, on_event: OnEvent | None = None
     ) -> ProcessOrderResult:
+        logger.info("Job submitted: %s (%d bytes)", filename, len(pdf_bytes))
         future: asyncio.Future[ProcessOrderResult] = asyncio.get_running_loop().create_future()
         await self._queue.put(
             ProcessingJob(pdf_bytes=pdf_bytes, filename=filename, future=future, on_event=on_event)
@@ -56,6 +62,7 @@ class OrderWorker:
                 result = await self._process(job)
                 job.future.set_result(result)
             except (IngestError, ExtractionError, FulfillmentError) as exc:
+                logger.exception("Job failed: %s", job.filename)
                 job.future.set_exception(exc)
             finally:
                 self._queue.task_done()
@@ -64,6 +71,7 @@ class OrderWorker:
         on_event = job.on_event
 
         markdown = await convert_pdf_to_markdown(job.pdf_bytes, job.filename)
+        logger.info("Ingested %s -> %d chars of markdown", job.filename, len(markdown))
         if on_event:
             await on_event(
                 "ingested",
@@ -71,6 +79,10 @@ class OrderWorker:
             )
 
         extracted = await asyncio.to_thread(extract_order, markdown)
+        logger.info(
+            "Extracted PO %s from %s: %d line item(s)",
+            extracted.po_number, job.filename, len(extracted.line_items),
+        )
         if on_event:
             await on_event(
                 "extracted",
@@ -84,6 +96,10 @@ class OrderWorker:
             )
 
         result = process_order(extracted)
+        logger.info(
+            "Processed PO %s as %s (totals_mismatch=%s)",
+            extracted.po_number, result.dc_order_id, result.totals_mismatch,
+        )
         if on_event:
             await on_event(
                 "processed",
@@ -96,4 +112,5 @@ class OrderWorker:
             )
 
         fulfillment = await fulfill_order(result, self._router, on_event=on_event)
+        logger.info("Fulfilled order %s: status=%s", result.dc_order_id, fulfillment.order_status)
         return result.model_copy(update={"fulfillment": fulfillment})

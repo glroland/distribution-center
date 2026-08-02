@@ -1,4 +1,5 @@
 import base64
+import logging
 
 import httpx
 from a2a.server.agent_execution import AgentExecutor, RequestContext
@@ -22,6 +23,8 @@ from .order_extraction import ExtractionError
 from .order_processing import summarize
 from .worker import OrderWorker
 
+logger = logging.getLogger(__name__)
+
 
 class ProcessOrderAgentExecutor(AgentExecutor):
     """Implements the distribution center's single skill: process_purchase_order.
@@ -44,6 +47,7 @@ class ProcessOrderAgentExecutor(AgentExecutor):
 
         pdf_file = _find_pdf_file(context.message.parts if context.message else [])
         if pdf_file is None:
+            logger.warning("Task %s: no PDF file part found in the request", task.id)
             await updater.failed(
                 new_agent_text_message(
                     "No PDF file part found in the request. Attach a purchase "
@@ -57,6 +61,7 @@ class ProcessOrderAgentExecutor(AgentExecutor):
         try:
             pdf_bytes = await _load_pdf_bytes(pdf_file)
         except Exception as exc:
+            logger.exception("Task %s: could not read the PDF file", task.id)
             await updater.failed(
                 new_agent_text_message(f"Could not read the PDF file: {exc}", task.context_id, task.id)
             )
@@ -65,24 +70,29 @@ class ProcessOrderAgentExecutor(AgentExecutor):
         filename = pdf_file.name or "purchase_order.pdf"
         on_event = _build_progress_hook(context.message)
 
+        logger.info("Task %s: processing %s", task.id, filename)
         try:
             result = await self.worker.submit(pdf_bytes, filename, on_event=on_event)
         except IngestError as exc:
+            logger.exception("Task %s: failed to ingest %s", task.id, filename)
             await updater.failed(
                 new_agent_text_message(f"Failed to ingest PDF: {exc}", task.context_id, task.id)
             )
             return
         except ExtractionError as exc:
+            logger.exception("Task %s: failed to extract order data from %s", task.id, filename)
             await updater.failed(
                 new_agent_text_message(f"Failed to extract order data: {exc}", task.context_id, task.id)
             )
             return
         except FulfillmentError as exc:
+            logger.exception("Task %s: failed to fulfill order from %s", task.id, filename)
             await updater.failed(
                 new_agent_text_message(f"Failed to fulfill order: {exc}", task.context_id, task.id)
             )
             return
 
+        logger.info("Task %s: completed processing %s", task.id, filename)
         await updater.add_artifact(
             [
                 Part(root=DataPart(data=result.model_dump())),

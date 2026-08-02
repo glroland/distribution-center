@@ -1,6 +1,9 @@
 import csv
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class SkuNotFoundError(KeyError):
@@ -32,6 +35,7 @@ class InventoryStore:
 
     def reset(self) -> None:
         """Reload inventory from the original CSV, discarding all in-memory changes."""
+        logger.info("Resetting inventory from %s", self._csv_path)
         self._items = self._load_from_csv()
 
     def _load_from_csv(self) -> dict[str, InventoryItem]:
@@ -44,6 +48,7 @@ class InventoryStore:
                     location_x=int(row["location_x"]),
                     location_y=int(row["location_y"]),
                 )
+        logger.info("Loaded %d inventory items from %s", len(items), self._csv_path)
         return items
 
     def list_items(self) -> list[InventoryItem]:
@@ -53,6 +58,7 @@ class InventoryStore:
         try:
             return self._items[sku]
         except KeyError:
+            logger.warning("Unknown SKU requested: %s", sku)
             raise SkuNotFoundError(sku) from None
 
     def get_quantity(self, sku: str) -> int:
@@ -63,6 +69,7 @@ class InventoryStore:
             raise ValueError("qty must be positive")
         item = self.get_item(sku)
         item.on_hand_qty += qty
+        logger.info("Incremented %s by %d -> %d on hand", sku, qty, item.on_hand_qty)
         return item
 
     def decrement(self, sku: str, qty: int) -> InventoryItem:
@@ -70,8 +77,13 @@ class InventoryStore:
             raise ValueError("qty must be positive")
         item = self.get_item(sku)
         if item.on_hand_qty - qty < 0:
+            logger.warning(
+                "Insufficient quantity for %s: cannot decrement by %d, only %d on hand",
+                sku, qty, item.on_hand_qty,
+            )
             raise InsufficientQuantityError(
                 f"cannot decrement {sku} by {qty}: only {item.on_hand_qty} on hand"
             )
         item.on_hand_qty -= qty
+        logger.info("Decremented %s by %d -> %d on hand", sku, qty, item.on_hand_qty)
         return item

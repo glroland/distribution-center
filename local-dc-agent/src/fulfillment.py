@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -8,6 +9,8 @@ from pydantic import ValidationError
 from .mcp_tools import McpToolRouter, ToolCallError
 from .models import Escalation, FulfillmentItemResult, FulfillmentResult, ProcessOrderResult
 from .settings import settings
+
+logger = logging.getLogger(__name__)
 
 OnEvent = Callable[[str, dict], Awaitable[None]]
 
@@ -157,6 +160,8 @@ async def fulfill_order(
         {"role": "user", "content": _order_message(order)},
     ]
 
+    logger.info("Starting fulfillment for PO %s (%d line items)", order.po_number, len(order.line_items))
+
     nudged = False
     for _ in range(settings.MAX_FULFILLMENT_TURNS):
         try:
@@ -167,6 +172,7 @@ async def fulfill_order(
                 messages=messages,
             )
         except Exception as exc:  # openai.APIError and friends
+            logger.exception("OpenAI API call failed during fulfillment of PO %s", order.po_number)
             raise FulfillmentError(f"OpenAI API call failed: {exc}") from exc
 
         message = response.choices[0].message
@@ -191,6 +197,10 @@ async def fulfill_order(
         for tool_call in tool_calls:
             if tool_call.function.name == _FINISH_TOOL_NAME:
                 finish_result = _parse_finish_call(tool_call.function.arguments)
+                logger.info(
+                    "Fulfillment finished for PO %s: status=%s, %d escalation(s)",
+                    order.po_number, finish_result.order_status, len(finish_result.escalations),
+                )
                 if on_event:
                     await on_event("fulfillment_result", finish_result.model_dump())
                 return finish_result
@@ -212,16 +222,19 @@ async def _run_tool_call(tools: McpToolRouter, tool_call: Any, on_event: OnEvent
         arguments = json.loads(tool_call.function.arguments or "{}")
     except json.JSONDecodeError as exc:
         error = f"Invalid tool arguments: {exc}"
+        logger.warning("Tool call %s had invalid arguments: %s", name, exc)
         if on_event:
             await on_event("tool_call", {"name": name, "arguments": {}, "ok": False, "result": error})
         return json.dumps({"error": error})
 
     try:
         result = await tools.call(name, arguments)
+        logger.info("Tool call %s(%s) succeeded", name, arguments)
         if on_event:
             await on_event("tool_call", {"name": name, "arguments": arguments, "ok": True, "result": result})
         return result
     except ToolCallError as exc:
+        logger.warning("Tool call %s(%s) failed: %s", name, arguments, exc)
         if on_event:
             await on_event(
                 "tool_call", {"name": name, "arguments": arguments, "ok": False, "result": str(exc)}
@@ -246,6 +259,10 @@ async def _escalate_timeout(
 ) -> FulfillmentResult:
     """Fallback when the model never finishes: escalate directly and degrade gracefully
     rather than failing the whole PO."""
+    logger.warning(
+        "PO %s exceeded %d fulfillment turns without finishing; escalating",
+        order.po_number, settings.MAX_FULFILLMENT_TURNS,
+    )
     question = (
         f"Fulfillment agent exceeded {settings.MAX_FULFILLMENT_TURNS} tool-call turns while "
         f"processing PO {order.po_number} and did not finish. Manual review needed."

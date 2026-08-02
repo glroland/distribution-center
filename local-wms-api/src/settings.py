@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     PORT: int = 8001
     LOCATION_NAME: str = "DC-VIRTUAL-01"
     INVENTORY_CSV_PATH: str = "data/inventory.csv"
+    LOG_LEVEL: str = "INFO"
 
     def inventory_csv_path(self) -> Path:
         path = Path(self.INVENTORY_CSV_PATH)

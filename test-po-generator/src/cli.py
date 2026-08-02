@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import logging
+import os
 import random
 import sys
 from pathlib import Path
@@ -22,8 +24,10 @@ from src.numbering import (
 from src.templates import get_random_template
 from src.templates.base import fmt_currency
 
-DEFAULT_CATALOG = Path(__file__).resolve().parent.parent / "products.csv"
+DEFAULT_CATALOG = Path(__file__).resolve().parent.parent.parent / "products.csv"
 DEFAULT_OUTPUT_DIR = Path("output")
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -101,12 +105,18 @@ def generate_one(catalog: list[dict[str, str]], args: argparse.Namespace, output
 
     output_path = output_dir / f"{po.po_number}.pdf"
     template.render(po, str(output_path))
+    logger.debug("Rendered PO %s using template %s", po.po_number, buyer.name)
 
     print(f"{output_path.name}  |  {buyer.name}  |  {len(line_items)} items  |  {fmt_currency(po.total)}")
     return output_path
 
 
 def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(
+        level=os.environ.get("LOG_LEVEL", "WARNING"),
+        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    )
+
     args = parse_args(argv)
 
     if args.seed is not None:
@@ -116,12 +126,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         catalog = load_catalog(args.catalog)
     except (FileNotFoundError, ValueError) as exc:
+        logger.error("Could not load catalog: %s", exc)
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    logger.info("Generating %d PO(s) into %s", args.count, output_dir)
     for _ in range(args.count):
         generate_one(catalog, args, output_dir)
 

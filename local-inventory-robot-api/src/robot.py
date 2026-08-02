@@ -1,6 +1,9 @@
 import csv
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class OutOfBoundsError(ValueError):
@@ -71,10 +74,12 @@ class InventoryRobot:
                 loc = (int(row["location_x"]), int(row["location_y"]))
                 stock = shelves.setdefault(loc, {})
                 stock[row["sku"]] = stock.get(row["sku"], 0) + int(row["qty"])
+        logger.info("Loaded %d shelf locations from %s", len(shelves), self._csv_path)
         return shelves
 
     def reset(self) -> None:
         """Reload shelf stock from the seed CSV and return the robot to the dock, empty-handed."""
+        logger.info("Resetting robot: reloading shelves and returning to dock %s", self._dock)
         self._shelves = self._load_from_csv()
         self._x, self._y = self._dock
         self._carrying = {}
@@ -107,10 +112,14 @@ class InventoryRobot:
     def move_to(self, location: Coordinate) -> RobotStatus:
         x, y = location
         if not (0 <= x < self._grid_width) or not (0 <= y < self._grid_height):
+            logger.warning(
+                "Move to (%d, %d) rejected: outside %dx%d grid", x, y, self._grid_width, self._grid_height
+            )
             raise OutOfBoundsError(
                 f"({x}, {y}) is outside the {self._grid_width}x{self._grid_height} grid"
             )
         self._x, self._y = x, y
+        logger.info("Moved to (%d, %d)", x, y)
         return self.get_status()
 
     def pick(self, sku: str, qty: int) -> RobotStatus:
@@ -120,12 +129,18 @@ class InventoryRobot:
         stock = self._shelves.get((self._x, self._y), {})
         on_hand = stock.get(sku, 0)
         if on_hand <= 0:
+            logger.warning("%s not stocked at (%d, %d)", sku, self._x, self._y)
             raise SkuNotAtLocationError(sku)
         if on_hand < qty:
+            logger.warning(
+                "Insufficient stock for %s at (%d, %d): requested %d, only %d on hand",
+                sku, self._x, self._y, qty, on_hand,
+            )
             raise InsufficientQuantityError(
                 f"cannot pick {qty} of {sku} at ({self._x}, {self._y}): only {on_hand} on hand"
             )
         if self.get_status().carrying_total + qty > self._capacity:
+            logger.warning("Picking %d of %s would exceed carry capacity of %d", qty, sku, self._capacity)
             raise CapacityExceededError(
                 f"picking {qty} of {sku} would exceed carry capacity of {self._capacity}"
             )
@@ -133,15 +148,20 @@ class InventoryRobot:
         if stock[sku] == 0:
             del stock[sku]
         self._carrying[sku] = self._carrying.get(sku, 0) + qty
+        logger.info("Picked %d of %s at (%d, %d)", qty, sku, self._x, self._y)
         return self.get_status()
 
     def deliver(self) -> tuple[dict[str, int], RobotStatus]:
         """Drop everything the robot is carrying, only allowed at the dock."""
         if (self._x, self._y) != self._dock:
+            logger.warning(
+                "Deliver rejected: robot at (%d, %d), not at dock %s", self._x, self._y, self._dock
+            )
             raise NotAtDockError(
                 f"robot must be at the dock {self._dock} to deliver, currently at "
                 f"({self._x}, {self._y})"
             )
         delivered = dict(self._carrying)
         self._carrying = {}
+        logger.info("Delivered %s at the dock", delivered)
         return delivered, self.get_status()

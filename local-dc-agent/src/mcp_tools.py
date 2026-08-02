@@ -1,3 +1,4 @@
+import logging
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 
@@ -5,6 +6,8 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from .settings import settings
+
+logger = logging.getLogger(__name__)
 
 _TOOL_NAME_SEPARATOR = "__"
 
@@ -38,6 +41,7 @@ class McpToolRouter:
             "supervisor": settings.SUPERVISOR_API_URL,
         }
         for label, base_url in server_urls.items():
+            logger.info("Connecting to MCP server %s at %s", label, base_url)
             read_stream, write_stream = await self._stack.enter_async_context(
                 streamable_http_client(f"{base_url}/mcp")
             )
@@ -57,6 +61,7 @@ class McpToolRouter:
                         },
                     }
                 )
+            logger.info("Connected to %s: %d tool(s) registered", label, len(listed.tools))
 
     async def close(self) -> None:
         await self._stack.aclose()
@@ -76,5 +81,6 @@ class McpToolRouter:
         result = await server.session.call_tool(tool_name, arguments)
         text = "".join(part.text for part in result.content if hasattr(part, "text"))
         if result.is_error:
+            logger.warning("MCP tool %s reported an error: %s", name, text)
             raise ToolCallError(text or f"Tool '{name}' failed")
         return text

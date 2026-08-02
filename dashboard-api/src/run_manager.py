@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -8,6 +9,8 @@ from .agent_client import AgentCallError, process_purchase_order
 from .models import DistributionCenter
 from .po_catalog import read_purchase_order_bytes
 from .settings import settings
+
+logger = logging.getLogger(__name__)
 
 _RUN_RETENTION_SECONDS = 600
 
@@ -77,10 +80,12 @@ class RunManager:
             del self._runs[run_id]
 
     async def _execute(self, run: Run, dc: DistributionCenter, po_filename: str) -> None:
+        logger.info("Run %s started: dc=%s, po=%s", run.id, dc.name, po_filename)
         await run.publish("run_started", {"dc": dc.name, "po_filename": po_filename})
         try:
             pdf_bytes = read_purchase_order_bytes(po_filename)
         except Exception as exc:
+            logger.exception("Run %s: could not read %s", run.id, po_filename)
             await run.publish("run_failed", {"error": f"Could not read {po_filename}: {exc}"})
             await run.finish()
             return
@@ -90,10 +95,13 @@ class RunManager:
             outcome = await process_purchase_order(
                 dc.agent_url, pdf_bytes, po_filename, progress_webhook=webhook_url
             )
+            logger.info("Run %s complete: state=%s", run.id, outcome.get("state"))
             await run.publish("run_complete", outcome)
         except AgentCallError as exc:
+            logger.warning("Run %s failed: %s", run.id, exc)
             await run.publish("run_failed", {"error": str(exc)})
         except Exception as exc:
+            logger.exception("Run %s failed unexpectedly", run.id)
             await run.publish("run_failed", {"error": f"Unexpected error: {exc}"})
         finally:
             await run.finish()

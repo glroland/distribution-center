@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 9100
     AGENT_URL: str | None = None
+    LOG_LEVEL: str = "INFO"
 
     @model_validator(mode="after")
     def _default_agent_url(self) -> "Settings":

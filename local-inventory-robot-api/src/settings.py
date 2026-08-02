@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     DOCK_X: int = 0
     DOCK_Y: int = 0
     CARRY_CAPACITY: int = 100
+    LOG_LEVEL: str = "INFO"
 
     def shelves_csv_path(self) -> Path:
         path = Path(self.SHELVES_CSV_PATH)

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     HOST: str = "0.0.0.0"
     PORT: int = 8090
+    LOG_LEVEL: str = "INFO"
     # Base URL the *other* services use to reach this dashboard, e.g. for the
     # dc-agent's progress webhook callbacks. Override if not running on localhost.
     PUBLIC_URL: str = "http://localhost:8090"

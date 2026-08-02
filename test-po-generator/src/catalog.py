@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import csv
+import logging
 import random
 from pathlib import Path
 
 from src.models import LineItem
+
+logger = logging.getLogger(__name__)
 
 MIN_UNIT_PRICE = 1.99
 MAX_UNIT_PRICE = 999.99
@@ -26,6 +29,7 @@ def load_catalog(csv_path: str | Path) -> list[dict[str, str]]:
     if not rows:
         raise ValueError(f"Catalog CSV is empty or missing sku/description columns: {path}")
 
+    logger.info("Loaded %d products from catalog %s", len(rows), path)
     return rows
 
 

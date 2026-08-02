@@ -18,7 +18,7 @@ pip install -r requirements.txt
 ## Usage
 
 ```bash
-# Generate 1 PO using the default catalog (products.csv) into ./output
+# Generate 1 PO using the default catalog (repo-root products.csv) into ./output
 python -m src
 
 # Generate 25 POs
@@ -42,16 +42,20 @@ python -m src --count 5 --seed 42
 | `--max-items` | `8` | Maximum line items per PO |
 | `--seed` | none | Random seed for reproducible runs |
 
+Set `LOG_LEVEL` (e.g. `LOG_LEVEL=INFO`) to see diagnostic logging (catalog loading, per-PO rendering); it defaults to `WARNING` so normal runs only print the per-PO summary lines.
+
 ## Product catalog CSV format
 
 ```csv
 sku,description
-SKU-1001,Wireless Barcode Scanner
-SKU-1002,Heavy-Duty Shipping Tape (Case of 36)
+SKU-1001,Wrench
+SKU-1002,House Plant
 ```
 
 Quantities and unit prices are randomized per PO at generation time (not
-stored in the catalog).
+stored in the catalog). The default catalog (`products.csv` at the repo
+root) is shared with `local-wms-api` and `local-inventory-robot-api`, which
+seed on-hand/shelf stock for most of the same SKUs.
 
 ## Templates
 

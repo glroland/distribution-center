@@ -1,8 +1,11 @@
 import base64
+import logging
 import uuid
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class AgentCallError(Exception):
@@ -77,25 +80,31 @@ async def process_purchase_order(
     }
 
     request_timeout = httpx.Timeout(timeout, connect=connect_timeout)
+    logger.info("Sending %s to agent at %s", filename, agent_url)
     try:
         async with httpx.AsyncClient(timeout=request_timeout) as client:
             response = await client.post(agent_url.rstrip("/") + "/", json=payload)
     except httpx.ConnectError as exc:
+        logger.warning("Could not reach agent at %s: %s", agent_url, exc)
         raise AgentCallError(f"Could not reach agent at {agent_url}: {exc}") from exc
     except httpx.TimeoutException as exc:
+        logger.warning("Agent at %s timed out: %s", agent_url, exc)
         raise AgentCallError(f"Agent at {agent_url} timed out: {exc}") from exc
     except httpx.HTTPError as exc:
+        logger.warning("Error communicating with agent at %s: %s", agent_url, exc)
         raise AgentCallError(f"Error communicating with agent at {agent_url}: {exc}") from exc
 
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
+        logger.warning("Agent at %s returned %s", agent_url, response.status_code)
         raise AgentCallError(
             f"Agent at {agent_url} returned {response.status_code}: {response.text[:500]}"
         ) from exc
     body = response.json()
 
     if "error" in body:
+        logger.warning("Agent at %s returned a JSON-RPC error: %s", agent_url, body["error"])
         raise AgentCallError(body["error"].get("message", "agent returned a JSON-RPC error"))
 
     result = body.get("result") or {}
@@ -103,7 +112,9 @@ async def process_purchase_order(
     state = status.get("state")
 
     if state == "failed":
-        raise AgentCallError(_status_message_text(status) or "agent task failed")
+        message = _status_message_text(status) or "agent task failed"
+        logger.warning("Agent task for %s failed: %s", filename, message)
+        raise AgentCallError(message)
 
     data, summary = None, None
     for artifact in result.get("artifacts") or []:
@@ -114,4 +125,5 @@ async def process_purchase_order(
     if data is None:
         raise AgentCallError("agent response had no processed-order data artifact")
 
+    logger.info("Agent task for %s completed: state=%s", filename, state)
     return {"state": state, "result": data, "summary": summary}

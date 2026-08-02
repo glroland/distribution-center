@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     HOST: str = "0.0.0.0"
     PORT: int = 8004
+    LOG_LEVEL: str = "INFO"
 
 
 settings = Settings()

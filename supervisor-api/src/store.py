@@ -1,6 +1,9 @@
 import itertools
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 
 class HelpRequestNotFoundError(KeyError):
@@ -44,6 +47,7 @@ class SupervisorStore:
             created_at=datetime.now(timezone.utc),
         )
         self._requests.append(request)
+        logger.info("Help request %d created (agent_id=%s): %s", request.id, agent_id, question)
         return request
 
     def list_help_requests(self, status: str | None = None) -> list[HelpRequest]:
@@ -66,6 +70,7 @@ class SupervisorStore:
         request.status = "resolved"
         request.resolution = resolution
         request.resolved_at = datetime.now(timezone.utc)
+        logger.info("Help request %d resolved: %s", request_id, resolution)
         return request
 
     def reset(self) -> None:

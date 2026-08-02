@@ -32,7 +32,7 @@ def test_get_inventory_status_single_sku() -> None:
 
 def test_get_inventory_status_all_skus() -> None:
     body = _call("get_inventory_status", {})
-    assert len(body["items"]) == 5
+    assert len(body["items"]) == 18
 
 
 def test_get_inventory_status_unknown_sku_raises() -> None:
