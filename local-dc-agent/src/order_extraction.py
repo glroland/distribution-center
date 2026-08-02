@@ -28,12 +28,20 @@ _TOOL_SCHEMA = {
                     "items": {
                         "type": "object",
                         "properties": {
-                            "sku": {"type": "string", "description": "The SKU or item/product code for this line item, if listed."},
+                            "sku": {
+                                "type": ["string", "null"],
+                                "description": (
+                                    "The SKU or item/product code for this line item, exactly as "
+                                    "printed in its own column/field. Use null if the document has "
+                                    "no separate SKU/item-code field for line items -- never reuse "
+                                    "the description as a SKU."
+                                ),
+                            },
                             "description": {"type": "string"},
                             "quantity": {"type": "number"},
                             "unit_price": {"type": "number"},
                         },
-                        "required": ["description", "quantity", "unit_price"],
+                        "required": ["sku", "description", "quantity", "unit_price"],
                     },
                 },
                 "stated_subtotal": {"type": "number", "description": "Subtotal printed on the PO, if any."},
