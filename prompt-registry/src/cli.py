@@ -47,7 +47,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print what would be registered without contacting MLflow.",
+        help="Print what would happen without writing to MLflow. Still reads the current "
+        "latest version of each prompt (if MLFLOW_TRACKING_URI is set) to predict "
+        "create/update/skip accurately; falls back to an offline listing otherwise.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Register a new version even if it's identical to the current latest version.",
     )
     return parser.parse_args(argv)
 
@@ -88,13 +95,12 @@ def main(argv: list[str] | None = None) -> int:
 
     commit_message = args.commit_message or f"Loaded from {catalog_path.name}"
 
-    if args.dry_run:
-        for prompt in prompts:
-            print(f"[dry-run] would register '{prompt['id']}' ({len(prompt['template'])} chars)")
-        return 0
-
     tracking_uri = args.tracking_uri or os.environ.get("MLFLOW_TRACKING_URI")
     if not tracking_uri:
+        if args.dry_run:
+            for prompt in prompts:
+                print(f"[dry-run] would check '{prompt['id']}' ({len(prompt['template'])} chars) -- offline, no MLFLOW_TRACKING_URI set")
+            return 0
         print(
             "error: no MLflow tracking URI configured. Set MLFLOW_TRACKING_URI "
             "(and MLFLOW_WORKSPACE/MLFLOW_TRACKING_AUTH as needed) or pass --tracking-uri.",
@@ -109,12 +115,29 @@ def main(argv: list[str] | None = None) -> int:
         mlflow.set_tracking_uri(args.tracking_uri)
 
     for prompt in prompts:
+        existing = mlflow.genai.load_prompt(prompt["id"], allow_missing=True)
+        unchanged = not args.force and existing is not None and existing.template == prompt["template"]
+
+        if args.dry_run:
+            if unchanged:
+                print(f"[dry-run] {prompt['id']} unchanged (version {existing.version}) -- would skip")
+            elif existing is None:
+                print(f"[dry-run] {prompt['id']} not yet registered -- would create version 1")
+            else:
+                print(f"[dry-run] {prompt['id']} differs from version {existing.version} -- would create new version")
+            continue
+
+        if unchanged:
+            print(f"[skip] {prompt['id']} unchanged (version {existing.version})")
+            continue
+
         version = mlflow.genai.register_prompt(
             name=prompt["id"],
             template=prompt["template"],
             commit_message=commit_message,
             tags=_tags_for(prompt),
         )
-        print(f"[ok] {prompt['id']} -> version {version.version}")
+        action = "updated" if existing is not None else "created"
+        print(f"[{action}] {prompt['id']} -> version {version.version}")
 
     return 0
