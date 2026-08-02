@@ -1,4 +1,4 @@
-from fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from .shipping import Shipment, ShippingStore
 from .tracing import configure_tracing, tool_trace
@@ -21,10 +21,10 @@ def _shipment_dict(shipment: Shipment) -> dict:
     }
 
 
-def build_mcp_server(store: ShippingStore) -> FastMCP:
+def build_mcp_server(store: ShippingStore) -> MCPServer:
     """Build an MCP server for an LLM to ship items gathered for a purchase order."""
 
-    mcp_server = FastMCP(
+    mcp_server = MCPServer(
         name="local-shipping-api",
         instructions=(
             "Tools for shipping product a warehouse robot has gathered to fulfil a "

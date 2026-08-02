@@ -1,18 +1,28 @@
 import logging
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from .conversion import convert_pdf
 from .mcp_server import mcp_server
 from .models import ConversionResult
+from .settings import settings
 from .tracing import configure_tracing
 
 logger = logging.getLogger(__name__)
 
 configure_tracing()
-mcp_app = mcp_server.http_app(path="/")
+mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", host=settings.HOST)
 
-app = FastAPI(title="PO Ingest API", lifespan=mcp_app.lifespan)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
+        yield
+
+
+app = FastAPI(title="PO Ingest API", lifespan=lifespan)
 app.mount("/mcp", mcp_app)
 
 

@@ -75,8 +75,8 @@ than one-to-one with the REST endpoints:
 | `adjust_inventory` | `sku: str`, `delta: int` | Receive (`delta > 0`) or ship (`delta < 0`) stock for a SKU |
 | `reset_inventory` | - | Reload inventory from the seed CSV |
 
-Connect with any MCP client that supports Streamable HTTP, e.g.
-`fastmcp.Client`.
+Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
+Python SDK's `mcp.client.streamable_http.streamable_http_client`.
 
 ## Tests
 

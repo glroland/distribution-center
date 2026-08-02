@@ -1,4 +1,4 @@
-from fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from .store import HelpRequest, SupervisorStore, TransferRequest
 from .tracing import configure_tracing, tool_trace
@@ -32,10 +32,10 @@ def _transfer_dict(request: TransferRequest) -> dict:
     }
 
 
-def build_mcp_server(store: SupervisorStore) -> FastMCP:
+def build_mcp_server(store: SupervisorStore) -> MCPServer:
     """Build an MCP server letting an AI agent escalate to a human supervisor."""
 
-    mcp_server = FastMCP(
+    mcp_server = MCPServer(
         name="supervisor-api",
         instructions=(
             "Tools for an AI agent to ask a human supervisor for help when it gets "

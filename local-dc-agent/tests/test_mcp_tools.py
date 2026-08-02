@@ -17,35 +17,33 @@ class _FakeCallToolResult:
 
 
 @dataclass
-class _FakeClient:
+class _FakeSession:
     calls: list = field(default_factory=list)
     response: _FakeCallToolResult | None = None
 
-    async def call_tool(
-        self, tool_name: str, arguments: dict, *, raise_on_error: bool = True
-    ) -> _FakeCallToolResult:
+    async def call_tool(self, tool_name: str, arguments: dict) -> _FakeCallToolResult:
         self.calls.append((tool_name, arguments))
         return self.response
 
 
-def _router_with_servers(**servers: tuple[_FakeClient, str | None]) -> McpToolRouter:
+def _router_with_servers(**servers: tuple[_FakeSession, str | None]) -> McpToolRouter:
     router = McpToolRouter()
-    for label, (client, instructions) in servers.items():
-        router._servers[label] = _Server(label=label, client=client, instructions=instructions)
+    for label, (session, instructions) in servers.items():
+        router._servers[label] = _Server(label=label, session=session, instructions=instructions)
     return router
 
 
 @pytest.mark.asyncio
 async def test_call_routes_to_the_right_server() -> None:
-    wms_client = _FakeClient(response=_FakeCallToolResult(content=[_FakeTextContent(text='{"ok": true}')]))
-    robot_client = _FakeClient(response=_FakeCallToolResult(content=[_FakeTextContent(text="{}")]))
-    router = _router_with_servers(wms=(wms_client, None), robot=(robot_client, None))
+    wms_session = _FakeSession(response=_FakeCallToolResult(content=[_FakeTextContent(text='{"ok": true}')]))
+    robot_session = _FakeSession(response=_FakeCallToolResult(content=[_FakeTextContent(text="{}")]))
+    router = _router_with_servers(wms=(wms_session, None), robot=(robot_session, None))
 
     result = await router.call("wms__get_inventory_status", {"sku": "SKU-1001"})
 
     assert result == '{"ok": true}'
-    assert wms_client.calls == [("get_inventory_status", {"sku": "SKU-1001"})]
-    assert robot_client.calls == []
+    assert wms_session.calls == [("get_inventory_status", {"sku": "SKU-1001"})]
+    assert robot_session.calls == []
 
 
 @pytest.mark.asyncio
@@ -58,10 +56,10 @@ async def test_call_raises_on_unknown_server() -> None:
 
 @pytest.mark.asyncio
 async def test_call_raises_tool_call_error_on_error_result() -> None:
-    client = _FakeClient(
+    session = _FakeSession(
         response=_FakeCallToolResult(content=[_FakeTextContent(text="SKU not found")], is_error=True)
     )
-    router = _router_with_servers(wms=(client, None))
+    router = _router_with_servers(wms=(session, None))
 
     with pytest.raises(ToolCallError, match="SKU not found"):
         await router.call("wms__get_inventory_status", {"sku": "does-not-exist"})
@@ -81,8 +79,8 @@ def test_list_openai_tools_are_prefixed_by_server() -> None:
 
 def test_server_instructions_omits_servers_without_instructions() -> None:
     router = _router_with_servers(
-        wms=(_FakeClient(), "manage inventory"),
-        robot=(_FakeClient(), None),
+        wms=(_FakeSession(), "manage inventory"),
+        robot=(_FakeSession(), None),
     )
 
     assert router.server_instructions() == {"wms": "manage inventory"}

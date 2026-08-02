@@ -1,3 +1,5 @@
+from contextlib import AsyncExitStack, asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 
 from .mcp_server import build_mcp_server
@@ -15,9 +17,17 @@ from .tracing import configure_tracing
 configure_tracing()
 store = ShippingStore()
 mcp_server = build_mcp_server(store)
-mcp_app = mcp_server.http_app(path="/")
+mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", host=settings.HOST)
 
-app = FastAPI(title="Local Shipping API", lifespan=mcp_app.lifespan)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
+        yield
+
+
+app = FastAPI(title="Local Shipping API", lifespan=lifespan)
 app.mount("/mcp", mcp_app)
 
 

@@ -79,7 +79,8 @@ same Docling model instance. It offers one tool:
 
 `pdf_base64` is the PDF's bytes, base64-encoded (MCP tool arguments are
 JSON, so there's no raw binary type). Connect with any MCP client that
-supports Streamable HTTP, e.g. `fastmcp.Client`.
+supports Streamable HTTP, e.g. the `mcp` Python SDK's
+`mcp.client.streamable_http.streamable_http_client`.
 
 ## Tests
 

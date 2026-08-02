@@ -1,4 +1,4 @@
-from fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from .inventory import InventoryItem, InventoryStore
 from .tracing import configure_tracing, tool_trace
@@ -15,10 +15,10 @@ def _item_dict(item: InventoryItem) -> dict:
     }
 
 
-def build_mcp_server(store: InventoryStore) -> FastMCP:
+def build_mcp_server(store: InventoryStore) -> MCPServer:
     """Build a coarse-grained MCP server for LLM-driven inventory management."""
 
-    mcp_server = FastMCP(
+    mcp_server = MCPServer(
         name="local-wms-api",
         instructions=(
             "Tools for managing inventory at a single virtual warehouse location. "
