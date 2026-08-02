@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
 
-RUN chmod -R 777 /usr/local/lib/python3.12
+RUN chmod -R 777 /usr/local/lib/python3.12/site-packages/rapidocr/models
 
 ENV HOST=0.0.0.0
 ENV PORT=8000
