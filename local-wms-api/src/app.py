@@ -11,7 +11,7 @@ from .tracing import configure_tracing
 configure_tracing()
 store = InventoryStore(settings.inventory_csv_path(), settings.LOCATION_NAME)
 mcp_server = build_mcp_server(store)
-mcp_app = mcp_server.streamable_http_app(streamable_http_path="/")
+mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", host=settings.HOST)
 
 
 @asynccontextmanager

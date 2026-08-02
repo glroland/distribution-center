@@ -39,7 +39,7 @@ robot = InventoryRobot(
     move_step_delay=settings.MOVE_STEP_DELAY_SECONDS,
 )
 mcp_server = build_mcp_server(robot)
-mcp_app = mcp_server.streamable_http_app(streamable_http_path="/")
+mcp_app = mcp_server.streamable_http_app(streamable_http_path="/", host=settings.HOST)
 
 
 @asynccontextmanager
