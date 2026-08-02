@@ -41,11 +41,16 @@ async def process_purchase_order(
     filename: str,
     progress_webhook: str | None = None,
     timeout: float = 300.0,
+    connect_timeout: float = 5.0,
 ) -> dict[str, Any]:
     """Sends a PDF to a dc-agent's A2A `message/send` endpoint and waits for the
     (blocking) result. If `progress_webhook` is set, the agent will POST an event
     to it for every processing stage and tool call - see local-dc-agent's
-    agent_executor.py:_build_progress_hook."""
+    agent_executor.py:_build_progress_hook.
+
+    `connect_timeout` is kept short (unlike the overall `timeout`, which has to
+    accommodate slow LLM processing) so an unreachable agent fails fast instead
+    of hanging the UI for the full request timeout."""
     message: dict[str, Any] = {
         "role": "user",
         "messageId": str(uuid.uuid4()),
@@ -71,9 +76,23 @@ async def process_purchase_order(
         "params": {"message": message},
     }
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(agent_url.rstrip("/") + "/", json=payload)
-    response.raise_for_status()
+    request_timeout = httpx.Timeout(timeout, connect=connect_timeout)
+    try:
+        async with httpx.AsyncClient(timeout=request_timeout) as client:
+            response = await client.post(agent_url.rstrip("/") + "/", json=payload)
+    except httpx.ConnectError as exc:
+        raise AgentCallError(f"Could not reach agent at {agent_url}: {exc}") from exc
+    except httpx.TimeoutException as exc:
+        raise AgentCallError(f"Agent at {agent_url} timed out: {exc}") from exc
+    except httpx.HTTPError as exc:
+        raise AgentCallError(f"Error communicating with agent at {agent_url}: {exc}") from exc
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise AgentCallError(
+            f"Agent at {agent_url} returned {response.status_code}: {response.text[:500]}"
+        ) from exc
     body = response.json()
 
     if "error" in body:
