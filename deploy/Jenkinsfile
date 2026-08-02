@@ -23,17 +23,6 @@ pipeline
          }
       }
 
-      stage('Create Docker Image for po-ingest-api')
-      {
-         steps
-         {
-            sh 'cd po-ingest-api ; docker build --no-cache -f Containerfile . --tag po-ingest-api:$BUILD_NUMBER'
-            sh 'cd po-ingest-api ; docker save po-ingest-api:$BUILD_NUMBER > po-ingest-api-dockerimage.tar'
-            step(followSymlinks: false, artifacts: 'po-ingest-api/po-ingest-api-dockerimage.tar', $class: 'ArtifactArchiver')
-            sh 'cd po-ingest-api ; docker rmi po-ingest-api:$BUILD_NUMBER'
-         }
-      }
-
       stage('Create Docker Image for supervisor-api')
       {
          steps
@@ -97,6 +86,17 @@ pipeline
             sh 'cd local-shipping-api ; docker save local-shipping-api:$BUILD_NUMBER > local-shipping-api-dockerimage.tar'
             step(followSymlinks: false, artifacts: 'local-shipping-api/local-shipping-api-dockerimage.tar', $class: 'ArtifactArchiver')
             sh 'cd local-shipping-api ; docker rmi local-shipping-api:$BUILD_NUMBER'
+         }
+      }
+
+      stage('Create Docker Image for po-ingest-api')
+      {
+         steps
+         {
+            sh 'cd po-ingest-api ; docker build --no-cache -f Containerfile . --tag po-ingest-api:$BUILD_NUMBER'
+            sh 'cd po-ingest-api ; docker save po-ingest-api:$BUILD_NUMBER > po-ingest-api-dockerimage.tar'
+            step(followSymlinks: false, artifacts: 'po-ingest-api/po-ingest-api-dockerimage.tar', $class: 'ArtifactArchiver')
+            sh 'cd po-ingest-api ; docker rmi po-ingest-api:$BUILD_NUMBER'
          }
       }
 
