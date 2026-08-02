@@ -37,7 +37,7 @@ REQUIREMENTS := $(shell find . \
 	-not -path '*/.venv/*' \
 	-name 'requirements.txt')
 
-.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-dashboard start-all kill-all status-all clean
+.PHONY: help install generate-pos run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-dashboard start-all kill-all restart-all status-all clean
 
 help:
 	@echo "Targets:"
@@ -52,6 +52,7 @@ help:
 	@echo "  run-dashboard                Run the demo control room UI (http://localhost:8090)"
 	@echo "  start-all                    Start every service in the background (logs: $(LOG_DIR)/, pids: $(PID_DIR)/)"
 	@echo "  kill-all                     Stop every service started by start-all"
+	@echo "  restart-all                  Stop then start every service (kill-all + start-all)"
 	@echo "  status-all                   Show which start-all services are up"
 	@echo "  clean                        Remove the $(TARGET_DIR) directory"
 
@@ -90,7 +91,8 @@ run-dashboard:
 start-all:
 	@mkdir -p $(LOG_DIR) $(PID_DIR)
 	@echo "Starting all services (logs: $(LOG_DIR)/, pids: $(PID_DIR)/)..."
-	@for entry in $(SERVICES); do \
+	@to_check=""; \
+	for entry in $(SERVICES); do \
 		name=$${entry%%:*}; rest=$${entry#*:}; dir=$${rest%%:*}; portvar=$${rest#*:}; \
 		port=$${!portvar}; \
 		pidfile="$(CURDIR)/$(PID_DIR)/$$name.pid"; \
@@ -100,10 +102,32 @@ start-all:
 			continue; \
 		fi; \
 		(cd $$dir && trap '' HUP && exec env PORT=$$port python3 -m src > "$$logfile" 2>&1) & \
-		echo $$! > "$$pidfile"; \
-		echo "  [ok]   $$name -> http://localhost:$$port (pid $$(cat "$$pidfile"), log $$logfile)"; \
-	done
-	@echo "Done. Tail logs with: tail -f $(LOG_DIR)/*.log"
+		pid=$$!; \
+		echo $$pid > "$$pidfile"; \
+		to_check="$$to_check $$name:$$port:$$pid:$$logfile"; \
+	done; \
+	failed=0; \
+	for item in $$to_check; do \
+		name=$${item%%:*}; rest=$${item#*:}; \
+		port=$${rest%%:*}; rest=$${rest#*:}; \
+		pid=$${rest%%:*}; logfile=$${rest#*:}; \
+		up=0; \
+		for i in $$(seq 1 40); do \
+			if ! kill -0 "$$pid" 2>/dev/null; then break; fi; \
+			if grep -q 'Uvicorn running on' "$$logfile" 2>/dev/null; then up=1; break; fi; \
+			sleep 0.5; \
+		done; \
+		if [ "$$up" -eq 1 ] && kill -0 "$$pid" 2>/dev/null; then \
+			echo "  [ok]   $$name -> http://localhost:$$port (pid $$pid, log $$logfile)"; \
+		else \
+			rm -f "$(CURDIR)/$(PID_DIR)/$$name.pid"; \
+			failed=1; \
+			echo "  [FAIL] $$name failed to start -> http://localhost:$$port (log $$logfile)"; \
+			sed 's/^/           | /' "$$logfile" | tail -5; \
+		fi; \
+	done; \
+	echo "Done. Tail logs with: tail -f $(LOG_DIR)/*.log"; \
+	exit $$failed
 
 kill-all:
 	@if [ ! -d $(PID_DIR) ]; then echo "Nothing to kill ($(PID_DIR) not found)."; exit 0; fi
@@ -119,6 +143,8 @@ kill-all:
 		rm -f "$$pidfile"; \
 	done
 	@echo "Done."
+
+restart-all: kill-all start-all
 
 status-all:
 	@if [ ! -d $(PID_DIR) ]; then echo "No services started."; exit 0; fi
