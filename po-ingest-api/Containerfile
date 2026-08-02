@@ -1,4 +1,4 @@
-FROM registry.redhat.io/rhai/base-image-cuda-rhel9:3.4.0
+FROM registry.redhat.io/rhai/base-image-cuda-rhel9:3.2.2-1782915184
 
 WORKDIR /app
 
