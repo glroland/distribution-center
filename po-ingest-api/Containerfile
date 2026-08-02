@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
 
+RUN chmod -R 777 /usr/local/lib/python3.12
+
 ENV HOST=0.0.0.0
 ENV PORT=8000
 EXPOSE 8000
