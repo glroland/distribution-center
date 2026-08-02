@@ -1,4 +1,4 @@
-{{- range $dc := .Values.distributionCenters }}
+{{- range $dc := .Values.centers }}
 {{- $root := $ }}
 {{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "shipping-api") }}
 ---
@@ -63,24 +63,4 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml $dc.shippingApi.resources | nindent 12 }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $svcName }}
-  labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
-    app.kubernetes.io/name: shipping-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
-    app.kubernetes.io/component: shipping-api
-    distribution-center: {{ $dc.name }}
-spec:
-  selector:
-    app.kubernetes.io/name: shipping-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
-    distribution-center: {{ $dc.name }}
-  ports:
-    - name: http
-      port: {{ $dc.shippingApi.port }}
-      targetPort: http
 {{- end }}

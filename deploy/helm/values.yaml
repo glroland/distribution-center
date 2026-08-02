@@ -1,4 +1,9 @@
 # Default values for the ai-distribution-center chart.
+#
+# Everything below `global` is scoped to one of the subcharts under charts/
+# (poIngestApi, supervisorApi, distributionCenter) and simply overrides that
+# subchart's own defaults in charts/<name>/values.yaml. Values under `global`
+# are the only ones Helm shares across all subcharts automatically.
 
 global:
   # Prefix applied to every image repository below, e.g. an OpenShift
@@ -10,31 +15,39 @@ global:
   # the project's allocated range. Set only if your cluster requires it.
   podSecurityContext: {}
 
-openshift:
-  # Creates route.openshift.io/v1 Route objects for components with
-  # route.enabled: true below. Disable if deploying to plain Kubernetes.
-  routes:
-    enabled: true
-    tls:
-      termination: edge
-      insecureEdgeTerminationPolicy: Redirect
+  openshift:
+    # Creates route.openshift.io/v1 Route objects for components with
+    # route.enabled: true below. Disable if deploying to plain Kubernetes.
+    routes:
+      enabled: true
+      tls:
+        termination: edge
+        insecureEdgeTerminationPolicy: Redirect
 
-openai:
-  # Consumed by every distribution center's dc-agent (OPENAI_API_KEY).
-  # Leave apiKey empty and set existingSecret to use a pre-created secret
-  # instead of storing the key in values.
-  apiKey: ""
-  model: gpt-5
-  # Set to point dc-agent at an OpenAI-compatible endpoint (e.g. a local
-  # or self-hosted model server) instead of the real OpenAI API. Leave
-  # empty to use OpenAI's default endpoint.
-  baseUrl: ""
-  existingSecret: ""
-  existingSecretKey: OPENAI_API_KEY
+  openai:
+    # Consumed by every distribution center's dc-agent (OPENAI_API_KEY).
+    # Leave apiKey empty and set existingSecret to use a pre-created secret
+    # instead of storing the key in values.
+    apiKey: ""
+    model: gpt-5
+    # Set to point dc-agent at an OpenAI-compatible endpoint (e.g. a local
+    # or self-hosted model server) instead of the real OpenAI API. Leave
+    # empty to use OpenAI's default endpoint.
+    baseUrl: ""
+    existingSecret: ""
+    existingSecretKey: OPENAI_API_KEY
+
+  # Ports of the two global services below, mirrored here so the
+  # distributionCenter subchart's dc-agent can address them -- Helm only
+  # shares `global` values across subcharts, never one subchart's local
+  # values with another.
+  poIngestApi:
+    port: 8000
+  supervisorApi:
+    port: 8003
 
 # ---------------------------------------------------------------------------
-# Global (cluster-shared) services. These are singletons used by every
-# distribution center, not part of any one local:* grouping.
+# Global (cluster-shared) services. Each is its own subchart under charts/.
 # ---------------------------------------------------------------------------
 
 poIngestApi:
@@ -42,7 +55,6 @@ poIngestApi:
   image:
     repository: po-ingest-api
     tag: latest
-  port: 8000
   replicaCount: 1
   resources:
     requests:
@@ -59,7 +71,6 @@ supervisorApi:
   image:
     repository: supervisor-api
     tag: latest
-  port: 8003
   replicaCount: 1
   resources:
     requests:
@@ -72,94 +83,96 @@ supervisorApi:
     enabled: false
 
 # ---------------------------------------------------------------------------
-# Distribution centers. Each entry is a self-contained "local" grouping:
-# one dc-agent, wms-api, inventory-robot-api, and shipping-api, wired to
-# talk only to each other (plus the global services above). Add more
-# entries here to stand up additional distribution centers.
+# Distribution centers (charts/distributionCenter subchart). Each entry in
+# centers is a self-contained "local" grouping: one dc-agent, wms-api,
+# robot-api, and shipping-api, wired to talk only to each other (plus the
+# two global services above). Add more entries here to stand up additional
+# distribution centers -- no template changes required.
 # ---------------------------------------------------------------------------
 
-distributionCenters:
-  - name: distribution-center-a
-    displayName: "Distribution Center A"
-    locationName: DC-VIRTUAL-01
+distributionCenter:
+  centers:
+    - name: distribution-center-a
+      displayName: "Distribution Center A"
+      locationName: DC-VIRTUAL-01
 
-    dcAgent:
-      image:
-        repository: local-dc-agent
-        tag: latest
-      port: 9100
-      maxFulfillmentTurns: 20
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 500m
-          memory: 512Mi
-      route:
-        enabled: true
+      dcAgent:
+        image:
+          repository: local-dc-agent
+          tag: latest
+        port: 9100
+        maxFulfillmentTurns: 20
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        route:
+          enabled: true
 
-    wmsApi:
-      image:
-        repository: local-wms-api
-        tag: latest
-      port: 8001
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 500m
-          memory: 512Mi
-      # Seeds the ConfigMap mounted at data/inventory.csv. Override per
-      # distribution center to give each one its own starting inventory.
-      inventoryCsv: |
-        sku,on_hand_qty,location_x,location_y
-        SKU-1001,120,3,5
-        SKU-1002,45,7,2
-        SKU-1003,300,1,1
-        SKU-1004,0,9,4
-        SKU-1005,78,5,8
+      wmsApi:
+        image:
+          repository: local-wms-api
+          tag: latest
+        port: 8001
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        # Seeds the ConfigMap mounted at data/inventory.csv. Override per
+        # distribution center to give each one its own starting inventory.
+        inventoryCsv: |
+          sku,on_hand_qty,location_x,location_y
+          SKU-1001,120,3,5
+          SKU-1002,45,7,2
+          SKU-1003,300,1,1
+          SKU-1004,0,9,4
+          SKU-1005,78,5,8
 
-    robotApi:
-      image:
-        repository: local-inventory-robot-api
-        tag: latest
-      port: 8002
-      grid:
-        width: 10
-        height: 10
-      dock:
-        x: 0
-        y: 0
-      carryCapacity: 100
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 500m
-          memory: 512Mi
-      # Seeds the ConfigMap mounted at data/shelves.csv.
-      shelvesCsv: |
-        sku,qty,location_x,location_y
-        SKU-1001,50,3,5
-        SKU-1001,10,6,6
-        SKU-1002,20,7,2
-        SKU-1003,15,1,8
-        SKU-1004,40,9,4
-        SKU-1005,5,5,6
-        SKU-1006,60,2,9
+      robotApi:
+        image:
+          repository: local-inventory-robot-api
+          tag: latest
+        port: 8002
+        grid:
+          width: 10
+          height: 10
+        dock:
+          x: 0
+          y: 0
+        carryCapacity: 100
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        # Seeds the ConfigMap mounted at data/shelves.csv.
+        shelvesCsv: |
+          sku,qty,location_x,location_y
+          SKU-1001,50,3,5
+          SKU-1001,10,6,6
+          SKU-1002,20,7,2
+          SKU-1003,15,1,8
+          SKU-1004,40,9,4
+          SKU-1005,5,5,6
+          SKU-1006,60,2,9
 
-    shippingApi:
-      image:
-        repository: local-shipping-api
-        tag: latest
-      port: 8004
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 500m
-          memory: 512Mi
+      shippingApi:
+        image:
+          repository: local-shipping-api
+          tag: latest
+        port: 8004
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi

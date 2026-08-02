@@ -50,8 +50,8 @@ Name of the global supervisor-api Service.
 Name of the OpenAI secret consumed by dc-agent deployments.
 */}}
 {{- define "adc.openai.secretName" -}}
-{{- if .Values.openai.existingSecret -}}
-{{ .Values.openai.existingSecret }}
+{{- if .Values.global.openai.existingSecret -}}
+{{ .Values.global.openai.existingSecret }}
 {{- else -}}
 {{ include "adc.fullname" . }}-openai
 {{- end -}}

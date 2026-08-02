@@ -1,0 +1,8 @@
+apiVersion: v2
+name: supervisorApi
+description: >-
+  The global human-escalation supervisor API, shared by every distribution
+  center's dc-agent.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

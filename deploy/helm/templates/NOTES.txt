@@ -2,14 +2,14 @@ AI Distribution Center deployed as release "{{ .Release.Name }}" in namespace "{
 
 Global services:
 {{- if .Values.poIngestApi.enabled }}
-  - po-ingest-api : {{ include "adc.fullname" . }}-po-ingest-api:{{ .Values.poIngestApi.port }}
+  - po-ingest-api : {{ include "adc.poIngestApi.serviceName" . }}:{{ .Values.global.poIngestApi.port }}
 {{- end }}
 {{- if .Values.supervisorApi.enabled }}
-  - supervisor-api: {{ include "adc.fullname" . }}-supervisor-api:{{ .Values.supervisorApi.port }}
+  - supervisor-api: {{ include "adc.supervisorApi.serviceName" . }}:{{ .Values.global.supervisorApi.port }}
 {{- end }}
 
 Distribution centers:
-{{- range $dc := .Values.distributionCenters }}
+{{- range $dc := .Values.distributionCenter.centers }}
   - {{ $dc.displayName }} ({{ $dc.name }})
       dc-agent  : {{ include "adc.dc.serviceName" (dict "root" $ "dc" $dc "component" "dc-agent") }}:{{ $dc.dcAgent.port }}
       wms-api   : {{ include "adc.dc.serviceName" (dict "root" $ "dc" $dc "component" "wms-api") }}:{{ $dc.wmsApi.port }}
@@ -20,7 +20,7 @@ Distribution centers:
 Check rollout status:
   oc get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/managed-by={{ .Release.Service }},app.kubernetes.io/instance={{ .Release.Name }}
 
-{{- if .Values.openshift.routes.enabled }}
+{{- if .Values.global.openshift.routes.enabled }}
 
 Routes:
   oc get routes -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}

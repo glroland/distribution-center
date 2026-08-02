@@ -1,21 +1,7 @@
-{{- range $dc := .Values.distributionCenters }}
+{{- range $dc := .Values.centers }}
 {{- $root := $ }}
 {{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "robot-api") }}
 {{- $cmName := printf "%s-%s-robot-shelves" (include "adc.fullname" $root) $dc.name }}
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ $cmName }}
-  labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
-    app.kubernetes.io/name: robot-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
-    app.kubernetes.io/component: robot-api
-    distribution-center: {{ $dc.name }}
-data:
-  shelves.csv: |
-    {{- $dc.robotApi.shelvesCsv | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -98,24 +84,4 @@ spec:
         - name: shelves-data
           configMap:
             name: {{ $cmName }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $svcName }}
-  labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
-    app.kubernetes.io/name: robot-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
-    app.kubernetes.io/component: robot-api
-    distribution-center: {{ $dc.name }}
-spec:
-  selector:
-    app.kubernetes.io/name: robot-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
-    distribution-center: {{ $dc.name }}
-  ports:
-    - name: http
-      port: {{ $dc.robotApi.port }}
-      targetPort: http
 {{- end }}

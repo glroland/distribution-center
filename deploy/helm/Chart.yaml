@@ -13,3 +13,12 @@ keywords:
   - a2a
   - mcp
 home: https://github.com/ai-distribution-center
+dependencies:
+  - name: poIngestApi
+    version: 0.1.0
+    condition: poIngestApi.enabled
+  - name: supervisorApi
+    version: 0.1.0
+    condition: supervisorApi.enabled
+  - name: distributionCenter
+    version: 0.1.0

@@ -1,0 +1,20 @@
+{{- if and .Values.enabled .Values.global.openshift.routes.enabled .Values.route.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "adc.supervisorApi.serviceName" . }}
+  labels:
+    {{- include "adc.commonLabels" . | nindent 4 }}
+    app.kubernetes.io/name: supervisor-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: supervisor-api
+spec:
+  to:
+    kind: Service
+    name: {{ include "adc.supervisorApi.serviceName" . }}
+  port:
+    targetPort: http
+  tls:
+    termination: {{ .Values.global.openshift.routes.tls.termination }}
+    insecureEdgeTerminationPolicy: {{ .Values.global.openshift.routes.tls.insecureEdgeTerminationPolicy }}
+{{- end }}

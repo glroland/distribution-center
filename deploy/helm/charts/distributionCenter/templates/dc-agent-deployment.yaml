@@ -1,4 +1,4 @@
-{{- range $dc := .Values.distributionCenters }}
+{{- range $dc := .Values.centers }}
 {{- $root := $ }}
 {{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "dc-agent") }}
 {{- $wmsSvc := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "wms-api") }}
@@ -64,24 +64,24 @@ spec:
               value: http://{{ $shippingSvc }}:{{ $dc.shippingApi.port }}
             # Wired to the cluster-wide global services.
             - name: PO_INGEST_API_URL
-              value: http://{{ $poIngestSvc }}:{{ $root.Values.poIngestApi.port }}
+              value: http://{{ $poIngestSvc }}:{{ $root.Values.global.poIngestApi.port }}
             - name: SUPERVISOR_API_URL
-              value: http://{{ $supervisorSvc }}:{{ $root.Values.supervisorApi.port }}
+              value: http://{{ $supervisorSvc }}:{{ $root.Values.global.supervisorApi.port }}
             - name: AGENT_URL
               value: http://{{ $svcName }}:{{ $dc.dcAgent.port }}/
             - name: MAX_FULFILLMENT_TURNS
               value: {{ $dc.dcAgent.maxFulfillmentTurns | quote }}
             - name: OPENAI_MODEL
-              value: {{ $root.Values.openai.model | quote }}
-            {{- if $root.Values.openai.baseUrl }}
+              value: {{ $root.Values.global.openai.model | quote }}
+            {{- if $root.Values.global.openai.baseUrl }}
             - name: OPENAI_BASE_URL
-              value: {{ $root.Values.openai.baseUrl | quote }}
+              value: {{ $root.Values.global.openai.baseUrl | quote }}
             {{- end }}
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "adc.openai.secretName" $root }}
-                  key: {{ $root.Values.openai.existingSecretKey }}
+                  key: {{ $root.Values.global.openai.existingSecretKey }}
           readinessProbe:
             httpGet:
               path: /.well-known/agent-card.json
@@ -96,46 +96,4 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml $dc.dcAgent.resources | nindent 12 }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $svcName }}
-  labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
-    app.kubernetes.io/name: dc-agent
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
-    app.kubernetes.io/component: dc-agent
-    distribution-center: {{ $dc.name }}
-spec:
-  selector:
-    app.kubernetes.io/name: dc-agent
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
-    distribution-center: {{ $dc.name }}
-  ports:
-    - name: http
-      port: {{ $dc.dcAgent.port }}
-      targetPort: http
-{{- if and $root.Values.openshift.routes.enabled $dc.dcAgent.route.enabled }}
----
-apiVersion: route.openshift.io/v1
-kind: Route
-metadata:
-  name: {{ $svcName }}
-  labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
-    app.kubernetes.io/name: dc-agent
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
-    app.kubernetes.io/component: dc-agent
-    distribution-center: {{ $dc.name }}
-spec:
-  to:
-    kind: Service
-    name: {{ $svcName }}
-  port:
-    targetPort: http
-  tls:
-    termination: {{ $root.Values.openshift.routes.tls.termination }}
-    insecureEdgeTerminationPolicy: {{ $root.Values.openshift.routes.tls.insecureEdgeTerminationPolicy }}
-{{- end }}
 {{- end }}

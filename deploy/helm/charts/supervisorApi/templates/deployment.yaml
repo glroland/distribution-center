@@ -1,0 +1,58 @@
+{{- if .Values.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "adc.supervisorApi.serviceName" . }}
+  labels:
+    {{- include "adc.commonLabels" . | nindent 4 }}
+    app.kubernetes.io/name: supervisor-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: supervisor-api
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: supervisor-api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: supervisor-api
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: supervisor-api
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "adc.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: supervisor-api
+          image: {{ include "adc.image" (dict "root" $ "image" .Values.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          securityContext:
+            {{- include "adc.containerSecurityContext" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.global.supervisorApi.port }}
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: {{ .Values.global.supervisorApi.port | quote }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+{{- end }}

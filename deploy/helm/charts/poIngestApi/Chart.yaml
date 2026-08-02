@@ -1,0 +1,8 @@
+apiVersion: v2
+name: poIngestApi
+description: >-
+  The global purchase-order ingest API -- the cluster-wide entry point for
+  submitting POs, shared by every distribution center.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
