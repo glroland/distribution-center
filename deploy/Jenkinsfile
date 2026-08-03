@@ -23,72 +23,6 @@ pipeline
          }
       }
 
-      stage('Create Docker Image for supervisor-api')
-      {
-         steps
-         {
-            sh 'cd supervisor-api ; docker build --no-cache -f Containerfile . --tag supervisor-api:$BUILD_NUMBER'
-            sh 'cd supervisor-api ; docker save supervisor-api:$BUILD_NUMBER > supervisor-api-dockerimage.tar'
-            step(followSymlinks: false, artifacts: 'supervisor-api/supervisor-api-dockerimage.tar', $class: 'ArtifactArchiver')
-            sh 'cd supervisor-api ; docker rmi supervisor-api:$BUILD_NUMBER'
-         }
-      }
-
-      stage('Create Docker Image for dashboard-ui')
-      {
-         steps
-         {
-            sh 'cd dashboard-ui ; docker build --no-cache -f Containerfile . --tag dashboard-ui:$BUILD_NUMBER'
-            sh 'cd dashboard-ui ; docker save dashboard-ui:$BUILD_NUMBER > dashboard-ui-dockerimage.tar'
-            step(followSymlinks: false, artifacts: 'dashboard-ui/dashboard-ui-dockerimage.tar', $class: 'ArtifactArchiver')
-            sh 'cd dashboard-ui ; docker rmi dashboard-ui:$BUILD_NUMBER'
-         }
-      }
-
-      stage('Create Docker Image for local-dc-agent')
-      {
-         steps
-         {
-            sh 'cd local-dc-agent ; docker build --no-cache -f Containerfile . --tag local-dc-agent:$BUILD_NUMBER'
-            sh 'cd local-dc-agent ; docker save local-dc-agent:$BUILD_NUMBER > local-dc-agent-dockerimage.tar'
-            step(followSymlinks: false, artifacts: 'local-dc-agent/local-dc-agent-dockerimage.tar', $class: 'ArtifactArchiver')
-            sh 'cd local-dc-agent ; docker rmi local-dc-agent:$BUILD_NUMBER'
-         }
-      }
-
-      stage('Create Docker Image for local-wms-api')
-      {
-         steps
-         {
-            sh 'cd local-wms-api ; docker build --no-cache -f Containerfile . --tag local-wms-api:$BUILD_NUMBER'
-            sh 'cd local-wms-api ; docker save local-wms-api:$BUILD_NUMBER > local-wms-api-dockerimage.tar'
-            step(followSymlinks: false, artifacts: 'local-wms-api/local-wms-api-dockerimage.tar', $class: 'ArtifactArchiver')
-            sh 'cd local-wms-api ; docker rmi local-wms-api:$BUILD_NUMBER'
-         }
-      }
-
-      stage('Create Docker Image for local-inventory-robot-api')
-      {
-         steps
-         {
-            sh 'cd local-inventory-robot-api ; docker build --no-cache -f Containerfile . --tag local-inventory-robot-api:$BUILD_NUMBER'
-            sh 'cd local-inventory-robot-api ; docker save local-inventory-robot-api:$BUILD_NUMBER > local-inventory-robot-api-dockerimage.tar'
-            step(followSymlinks: false, artifacts: 'local-inventory-robot-api/local-inventory-robot-api-dockerimage.tar', $class: 'ArtifactArchiver')
-            sh 'cd local-inventory-robot-api ; docker rmi local-inventory-robot-api:$BUILD_NUMBER'
-         }
-      }
-
-      stage('Create Docker Image for local-shipping-api')
-      {
-         steps
-         {
-            sh 'cd local-shipping-api ; docker build --no-cache -f Containerfile . --tag local-shipping-api:$BUILD_NUMBER'
-            sh 'cd local-shipping-api ; docker save local-shipping-api:$BUILD_NUMBER > local-shipping-api-dockerimage.tar'
-            step(followSymlinks: false, artifacts: 'local-shipping-api/local-shipping-api-dockerimage.tar', $class: 'ArtifactArchiver')
-            sh 'cd local-shipping-api ; docker rmi local-shipping-api:$BUILD_NUMBER'
-         }
-      }
-
       stage('Create Docker Image for po-ingest-api')
       {
          steps
@@ -113,42 +47,6 @@ pipeline
                   sh 'docker rmi po-ingest-api:$BUILD_NUMBER'
                   sh 'docker push registry.home.glroland.com/distribution-center/po-ingest-api:$BUILD_NUMBER'
                   sh 'docker rmi registry.home.glroland.com/distribution-center/po-ingest-api:$BUILD_NUMBER'
-
-                  sh 'docker load -i supervisor-api/supervisor-api-dockerimage.tar'
-                  sh 'docker tag supervisor-api:$BUILD_NUMBER registry.home.glroland.com/distribution-center/supervisor-api:$BUILD_NUMBER'
-                  sh 'docker rmi supervisor-api:$BUILD_NUMBER'
-                  sh 'docker push registry.home.glroland.com/distribution-center/supervisor-api:$BUILD_NUMBER'
-                  sh 'docker rmi registry.home.glroland.com/distribution-center/supervisor-api:$BUILD_NUMBER'
-
-                  sh 'docker load -i dashboard-ui/dashboard-ui-dockerimage.tar'
-                  sh 'docker tag dashboard-ui:$BUILD_NUMBER registry.home.glroland.com/distribution-center/dashboard-ui:$BUILD_NUMBER'
-                  sh 'docker rmi dashboard-ui:$BUILD_NUMBER'
-                  sh 'docker push registry.home.glroland.com/distribution-center/dashboard-ui:$BUILD_NUMBER'
-                  sh 'docker rmi registry.home.glroland.com/distribution-center/dashboard-ui:$BUILD_NUMBER'
-
-                  sh 'docker load -i local-dc-agent/local-dc-agent-dockerimage.tar'
-                  sh 'docker tag local-dc-agent:$BUILD_NUMBER registry.home.glroland.com/distribution-center/local-dc-agent:$BUILD_NUMBER'
-                  sh 'docker rmi local-dc-agent:$BUILD_NUMBER'
-                  sh 'docker push registry.home.glroland.com/distribution-center/local-dc-agent:$BUILD_NUMBER'
-                  sh 'docker rmi registry.home.glroland.com/distribution-center/local-dc-agent:$BUILD_NUMBER'
-
-                  sh 'docker load -i local-wms-api/local-wms-api-dockerimage.tar'
-                  sh 'docker tag local-wms-api:$BUILD_NUMBER registry.home.glroland.com/distribution-center/local-wms-api:$BUILD_NUMBER'
-                  sh 'docker rmi local-wms-api:$BUILD_NUMBER'
-                  sh 'docker push registry.home.glroland.com/distribution-center/local-wms-api:$BUILD_NUMBER'
-                  sh 'docker rmi registry.home.glroland.com/distribution-center/local-wms-api:$BUILD_NUMBER'
-
-                  sh 'docker load -i local-inventory-robot-api/local-inventory-robot-api-dockerimage.tar'
-                  sh 'docker tag local-inventory-robot-api:$BUILD_NUMBER registry.home.glroland.com/distribution-center/local-inventory-robot-api:$BUILD_NUMBER'
-                  sh 'docker rmi local-inventory-robot-api:$BUILD_NUMBER'
-                  sh 'docker push registry.home.glroland.com/distribution-center/local-inventory-robot-api:$BUILD_NUMBER'
-                  sh 'docker rmi registry.home.glroland.com/distribution-center/local-inventory-robot-api:$BUILD_NUMBER'
-
-                  sh 'docker load -i local-shipping-api/local-shipping-api-dockerimage.tar'
-                  sh 'docker tag local-shipping-api:$BUILD_NUMBER registry.home.glroland.com/distribution-center/local-shipping-api:$BUILD_NUMBER'
-                  sh 'docker rmi local-shipping-api:$BUILD_NUMBER'
-                  sh 'docker push registry.home.glroland.com/distribution-center/local-shipping-api:$BUILD_NUMBER'
-                  sh 'docker rmi registry.home.glroland.com/distribution-center/local-shipping-api:$BUILD_NUMBER'
                }
             }
          }
