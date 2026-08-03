@@ -52,5 +52,6 @@ def generate_stickers_bulk(body: BulkGenerateRequest) -> FileResponse:
         color_mode=body.color_mode,
         image_format=body.image_format,
         cleanup_after_zip=settings.BULK_CLEANUP_AFTER_ZIP,
+        include_manifest=body.include_manifest,
     )
     return FileResponse(zip_path, media_type="application/zip", filename=zip_path.name)

@@ -10,7 +10,9 @@ photo or an ML model - it is procedural PIL/numpy compositing.
 from __future__ import annotations
 
 import io
+import math
 import random
+from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
@@ -18,6 +20,28 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ColorMode = Literal["color", "bw", "random"]
 ImageFormat = Literal["jpg", "png"]
+
+
+@dataclass(frozen=True)
+class StickerMetadata:
+    """Ground truth for one generated sample - not returned by the plain
+    `/stickers/{sku}` endpoint, but available to callers (e.g. bulk
+    generation with `include_manifest=True`) that want to train models
+    against this generator's output rather than just look at it."""
+
+    sku: str
+    canvas_width: int
+    canvas_height: int
+    color_mode: Literal["color", "bw"]
+    rotation_angle_degrees: float
+    # Unrotated sticker rectangle's own size, before it was rotated onto the canvas.
+    sticker_width: int
+    sticker_height: int
+    # The 4 corners of the (rotated) sticker rectangle in final-image pixel
+    # coordinates, in order: top-left, top-right, bottom-right, bottom-left
+    # of the *unrotated* sticker, mapped through the same rotation this
+    # module actually applied.
+    corners_xy: list[tuple[float, float]]
 
 # Degrees on either side of a horizontal edge (0 and 180) a sticker may never land in,
 # so it always reads as visibly angled rather than perfectly level.
@@ -102,9 +126,51 @@ def _draw_sticker(sku_text: str, rng: random.Random) -> Image.Image:
     return sticker
 
 
-def _composite(background: Image.Image, sticker: Image.Image, rng: random.Random) -> Image.Image:
+def _rotated_sticker_corners(
+    sticker_size: tuple[int, int],
+    angle_degrees: float,
+    rotated_size: tuple[int, int],
+    final_size: tuple[int, int],
+    paste_xy: tuple[int, int],
+) -> list[tuple[float, float]]:
+    """Where the 4 corners of the *unrotated* sticker rectangle land in final
+    composed-image pixel coordinates, replicating exactly what
+    `sticker.rotate(angle, expand=True)` + the optional uniform resize +
+    paste in `_composite` does to those corners.
+
+    PIL's `Image.rotate(angle, expand=True)` builds an output->input affine
+    matrix using `theta = -radians(angle)` (see PIL.Image.Image.rotate
+    source), which works out to the forward (input->output) map, relative to
+    each image's own center, being the rotation matrix
+    `[[cos a, sin a], [-sin a, cos a]]` for `a = radians(angle)`. Everything
+    below is that relation applied to the sticker's own corners, followed by
+    the same resize-to-fit scaling and paste offset `_composite` applies to
+    the whole rotated sticker image.
+    """
+    w, h = sticker_size
+    a = math.radians(angle_degrees)
+    cos_a, sin_a = math.cos(a), math.sin(a)
+    corners_rel = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)]
+
+    rot_w, rot_h = rotated_size
+    final_w, final_h = final_size
+    scale_x, scale_y = final_w / rot_w, final_h / rot_h
+    paste_x, paste_y = paste_xy
+
+    corners = []
+    for ix, iy in corners_rel:
+        rx = cos_a * ix + sin_a * iy
+        ry = -sin_a * ix + cos_a * iy
+        corners.append(((rx + rot_w / 2) * scale_x + paste_x, (ry + rot_h / 2) * scale_y + paste_y))
+    return corners
+
+
+def _composite(
+    background: Image.Image, sticker: Image.Image, rng: random.Random
+) -> tuple[Image.Image, float, list[tuple[float, float]]]:
     angle = _random_rotation_angle(rng)
     rotated = sticker.rotate(angle, expand=True, resample=Image.BICUBIC)
+    rotated_size = rotated.size
 
     bg_w, bg_h = background.size
     st_w, st_h = rotated.size
@@ -125,7 +191,15 @@ def _composite(background: Image.Image, sticker: Image.Image, rng: random.Random
     composed = background.convert("RGBA")
     composed.alpha_composite(shadow)
     composed.alpha_composite(rotated, (x, y))
-    return composed.convert("RGB")
+
+    corners = _rotated_sticker_corners(
+        sticker_size=sticker.size,
+        angle_degrees=angle,
+        rotated_size=rotated_size,
+        final_size=(st_w, st_h),
+        paste_xy=(x, y),
+    )
+    return composed.convert("RGB"), angle, corners
 
 
 def _apply_camera_artifacts(
@@ -150,6 +224,56 @@ def _apply_camera_artifacts(
     return small.resize((w, h), Image.BILINEAR)
 
 
+def generate_sticker_sample(
+    sku: str,
+    *,
+    min_width: int,
+    max_width: int,
+    min_height: int,
+    max_height: int,
+    color_mode: ColorMode = "random",
+    image_format: ImageFormat = "jpg",
+    seed: int | None = None,
+) -> tuple[bytes, StickerMetadata]:
+    """Render one synthetic camera photo of a white sticker printed with `sku`,
+    plus the ground-truth geometry that produced it.
+
+    Every call (unless `seed` is fixed) picks a new canvas size, background
+    surface, sticker placement/rotation, and color/bw mode, so no two stickers
+    for the same SKU look identical.
+    """
+    sku_text = _validate_sku(sku)
+    rng = random.Random(seed)
+
+    width = rng.randint(min_width, max_width)
+    height = rng.randint(min_height, max_height)
+    resolved_color_mode = _resolve_color_mode(color_mode, rng)
+
+    background = _make_background(width, height, rng)
+    sticker = _draw_sticker(sku_text, rng)
+    sticker_width, sticker_height = sticker.size
+    composed, angle, corners = _composite(background, sticker, rng)
+    final = _apply_camera_artifacts(composed, rng, resolved_color_mode)
+
+    buf = io.BytesIO()
+    if image_format == "jpg":
+        final.save(buf, format="JPEG", quality=rng.randint(35, 70))
+    else:
+        final.save(buf, format="PNG")
+
+    metadata = StickerMetadata(
+        sku=sku_text,
+        canvas_width=width,
+        canvas_height=height,
+        color_mode=resolved_color_mode,
+        rotation_angle_degrees=angle,
+        sticker_width=sticker_width,
+        sticker_height=sticker_height,
+        corners_xy=corners,
+    )
+    return buf.getvalue(), metadata
+
+
 def generate_sticker_image(
     sku: str,
     *,
@@ -167,21 +291,14 @@ def generate_sticker_image(
     surface, sticker placement/rotation, and color/bw mode, so no two stickers
     for the same SKU look identical.
     """
-    sku_text = _validate_sku(sku)
-    rng = random.Random(seed)
-
-    width = rng.randint(min_width, max_width)
-    height = rng.randint(min_height, max_height)
-    resolved_color_mode = _resolve_color_mode(color_mode, rng)
-
-    background = _make_background(width, height, rng)
-    sticker = _draw_sticker(sku_text, rng)
-    composed = _composite(background, sticker, rng)
-    final = _apply_camera_artifacts(composed, rng, resolved_color_mode)
-
-    buf = io.BytesIO()
-    if image_format == "jpg":
-        final.save(buf, format="JPEG", quality=rng.randint(35, 70))
-    else:
-        final.save(buf, format="PNG")
-    return buf.getvalue()
+    image_bytes, _metadata = generate_sticker_sample(
+        sku,
+        min_width=min_width,
+        max_width=max_width,
+        min_height=min_height,
+        max_height=max_height,
+        color_mode=color_mode,
+        image_format=image_format,
+        seed=seed,
+    )
+    return image_bytes

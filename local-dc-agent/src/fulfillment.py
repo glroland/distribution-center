@@ -114,7 +114,8 @@ quantity via `wms__adjust_inventory` (negative delta), so the warehouse's \
 book of record matches what physically left the shelf.
 5. Once picking is done, ship everything fetched in a single \
 `shipping__ship_order` call, using the order's buyer_name as customer_name \
-and its ship_to address as customer_address.
+(or "Recipient" if the order has no buyer_name) and its ship_to address as \
+customer_address.
 6. For any line item that comes up short — either because the WMS didn't have \
 enough on-hand quantity in the first place, or because `plan_and_fetch_items` \
 reported `fetched_qty` below what the WMS said was on hand (a data mismatch \
@@ -226,14 +227,16 @@ async def fulfill_order(
                 {
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "content": await _run_tool_call(tools, tool_call, on_event),
+                    "content": await _run_tool_call(tools, tool_call, order, on_event),
                 }
             )
 
     return await _escalate_timeout(order, tools, on_event)
 
 
-async def _run_tool_call(tools: McpToolRouter, tool_call: Any, on_event: OnEvent | None = None) -> str:
+async def _run_tool_call(
+    tools: McpToolRouter, tool_call: Any, order: ProcessOrderResult, on_event: OnEvent | None = None
+) -> str:
     name = tool_call.function.name
     try:
         arguments = json.loads(tool_call.function.arguments or "{}")
@@ -243,6 +246,22 @@ async def _run_tool_call(tools: McpToolRouter, tool_call: Any, on_event: OnEvent
         if on_event:
             await on_event("tool_call", {"name": name, "arguments": {}, "ok": False, "result": error})
         return json.dumps({"error": error})
+
+    if name == "shipping__ship_order":
+        if not order.ship_to:
+            error = (
+                "Cannot ship: this order is missing ship_to. "
+                "Escalate via supervisor__request_help instead of shipping without that information."
+            )
+            logger.warning("Tool call %s blocked for PO %s: %s", name, order.po_number, error)
+            if on_event:
+                await on_event("tool_call", {"name": name, "arguments": arguments, "ok": False, "result": error})
+            return json.dumps({"error": error})
+        # The order's buyer_name/ship_to are known good; don't trust the model to have
+        # copied them correctly into the tool call. buyer_name is optional on the order,
+        # so fall back to a generic recipient rather than blocking the shipment.
+        arguments["customer_name"] = order.buyer_name or "Recipient"
+        arguments["customer_address"] = order.ship_to
 
     try:
         result = await tools.call(name, arguments)

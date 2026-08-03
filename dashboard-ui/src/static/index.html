@@ -49,7 +49,7 @@
       </div>
       <ol class="stepper" id="stepper">
         <li data-step="sent"><span class="step-dot"></span><div><strong>PO Sent</strong><small>Handed to the DC agent</small></div></li>
-        <li data-step="reading"><span class="step-dot"></span><div><strong>Reading &amp; Understanding</strong><small>Docling ingest + LLM field extraction</small></div></li>
+        <li data-step="reading"><span class="step-dot"></span><div><strong>Reading &amp; Understanding</strong><small>PDF ingest + LLM field extraction</small></div></li>
         <li data-step="fulfilling"><span class="step-dot"></span><div><strong>Fulfilling</strong><small>Checking stock, picking, shipping</small></div></li>
         <li data-step="done"><span class="step-dot"></span><div><strong>Complete</strong><small>Tracking numbers &amp; summary</small></div></li>
       </ol>
@@ -133,7 +133,7 @@
 <dialog id="docling-modal" class="docling-modal">
   <div class="docling-modal-head">
     <div>
-      <h3 id="docling-modal-title">Docling conversion result</h3>
+      <h3 id="docling-modal-title">PDF conversion result</h3>
       <div id="docling-modal-meta" class="docling-modal-meta"></div>
     </div>
     <button id="docling-modal-close" class="btn btn-ghost btn-small" type="button" aria-label="Close preview">✕</button>
@@ -150,6 +150,19 @@
     <button id="extracted-modal-close" class="btn btn-ghost btn-small" type="button" aria-label="Close preview">✕</button>
   </div>
   <pre id="extracted-modal-body" class="docling-modal-body"></pre>
+</dialog>
+
+<dialog id="sticker-modal" class="docling-modal">
+  <div class="docling-modal-head">
+    <div>
+      <h3 id="sticker-modal-title">Sticker photo</h3>
+      <div id="sticker-modal-meta" class="docling-modal-meta"></div>
+    </div>
+    <button id="sticker-modal-close" class="btn btn-ghost btn-small" type="button" aria-label="Close preview">✕</button>
+  </div>
+  <div class="sticker-modal-body">
+    <img id="sticker-modal-img" alt="Sticker photo" />
+  </div>
 </dialog>
 
 <template id="tpl-help-request">

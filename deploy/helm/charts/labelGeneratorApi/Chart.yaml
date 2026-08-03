@@ -1,0 +1,8 @@
+apiVersion: v2
+name: labelGeneratorApi
+description: >-
+  Standalone sticker-photo generator utility -- synthesizes camera-style
+  photos of SKU stickers. Not called by any other service yet.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

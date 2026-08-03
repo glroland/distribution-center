@@ -55,6 +55,13 @@ Name of the global supervisor-api Service.
 {{- end -}}
 
 {{/*
+Name of the global label-generator-api Service.
+*/}}
+{{- define "adc.labelGeneratorApi.serviceName" -}}
+{{ include "adc.fullname" . }}-label-generator-api
+{{- end -}}
+
+{{/*
 Name of the OpenAI secret consumed by dc-agent deployments.
 */}}
 {{- define "adc.openai.secretName" -}}

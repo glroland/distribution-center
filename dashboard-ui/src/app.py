@@ -123,6 +123,23 @@ async def reset_dc(name: str) -> dict:
     return results
 
 
+@app.get("/api/stickers/{sku}")
+async def get_sticker_photo(sku: str, color_mode: str = "random", image_format: str = "jpg") -> Response:
+    url = f"{settings.LABEL_GENERATOR_API_URL}/stickers/{sku}"
+    params = {"color_mode": color_mode, "image_format": image_format}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, params=params)
+    except httpx.HTTPError as exc:
+        logger.warning("Could not reach %s: %s", url, exc)
+        raise HTTPException(status_code=502, detail=f"Could not reach {url}: {exc}") from None
+    return Response(
+        content=response.content,
+        status_code=response.status_code,
+        media_type=response.headers.get("content-type", "application/octet-stream"),
+    )
+
+
 @app.get("/api/help-requests")
 async def get_help_requests(status: str | None = None) -> JSONResponse:
     params = {"status": status} if status else None

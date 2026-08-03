@@ -51,6 +51,10 @@ async function init() {
   $("#extracted-modal").addEventListener("click", (e) => {
     if (e.target.id === "extracted-modal") $("#extracted-modal").close();
   });
+  $("#sticker-modal-close").addEventListener("click", () => $("#sticker-modal").close());
+  $("#sticker-modal").addEventListener("click", (e) => {
+    if (e.target.id === "sticker-modal") $("#sticker-modal").close();
+  });
 
   state.dcs = await api("/api/dcs");
   const select = $("#dc-select");
@@ -227,7 +231,7 @@ function handleRunEvent(event) {
       setStep("reading", "active");
       addActivity(
         "📄",
-        "PDF converted to text (Docling)",
+        "PDF converted to text",
         `${data.markdown_length} characters extracted — click to preview`,
         "",
         ts,
@@ -337,10 +341,14 @@ function onToolCall(data, ts) {
   const title = labelFn(data.arguments || {});
   const tone = data.ok ? "" : "error";
   const detail = data.ok ? "" : `Error: ${data.result}`;
-  addActivity(icon, title, detail, tone, ts);
+  const parsed = data.ok ? safeJson(data.result) : null;
+  const onClick =
+    data.name === "robot__fetch_item" && parsed?.sticker_available
+      ? () => openStickerPreview(data.arguments.sku, data.arguments.qty)
+      : undefined;
+  addActivity(icon, title, detail, tone, ts, onClick);
 
   if (!data.ok) return;
-  const parsed = safeJson(data.result);
   if (parsed) applyToolResult(data.name, data.arguments || {}, parsed);
 }
 
@@ -414,6 +422,16 @@ async function animateRobotTrace(trace) {
   for (const step of trace) {
     if (token !== robotTraceToken) return; // a newer trace/tool call has taken over
     if (step.status) updateRobotState(step.status);
+    if (step.type === "pick" && step.sticker_available) {
+      addActivity(
+        "📷",
+        `Captured sticker photo: ${step.qty}× ${step.sku}`,
+        "Click to preview",
+        "",
+        Date.now() / 1000,
+        () => openStickerPreview(step.sku, step.qty)
+      );
+    }
     await sleep(650);
   }
 }
@@ -825,7 +843,7 @@ function addActivity(icon, title, detail, tone, ts, onClick) {
 // ---------------------------------------------------------------------------
 
 function openDoclingPreview(filename, markdown) {
-  $("#docling-modal-title").textContent = `Docling conversion result${filename ? ` — ${filename}` : ""}`;
+  $("#docling-modal-title").textContent = `PDF conversion result${filename ? ` — ${filename}` : ""}`;
   $("#docling-modal-meta").textContent = markdown
     ? `${markdown.length.toLocaleString()} characters · this is the text the LLM used for field extraction`
     : "No markdown was included with this event";
@@ -839,9 +857,20 @@ function openDoclingPreview(filename, markdown) {
 
 function openExtractedPreview(data) {
   $("#extracted-modal-title").textContent = `LLM extracted data elements${data.po_number ? ` — PO ${data.po_number}` : ""}`;
-  $("#extracted-modal-meta").textContent = `${data.line_items.length} line item(s) · structured fields the LLM pulled from the Docling markdown`;
+  $("#extracted-modal-meta").textContent = `${data.line_items.length} line item(s) · structured fields the LLM pulled from the converted text`;
   $("#extracted-modal-body").textContent = JSON.stringify(data, null, 2);
   $("#extracted-modal").showModal();
+}
+
+// ---------------------------------------------------------------------------
+// Sticker photo preview
+// ---------------------------------------------------------------------------
+
+function openStickerPreview(sku, qty) {
+  $("#sticker-modal-title").textContent = `Sticker photo — ${sku}`;
+  $("#sticker-modal-meta").textContent = `${qty}× picked · simulated warehouse camera capture, generated on demand`;
+  $("#sticker-modal-img").src = `/api/stickers/${encodeURIComponent(sku)}?color_mode=random&t=${Date.now()}`;
+  $("#sticker-modal").showModal();
 }
 
 function escapeHtml(str) {

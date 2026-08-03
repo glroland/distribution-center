@@ -2,24 +2,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "adc.dashboardUi.serviceName" . }}
+  name: {{ include "adc.labelGeneratorApi.serviceName" . }}
   labels:
     {{- include "adc.commonLabels" . | nindent 4 }}
-    app.kubernetes.io/name: dashboard-ui
+    app.kubernetes.io/name: label-generator-api
     app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/component: dashboard-ui
+    app.kubernetes.io/component: label-generator-api
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: dashboard-ui
+      app.kubernetes.io/name: label-generator-api
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: dashboard-ui
+        app.kubernetes.io/name: label-generator-api
         app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/component: dashboard-ui
+        app.kubernetes.io/component: label-generator-api
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
@@ -28,41 +28,28 @@ spec:
       securityContext:
         {{- include "adc.podSecurityContext" . | nindent 8 }}
       containers:
-        - name: dashboard-ui
+        - name: label-generator-api
           image: {{ include "adc.image" (dict "root" $ "image" .Values.image) }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext:
             {{- include "adc.containerSecurityContext" . | nindent 12 }}
           ports:
             - name: http
-              containerPort: {{ .Values.port }}
+              containerPort: {{ .Values.global.labelGeneratorApi.port }}
           env:
             - name: HOST
               value: "0.0.0.0"
             - name: PORT
-              value: {{ .Values.port | quote }}
-            # Reachable only from inside the cluster -- the dc-agent posts
-            # progress-webhook callbacks to this over Service DNS, never
-            # through the Route.
-            - name: PUBLIC_URL
-              value: http://{{ include "adc.dashboardUi.serviceName" . }}:{{ .Values.port }}
-            - name: SUPERVISOR_API_URL
-              value: http://{{ include "adc.supervisorApi.serviceName" . }}:{{ .Values.global.supervisorApi.port }}
-            - name: PO_INGEST_API_URL
-              value: http://{{ include "adc.poIngestApi.serviceName" . }}:{{ .Values.global.poIngestApi.port }}
-            - name: LABEL_GENERATOR_API_URL
-              value: http://{{ include "adc.labelGeneratorApi.serviceName" . }}:{{ .Values.global.labelGeneratorApi.port }}
-            - name: DISTRIBUTION_CENTERS_JSON
-              value: {{ include "adc.dashboardUi.distributionCentersJson" . | quote }}
+              value: {{ .Values.global.labelGeneratorApi.port | quote }}
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
             initialDelaySeconds: 15
             periodSeconds: 20

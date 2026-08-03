@@ -74,7 +74,8 @@ curl -X POST http://localhost:8005/stickers/bulk -H 'Content-Type: application/j
     {"sku": "SKU-1002", "quantity": 1}
   ],
   "color_mode": "random",
-  "image_format": "jpg"
+  "image_format": "jpg",
+  "include_manifest": true
 }' -o stickers.zip
 ```
 
@@ -82,6 +83,15 @@ Each request writes its images to a new `BULK_OUTPUT_DIR/batch-<uuid>/`
 folder, zips that folder to `BULK_OUTPUT_DIR/batch-<uuid>.zip`, and returns
 the zip. The staged folder and zip are left on disk for inspection unless
 `BULK_CLEANUP_AFTER_ZIP=true`, in which case only the zip remains.
+
+If `include_manifest` is true (default `false`), the zip also contains a
+`manifest.jsonl` with one JSON record per image - `filename`, `sku`,
+`canvas_width`/`canvas_height`, `color_mode`, `rotation_angle_degrees`,
+`sticker_width`/`sticker_height`, and `corners_xy` (the 4 corners of the
+sticker rectangle in that image's pixel coordinates). This is ground truth
+for training models against this generator's output (e.g. the `vision-ml`
+project's sticker localization/orientation/OCR notebooks) - not needed if
+you just want the pictures.
 
 ## Tests
 

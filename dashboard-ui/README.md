@@ -64,6 +64,7 @@ Starts on `http://localhost:8090` - open that in a browser.
 | `PUBLIC_URL` | `http://localhost:8090` | Base URL other services use to reach this one (the dc-agent's progress webhook target) |
 | `SUPERVISOR_API_URL` | `http://localhost:8003` | Base URL of `supervisor-api` |
 | `PO_INGEST_API_URL` | `http://localhost:8000` | Base URL of `po-ingest-api` (currently unused directly, reserved) |
+| `LABEL_GENERATOR_API_URL` | `http://localhost:8005` | Base URL of `label-generator-api`, proxied by `GET /api/stickers/{sku}` for the sticker-photo preview |
 | `PO_DIRS` | `target/pos,test-po-generator/output` | Comma-separated *additional* directories (relative to the repo root) to look for demo PO PDFs, on top of the packaged `data/pos/` (always searched, not configurable) |
 
 ## Distribution centers
@@ -90,6 +91,7 @@ All under `/api`:
 | `GET` | `/dcs/{name}/shipments?po_number=` | Shipments passthrough |
 | `POST` | `/dcs/{name}/reset` | Reset inventory, robot, and shipments for a DC |
 | `GET` | `/help-requests?status=` | Supervisor help requests passthrough |
+| `GET` | `/stickers/{sku}?color_mode=&image_format=` | Sticker photo passthrough to `label-generator-api`, for the "captured sticker photo" preview on each robot pick |
 | `POST` | `/help-requests/{id}/resolve` | Resolve a help request |
 | `POST` | `/runs` | Body `{"dc": str, "filename": str}`; starts sending a PO, returns `{"run_id"}` |
 | `GET` | `/runs/{run_id}/stream` | SSE stream of that run's events |

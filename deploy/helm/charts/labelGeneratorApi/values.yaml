@@ -1,0 +1,18 @@
+# Default values for the labelGeneratorApi subchart. The umbrella chart's
+# values.yaml overrides these under the `labelGeneratorApi:` key; the port
+# itself lives under `global.labelGeneratorApi.port` since dashboardUi (which
+# proxies sticker-photo requests to it) needs it too.
+
+enabled: true
+image:
+  repository: label-generator-api
+replicaCount: 1
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+route:
+  enabled: true

@@ -269,6 +269,114 @@ async def test_exceeding_max_turns_falls_back_to_escalation(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
+async def test_ship_order_arguments_overridden_from_order_data(monkeypatch) -> None:
+    """The model's own customer_name/customer_address must never reach the shipping
+    tool verbatim -- the agent always substitutes the values already known from the
+    processed order, even if the model got them wrong or omitted them."""
+    ship_call = _FakeToolCall(
+        id="call_0",
+        function=_FakeFunctionCall(
+            name="shipping__ship_order",
+            arguments=json.dumps(
+                {
+                    "po_number": "PO-9001",
+                    "customer_name": None,
+                    "customer_address": None,
+                    "items": [{"sku": "SKU-1001", "qty": 5}],
+                }
+            ),
+        ),
+    )
+    responses = [_FakeMessage(tool_calls=[ship_call]), _FakeMessage(tool_calls=[_finish_call()])]
+    fake_client = _FakeOpenAIClient(responses)
+    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key, base_url=None: fake_client)
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
+
+    tools = _FakeTools(
+        tool_results={
+            "shipping__ship_order": json.dumps({"carrier": "UPS", "tracking_number": "1Z999"}),
+        }
+    )
+
+    await fulfill_order(_order(), tools)
+
+    assert tools.calls == [
+        (
+            "shipping__ship_order",
+            {
+                "po_number": "PO-9001",
+                "customer_name": "Acme Corp",
+                "customer_address": "1 Main St",
+                "items": [{"sku": "SKU-1001", "qty": 5}],
+            },
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ship_order_blocked_when_ship_to_missing(monkeypatch) -> None:
+    extracted = ExtractedOrder(
+        po_number="PO-9002",
+        buyer_name="Acme Corp",
+        ship_to=None,
+        line_items=[LineItem(sku="SKU-1001", description="Widget", quantity=5, unit_price=10.0)],
+    )
+    order = process_order(extracted)
+
+    ship_call = _FakeToolCall(
+        id="call_0",
+        function=_FakeFunctionCall(
+            name="shipping__ship_order",
+            arguments=json.dumps(
+                {
+                    "po_number": "PO-9002",
+                    "customer_name": "Acme Corp",
+                    "customer_address": "1 Main St",
+                    "items": [{"sku": "SKU-1001", "qty": 5}],
+                }
+            ),
+        ),
+    )
+    responses = [
+        _FakeMessage(tool_calls=[ship_call]),
+        _FakeMessage(
+            tool_calls=[
+                _finish_call(
+                    items=[
+                        {
+                            "sku": "SKU-1001",
+                            "description": "Widget",
+                            "requested_qty": 5,
+                            "fulfilled_qty": 5,
+                            "status": "escalated",
+                        }
+                    ],
+                    order_status="escalated",
+                    summary="Escalated: no ship-to address.",
+                )
+            ]
+        ),
+    ]
+    fake_client = _FakeOpenAIClient(responses)
+    monkeypatch.setattr(fulfillment_module, "OpenAI", lambda api_key, base_url=None: fake_client)
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
+
+    tools = _FakeTools()
+    events: list[tuple[str, dict]] = []
+
+    async def on_event(event_type: str, data: dict) -> None:
+        events.append((event_type, data))
+
+    result = await fulfill_order(order, tools, on_event=on_event)
+
+    assert not any(name == "shipping__ship_order" for name, _ in tools.calls)
+    assert events[0][0] == "tool_call"
+    assert events[0][1]["ok"] is False
+    assert "ship_to" in events[0][1]["result"]
+    assert result.order_status == "escalated"
+
+
+@pytest.mark.asyncio
 async def test_missing_api_key_raises_fulfillment_error(monkeypatch) -> None:
     monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
 

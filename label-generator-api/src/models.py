@@ -22,3 +22,4 @@ class BulkGenerateRequest(BaseModel):
     items: list[BulkGenerateItem] = Field(min_length=1, max_length=200)
     color_mode: ColorModeField = "random"
     image_format: ImageFormatField = "jpg"
+    include_manifest: bool = False

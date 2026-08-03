@@ -263,6 +263,20 @@ h1, h2, h3 { margin: 0; }
   line-height: 1.5;
   color: var(--text-dim);
 }
+.sticker-modal-body {
+  padding: 16px;
+  max-height: calc(82vh - 62px);
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  background: var(--bg-elevated);
+}
+.sticker-modal-body img {
+  max-width: 100%;
+  max-height: calc(82vh - 94px);
+  border-radius: 8px;
+  display: block;
+}
 
 /* --- warehouse map --- */
 .map-wrap { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 8px; }

@@ -38,14 +38,17 @@ global:
     existingSecret: "distribution-center-credentials"
     existingSecretKey: OPENAI_API_KEY
 
-  # Ports of the two global services below, mirrored here so the
-  # distributionCenter subchart's dc-agent can address them -- Helm only
-  # shares `global` values across subcharts, never one subchart's local
-  # values with another.
+  # Ports of the global services below, mirrored here so the
+  # distributionCenter subchart's dc-agent (poIngestApi, supervisorApi) and
+  # dashboardUi (labelGeneratorApi, for sticker-photo proxying) can address
+  # them -- Helm only shares `global` values across subcharts, never one
+  # subchart's local values with another.
   poIngestApi:
     port: 8000
   supervisorApi:
     port: 8003
+  labelGeneratorApi:
+    port: 8005
 
   # MLflow tracing (see each service's src/tracing.py), consumed by every
   # service below via the shared ConfigMap in templates/mlflow-configmap.yaml.
@@ -129,6 +132,21 @@ dashboardUi:
       dock:
         x: 0
         "y": 0
+
+labelGeneratorApi:
+  enabled: true
+  image:
+    repository: label-generator-api
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  route:
+    enabled: true
 
 # ---------------------------------------------------------------------------
 # Distribution centers (charts/distributionCenter subchart). Each entry in

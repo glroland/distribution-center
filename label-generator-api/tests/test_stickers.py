@@ -1,4 +1,5 @@
 import io
+import math
 import random
 
 import numpy as np
@@ -11,6 +12,7 @@ from src.stickers import (
     _random_rotation_angle,
     _validate_sku,
     generate_sticker_image,
+    generate_sticker_sample,
 )
 
 _SIZE_KWARGS = dict(min_width=200, max_width=260, min_height=150, max_height=190)
@@ -81,3 +83,49 @@ def test_random_rotation_angle_never_lands_on_horizontal() -> None:
         angle = _random_rotation_angle(rng)
         assert band <= angle <= 360 - band
         assert not (180 - band < angle < 180 + band)
+
+
+# Comfortably larger than any generated sticker (font size <= 52, ~8-char SKU text) so the
+# "shrink the rotated sticker to fit the canvas" branch in `_composite` never triggers here -
+# that keeps the corner-geometry checks below exact rather than fuzzed by an extra scale factor.
+_ROOMY_SIZE_KWARGS = dict(min_width=1400, max_width=1600, min_height=1000, max_height=1200)
+
+
+def _dist(a: tuple[float, float], b: tuple[float, float]) -> float:
+    return math.hypot(a[0] - b[0], a[1] - b[1])
+
+
+def test_generate_sticker_sample_corners_form_the_sticker_rectangle() -> None:
+    for seed in range(25):
+        _, metadata = generate_sticker_sample("sku-1001", seed=seed, **_ROOMY_SIZE_KWARGS)
+        tl, tr, br, bl = metadata.corners_xy
+
+        # Opposite sides equal in length...
+        assert _dist(tl, tr) == pytest.approx(_dist(bl, br), rel=1e-6)
+        assert _dist(tl, bl) == pytest.approx(_dist(tr, br), rel=1e-6)
+        # ...and matching the sticker's own (unrotated) width/height exactly, since rotation is
+        # a rigid transform and this canvas is roomy enough that no extra scaling was applied.
+        assert _dist(tl, tr) == pytest.approx(metadata.sticker_width, abs=0.5)
+        assert _dist(tl, bl) == pytest.approx(metadata.sticker_height, abs=0.5)
+
+        # Adjacent sides are perpendicular (it's a rectangle, not a sheared quadrilateral).
+        edge_top = (tr[0] - tl[0], tr[1] - tl[1])
+        edge_left = (bl[0] - tl[0], bl[1] - tl[1])
+        dot = edge_top[0] * edge_left[0] + edge_top[1] * edge_left[1]
+        assert dot == pytest.approx(0, abs=1e-6)
+
+
+def test_generate_sticker_sample_corners_stay_within_canvas() -> None:
+    for seed in range(25):
+        _, metadata = generate_sticker_sample("sku-1002", seed=seed, **_ROOMY_SIZE_KWARGS)
+        for corner_x, corner_y in metadata.corners_xy:
+            assert -1 <= corner_x <= metadata.canvas_width + 1
+            assert -1 <= corner_y <= metadata.canvas_height + 1
+
+
+def test_generate_sticker_sample_matches_generate_sticker_image() -> None:
+    # generate_sticker_image() must remain byte-for-byte identical to before this refactor -
+    # it's a thin wrapper around generate_sticker_sample() now, same seeded RNG sequence.
+    kwargs = dict(seed=42, **_ROOMY_SIZE_KWARGS)
+    image_bytes, _metadata = generate_sticker_sample("sku-1003", **kwargs)
+    assert generate_sticker_image("sku-1003", **kwargs) == image_bytes

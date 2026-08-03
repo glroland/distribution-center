@@ -50,7 +50,11 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
             "restock_shelf to let it pick a sensible cell automatically. The "
             "lower-level move_robot/fetch_item/deliver_items tools are also "
             "available for manual control if you need it, but plan_and_fetch_items "
-            "is the normal way to fulfil a pick run. Call reset_robot to restore "
+            "is the normal way to fulfil a pick run. Every pick (whether via "
+            "fetch_item or a plan_and_fetch_items trace step) comes back with "
+            "sticker_available: true, meaning a photo of that SKU's shelf sticker "
+            "can be previewed via the label generator service - purely a UI/audit "
+            "aid, nothing you need to act on. Call reset_robot to restore "
             "the demo to its starting state."
         ),
         host=settings.HOST,
@@ -111,8 +115,11 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
     def fetch_item(sku: str, qty: int) -> dict:
         """Pick `qty` units of `sku` off the shelf at the robot's current location and
         load them onto the robot. Fails if the SKU isn't stocked there, there isn't
-        enough on hand, or it would exceed the robot's carry capacity."""
-        return _status_dict(robot.pick(sku, qty))
+        enough on hand, or it would exceed the robot's carry capacity. The response
+        includes sticker_available: true - a photo of the SKU's shelf sticker, as the
+        robot's camera would have captured it, can be viewed via the label generator
+        service (dashboard UIs surface this as a preview)."""
+        return {**_status_dict(robot.pick(sku, qty)), "sticker_available": True}
 
     @mcp_server.tool()
     @tool_trace
@@ -126,12 +133,20 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         "final_status": {...}}. A SKU coming back with fetched_qty below
         requested_qty is not an error - it means that SKU isn't stocked
         anywhere, or not in sufficient quantity; decide what to do about the
-        shortfall yourself (e.g. request a supervisor transfer)."""
+        shortfall yourself (e.g. request a supervisor transfer). Each "pick" step
+        in trace includes sticker_available: true - a photo of that SKU's shelf
+        sticker, as the robot's camera would have captured it, can be viewed via
+        the label generator service (dashboard UIs surface this as a preview)."""
         result = await robot.run_pick_plan([(item["sku"], item["qty"]) for item in items])
         return {
             "items": result["items"],
             "trace": [
-                {**step, "status": _status_dict(step["status"])} for step in result["trace"]
+                {
+                    **step,
+                    "status": _status_dict(step["status"]),
+                    **({"sticker_available": True} if step["type"] == "pick" else {}),
+                }
+                for step in result["trace"]
             ],
             "final_status": _status_dict(result["final_status"]),
         }

@@ -128,6 +128,13 @@ manual control.
 Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
 Python SDK's `mcp.client.streamable_http.streamable_http_client`.
 
+Every pick (a `fetch_item` result, or a `"pick"` step in a
+`plan_and_fetch_items` trace) comes back with `sticker_available: true` - a
+flag, not the image itself, meaning a photo of that SKU's shelf sticker (as
+the robot's camera would have captured it) can be previewed via
+`label-generator-api`. `dashboard-ui` is what actually fetches and displays
+it, on demand, via its own `/api/stickers/{sku}` proxy.
+
 ## Tests
 
 ```bash

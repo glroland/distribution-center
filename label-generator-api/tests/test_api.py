@@ -63,6 +63,21 @@ def test_generate_stickers_bulk() -> None:
         assert len(zf.namelist()) == 3
 
 
+def test_generate_stickers_bulk_with_manifest() -> None:
+    resp = client.post(
+        "/stickers/bulk",
+        json={
+            "items": [{"sku": "SKU-1001", "quantity": 2}],
+            "include_manifest": True,
+        },
+    )
+    assert resp.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+        names = zf.namelist()
+        assert "manifest.jsonl" in names
+        assert len(names) == 3  # 2 images + manifest
+
+
 def test_generate_stickers_bulk_rejects_empty_items() -> None:
     resp = client.post("/stickers/bulk", json={"items": []})
     assert resp.status_code == 422

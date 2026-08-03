@@ -1,0 +1,12 @@
+torch>=2.4
+torchvision>=0.19
+opencv-python-headless>=4.10
+pillow>=10.4
+numpy>=1.26
+pandas>=2.2
+matplotlib>=3.9
+mlflow>=2.16
+requests>=2.32
+python-dotenv>=1.0
+jupyter>=1.0
+ipykernel>=6.29
