@@ -2,16 +2,16 @@
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: {{ include "adc.labelGeneratorApi.serviceName" . }}
+  name: {{ include "adc.labelApi.serviceName" . }}
   labels:
     {{- include "adc.commonLabels" . | nindent 4 }}
-    app.kubernetes.io/name: label-generator-api
+    app.kubernetes.io/name: label-api
     app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/component: label-generator-api
+    app.kubernetes.io/component: label-api
 spec:
   to:
     kind: Service
-    name: {{ include "adc.labelGeneratorApi.serviceName" . }}
+    name: {{ include "adc.labelApi.serviceName" . }}
   port:
     targetPort: http
   tls:

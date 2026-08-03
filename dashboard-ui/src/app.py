@@ -125,7 +125,7 @@ async def reset_dc(name: str) -> dict:
 
 @app.get("/api/stickers/{sku}")
 async def get_sticker_photo(sku: str, color_mode: str = "random", image_format: str = "jpg") -> Response:
-    url = f"{settings.LABEL_GENERATOR_API_URL}/stickers/{sku}"
+    url = f"{settings.LABEL_API_URL}/stickers/{sku}"
     params = {"color_mode": color_mode, "image_format": image_format}
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:

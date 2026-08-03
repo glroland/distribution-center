@@ -2,24 +2,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "adc.labelGeneratorApi.serviceName" . }}
+  name: {{ include "adc.labelApi.serviceName" . }}
   labels:
     {{- include "adc.commonLabels" . | nindent 4 }}
-    app.kubernetes.io/name: label-generator-api
+    app.kubernetes.io/name: label-api
     app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/component: label-generator-api
+    app.kubernetes.io/component: label-api
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: label-generator-api
+      app.kubernetes.io/name: label-api
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: label-generator-api
+        app.kubernetes.io/name: label-api
         app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/component: label-generator-api
+        app.kubernetes.io/component: label-api
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
@@ -28,19 +28,19 @@ spec:
       securityContext:
         {{- include "adc.podSecurityContext" . | nindent 8 }}
       containers:
-        - name: label-generator-api
+        - name: label-api
           image: {{ include "adc.image" (dict "root" $ "image" .Values.image) }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext:
             {{- include "adc.containerSecurityContext" . | nindent 12 }}
           ports:
             - name: http
-              containerPort: {{ .Values.global.labelGeneratorApi.port }}
+              containerPort: {{ .Values.global.labelApi.port }}
           env:
             - name: HOST
               value: "0.0.0.0"
             - name: PORT
-              value: {{ .Values.global.labelGeneratorApi.port | quote }}
+              value: {{ .Values.global.labelApi.port | quote }}
           readinessProbe:
             httpGet:
               path: /health

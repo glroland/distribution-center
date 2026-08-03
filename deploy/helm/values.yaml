@@ -40,14 +40,14 @@ global:
 
   # Ports of the global services below, mirrored here so the
   # distributionCenter subchart's dc-agent (poIngestApi, supervisorApi) and
-  # dashboardUi (labelGeneratorApi, for sticker-photo proxying) can address
+  # dashboardUi (labelApi, for sticker-photo proxying) can address
   # them -- Helm only shares `global` values across subcharts, never one
   # subchart's local values with another.
   poIngestApi:
     port: 8000
   supervisorApi:
     port: 8003
-  labelGeneratorApi:
+  labelApi:
     port: 8005
 
   # MLflow tracing (see each service's src/tracing.py), consumed by every
@@ -133,10 +133,10 @@ dashboardUi:
         x: 0
         "y": 0
 
-labelGeneratorApi:
+labelApi:
   enabled: true
   image:
-    repository: label-generator-api
+    repository: label-api
   replicaCount: 1
   resources:
     requests:

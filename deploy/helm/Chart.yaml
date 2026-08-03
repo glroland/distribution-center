@@ -23,8 +23,8 @@ dependencies:
   - name: dashboardUi
     version: 0.1.0
     condition: dashboardUi.enabled
-  - name: labelGeneratorApi
+  - name: labelApi
     version: 0.1.0
-    condition: labelGeneratorApi.enabled
+    condition: labelApi.enabled
   - name: distributionCenter
     version: 0.1.0

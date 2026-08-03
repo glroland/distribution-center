@@ -100,14 +100,14 @@ pipeline
          }
       }
 
-      stage('Create Docker Image for label-generator-api')
+      stage('Create Docker Image for label-api')
       {
          steps
          {
-            sh 'cd label-generator-api ; docker build --no-cache -f Containerfile . --tag label-generator-api:$BUILD_NUMBER'
-            sh 'cd label-generator-api ; docker save label-generator-api:$BUILD_NUMBER > label-generator-api-dockerimage.tar'
-            step(followSymlinks: false, artifacts: 'label-generator-api/label-generator-api-dockerimage.tar', $class: 'ArtifactArchiver')
-            sh 'cd label-generator-api ; docker rmi label-generator-api:$BUILD_NUMBER'
+            sh 'cd label-api ; docker build --no-cache -f Containerfile . --tag label-api:$BUILD_NUMBER'
+            sh 'cd label-api ; docker save label-api:$BUILD_NUMBER > label-api-dockerimage.tar'
+            step(followSymlinks: false, artifacts: 'label-api/label-api-dockerimage.tar', $class: 'ArtifactArchiver')
+            sh 'cd label-api ; docker rmi label-api:$BUILD_NUMBER'
          }
       }
 
@@ -161,11 +161,11 @@ pipeline
                   sh 'docker push registry.home.glroland.com/distribution-center/local-shipping-api:$BUILD_NUMBER'
                   sh 'docker rmi registry.home.glroland.com/distribution-center/local-shipping-api:$BUILD_NUMBER'
 
-                  sh 'docker load -i label-generator-api/label-generator-api-dockerimage.tar'
-                  sh 'docker tag label-generator-api:$BUILD_NUMBER registry.home.glroland.com/distribution-center/label-generator-api:$BUILD_NUMBER'
-                  sh 'docker rmi label-generator-api:$BUILD_NUMBER'
-                  sh 'docker push registry.home.glroland.com/distribution-center/label-generator-api:$BUILD_NUMBER'
-                  sh 'docker rmi registry.home.glroland.com/distribution-center/label-generator-api:$BUILD_NUMBER'
+                  sh 'docker load -i label-api/label-api-dockerimage.tar'
+                  sh 'docker tag label-api:$BUILD_NUMBER registry.home.glroland.com/distribution-center/label-api:$BUILD_NUMBER'
+                  sh 'docker rmi label-api:$BUILD_NUMBER'
+                  sh 'docker push registry.home.glroland.com/distribution-center/label-api:$BUILD_NUMBER'
+                  sh 'docker rmi registry.home.glroland.com/distribution-center/label-api:$BUILD_NUMBER'
                }
             }
          }

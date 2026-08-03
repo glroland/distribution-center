@@ -82,7 +82,7 @@ DEFAULT_CATALOG_SKUS = _default_catalog_skus()
 
 @dsl.component(base_image=TRAINER_IMAGE)
 def generate_dataset(
-    label_generator_api_url: str,
+    label_api_url: str,
     catalog_skus: list[str],
     catalog_qty_per_sku: int,
     synthetic_num_skus: int,
@@ -97,8 +97,8 @@ def generate_dataset(
     import random
     from pathlib import Path
 
-    os.environ["LABEL_GENERATOR_API_URL"] = label_generator_api_url
-    from src import client, datasets  # noqa: E402 - needs LABEL_GENERATOR_API_URL set first
+    os.environ["LABEL_API_URL"] = label_api_url
+    from src import client, datasets  # noqa: E402 - needs LABEL_API_URL set first
 
     random.seed(split_seed)
     dest_dir = Path(raw_data.path)
@@ -661,7 +661,7 @@ def finalize_pipeline_run(
 )
 def vision_ml_training_pipeline(
     # Dataset generation - 00_generate_dataset.ipynb
-    label_generator_api_url: str = "http://localhost:8005",
+    label_api_url: str = "http://localhost:8005",
     catalog_skus: list[str] = DEFAULT_CATALOG_SKUS,
     catalog_qty_per_sku: int = 40,
     synthetic_num_skus: int = 800,
@@ -694,7 +694,7 @@ def vision_ml_training_pipeline(
     mlflow_tracking_auth: str = "kubernetes-namespaced",
 ) -> str:
     dataset = generate_dataset(
-        label_generator_api_url=label_generator_api_url,
+        label_api_url=label_api_url,
         catalog_skus=catalog_skus,
         catalog_qty_per_sku=catalog_qty_per_sku,
         synthetic_num_skus=synthetic_num_skus,

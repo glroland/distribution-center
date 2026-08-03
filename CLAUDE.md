@@ -22,7 +22,7 @@ all at once via the root `Makefile`.
 | `local-inventory-robot-api` | 8002 | Simulated picking robot on a 2D shelf grid |
 | `supervisor-api` | 8003 | Human-in-the-loop escalation queue |
 | `local-shipping-api` | 8004 | Mock carrier handoff (tracking numbers, no real carrier) |
-| `label-generator-api` | 8005 | Synthesizes low-quality camera-style photos of SKU stickers |
+| `label-api` | 8005 | Synthesizes low-quality camera-style photos of SKU stickers; also serves local SKU inference against vision-ml-trained models |
 | `dashboard-ui` | 8090 | Backend-for-frontend + static UI that drives/watches a demo run |
 | `test-po-generator` | - | CLI, not a server; generates sample PO PDFs |
 
@@ -97,11 +97,17 @@ rather than hosting its own tools. See "The dc-agent pipeline" below.
 orchestrates calls to the other services and serves a static UI
 (`src/static/`).
 
-`label-generator-api` is also different: it's a standalone image-generation
-utility (no MCP, no LLM, no MLflow tracing) — `src/stickers.py` renders a
-synthetic camera photo of a white SKU sticker with PIL/numpy, and
-`src/bulk.py` batches that into a zip on request. Nothing else in the repo
-calls it yet.
+`label-api` (renamed from `label-generator-api`) is also different: it's two
+standalone utilities in one service (no MCP, no LLM, no MLflow tracing).
+`src/stickers.py` renders a synthetic camera photo of a white SKU sticker
+with PIL/numpy, and `src/bulk.py` batches that into a zip on request —
+nothing else in the repo calls this half yet. `src/inference.py` is the
+other half: it loads the 3 PyTorch checkpoints the `vision-ml` project
+trains (localize -> orient -> OCR) from `models/`, bundled into this
+service's own Docker image at build time, and runs them in-process against
+an uploaded sticker photo via `POST /infer` — a predicted SKU + confidence
+score, computed locally rather than by calling out to a shared inference
+service or model server.
 
 ### The dc-agent pipeline (`local-dc-agent`)
 

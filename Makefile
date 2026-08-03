@@ -18,7 +18,7 @@ SERVICES := \
 	local-inventory-robot-api:local-inventory-robot-api:ROBOT_API_PORT \
 	supervisor-api:supervisor-api:SUPERVISOR_API_PORT \
 	local-shipping-api:local-shipping-api:SHIPPING_API_PORT \
-	label-generator-api:label-generator-api:LABEL_GENERATOR_API_PORT \
+	label-api:label-api:LABEL_API_PORT \
 	dashboard:dashboard-ui:DASHBOARD_PORT
 
 # Every make target shares the repo-root .env (falling back to .env.example)
@@ -42,7 +42,7 @@ REQUIREMENTS := $(shell find . \
 	-not -path '*/.venv/*' \
 	-name 'requirements*.txt')
 
-.PHONY: help install generate-pos load-prompts run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-label-generator-api run-dashboard start-all kill-all restart-all status-all clean test
+.PHONY: help install generate-pos load-prompts run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-label-api run-dashboard start-all kill-all restart-all status-all clean test
 
 help:
 	@echo "Targets:"
@@ -55,7 +55,7 @@ help:
 	@echo "  run-local-inventory-robot-api Run the local inventory robot API (http://localhost:8002)"
 	@echo "  run-supervisor-api           Run the local supervisor API (http://localhost:8003)"
 	@echo "  run-local-shipping-api       Run the local shipping API (http://localhost:8004)"
-	@echo "  run-label-generator-api      Run the sticker label generator API (http://localhost:8005)"
+	@echo "  run-label-api                Run the sticker label + SKU inference API (http://localhost:8005)"
 	@echo "  run-dashboard                Run the demo control room UI (http://localhost:8090)"
 	@echo "  start-all                    Start every service in the background (logs: $(LOG_DIR)/, pids: $(PID_DIR)/)"
 	@echo "  kill-all                     Stop every service started by start-all"
@@ -96,8 +96,8 @@ run-supervisor-api:
 run-local-shipping-api:
 	cd local-shipping-api && PORT=$(SHIPPING_API_PORT) python3 -m src
 
-run-label-generator-api:
-	cd label-generator-api && PORT=$(LABEL_GENERATOR_API_PORT) python3 -m src
+run-label-api:
+	cd label-api && PORT=$(LABEL_API_PORT) python3 -m src
 
 run-dashboard:
 	cd dashboard-ui && PORT=$(DASHBOARD_PORT) python3 -m src
@@ -181,6 +181,6 @@ test:
 	cd local-inventory-robot-api && PYTHONPATH=src python3 -m pytest tests
 	cd local-shipping-api && PYTHONPATH=src python3 -m pytest tests
 	cd local-wms-api && PYTHONPATH=src python3 -m pytest tests
-	cd label-generator-api && PYTHONPATH=src python3 -m pytest tests
+	cd label-api && PYTHONPATH=src python3 -m pytest tests
 	cd po-ingest-api && PYTHONPATH=src python3 -m pytest tests
 	cd supervisor-api && PYTHONPATH=src python3 -m pytest tests

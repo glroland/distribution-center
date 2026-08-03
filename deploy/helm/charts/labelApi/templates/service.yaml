@@ -2,18 +2,18 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "adc.labelGeneratorApi.serviceName" . }}
+  name: {{ include "adc.labelApi.serviceName" . }}
   labels:
     {{- include "adc.commonLabels" . | nindent 4 }}
-    app.kubernetes.io/name: label-generator-api
+    app.kubernetes.io/name: label-api
     app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/component: label-generator-api
+    app.kubernetes.io/component: label-api
 spec:
   selector:
-    app.kubernetes.io/name: label-generator-api
+    app.kubernetes.io/name: label-api
     app.kubernetes.io/instance: {{ .Release.Name }}
   ports:
     - name: http
-      port: {{ .Values.global.labelGeneratorApi.port }}
+      port: {{ .Values.global.labelApi.port }}
       targetPort: http
 {{- end }}

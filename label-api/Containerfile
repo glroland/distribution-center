@@ -6,10 +6,15 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
+# The 3 vision-ml-trained SKU inference checkpoints (localizer.pt,
+# orientation.pt, ocr.pt) - baked into the image so POST /infer never
+# depends on a volume mount or a separate model-serving step.
+COPY models ./models
 
 ENV HOST=0.0.0.0
 ENV PORT=8005
 ENV BULK_OUTPUT_DIR=/app/output
+ENV INFERENCE_MODELS_DIR=/app/models
 EXPOSE 8005
 
 CMD ["python", "-m", "src"]

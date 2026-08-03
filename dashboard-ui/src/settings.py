@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     SUPERVISOR_API_URL: str = "http://localhost:8003"
     PO_INGEST_API_URL: str = "http://localhost:8000"
-    LABEL_GENERATOR_API_URL: str = "http://localhost:8005"
+    LABEL_API_URL: str = "http://localhost:8005"
 
     # Sample PO PDFs baked into this service's own image (see data/pos/ and its
     # COPY in the Containerfile) -- always searched first, in every environment,

@@ -19,5 +19,13 @@ class Settings(BaseSettings):
     # If true, the per-batch image folder is deleted after zipping, leaving only the zip on disk.
     BULK_CLEANUP_AFTER_ZIP: bool = False
 
+    # SKU inference (see src/inference.py) - vision-ml-trained checkpoints,
+    # bundled into this service's own Docker image at build time (see
+    # Containerfile). Loaded from disk and run in-process, not called out to
+    # a separate inference service.
+    INFERENCE_MODELS_DIR: str = "models"
+    INFERENCE_DEVICE: str = "cpu"
+    INFERENCE_PAD_FRAC: float = 0.2
+
 
 settings = Settings()
