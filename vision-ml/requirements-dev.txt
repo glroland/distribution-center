@@ -1,1 +1,6 @@
 pytest>=8.0
+
+# Only needed to compile src/pipeline.py into pipeline.yaml (python -m src.pipeline)
+# - not a runtime dependency of the pipeline's own components, which run in
+# their own container (see Containerfile) and never import kfp themselves.
+kfp>=2.9,<3

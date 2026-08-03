@@ -1,0 +1,15 @@
+# Base image for the KFP training components in src/pipeline.py (see that
+# file - `TRAINER_IMAGE`). Same RHOAI 3.4 base every other service's
+# Containerfile in this repo builds on, so it's already validated against
+# this cluster's OpenShift AI / Kubeflow Pipelines version.
+#
+# This is a training image, not a service: no CMD/EXPOSE - KFP's executor
+# invokes `python3 -c "<component source>"` directly inside the container.
+FROM registry.redhat.io/rhai/base-image-cpu-rhel9:3.4.0-1777399554
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src ./src

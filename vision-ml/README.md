@@ -59,6 +59,36 @@ produce under `data/`:
 | `03_sku_ocr.ipynb` | `data/models/ocr.pt` |
 | `04_end_to_end_pipeline.ipynb` | Chains all three, reports live end-to-end SKU accuracy on the real product catalog |
 
+## Kubeflow Pipeline
+
+`src/pipeline.py` is a KFP v2 Python DSL pipeline that runs the same
+generate -> localize -> orient -> OCR flow as the notebooks above, for
+running on OpenShift AI's Data Science Pipelines instead of by hand in
+Jupyter. Every notebook hyperparameter (epochs, LR, batch size, pad_frac,
+...) is a pipeline input, defaulted to that notebook's current hardcoded
+value. All three training stages log to MLflow as nested runs under one
+parent run in a single experiment (default `vision-ml`) rather than the
+notebooks' one-experiment-per-stage layout, and the pipeline's own output is
+that parent run's MLflow URL. Checkpoints are logged both as MLflow
+artifacts and as native KFP `Output[Model]` artifacts.
+
+```bash
+# Build & push the training image (registry/tag of your choice)
+docker build -t <registry>/vision-ml-trainer:latest -f Containerfile .
+docker push <registry>/vision-ml-trainer:latest
+
+# Compile the pipeline, pointing it at that image
+VISION_ML_TRAINER_IMAGE=<registry>/vision-ml-trainer:latest python -m src.pipeline
+# -> pipeline.yaml
+```
+
+Upload `pipeline.yaml` via the Data Science Pipelines UI (Import pipeline),
+or `kfp.Client().upload_pipeline`. `mlflow_tracking_auth` defaults to
+`kubernetes-namespaced` (same convention as the rest of this repo - see the
+root `deploy/helm` chart) so no MLflow token needs to be passed as a run
+parameter when the pipeline runs in-cluster; set `mlflow_tracking_token`
+instead to override that.
+
 ## Layout
 
 ```
@@ -71,6 +101,8 @@ src/
   models.py          # LocalizerNet, OrientationNet, CRNNReader + OCR charset/decode
   tracking.py         # MLflow configure helper (no-ops if MLFLOW_TRACKING_URI unset)
   inference.py         # SkuExtractionPipeline - chains the 3 trained models
+  pipeline.py           # KFP v2 pipeline: generate + train all 3 stages on OpenShift AI
+Containerfile            # Training image src/pipeline.py's components run in
 notebooks/              # 00-04, see table above
 data/                    # generated datasets + checkpoints (gitignored)
 ```
