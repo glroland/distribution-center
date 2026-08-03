@@ -78,11 +78,11 @@ poIngestApi:
   replicaCount: 1
   resources:
     requests:
-      cpu: "4"
-      memory: 16Gi
-    limits:
       cpu: "1"
       memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 16Gi
   route:
     enabled: true
 
