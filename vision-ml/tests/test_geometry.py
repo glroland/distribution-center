@@ -8,7 +8,7 @@ from src import geometry
 
 
 def _make_tilted_rectangle(w: float, h: float, angle_degrees: float, center: tuple[float, float]):
-    """A synthetic rectangle (independent of label-generator-api) tilted by
+    """A synthetic rectangle (independent of label-api) tilted by
     `angle_degrees` per `rotate_points`'s convention, so `corners_to_angle_degrees`
     can be checked against a known-good input rather than only self-consistently."""
     # rotate_points(X, a) is defined to *undo* a tilt of `a` (that's what
@@ -94,7 +94,7 @@ def pytest_approx(value, abs=1e-6):
 def test_rotate_upright_on_a_real_image_matches_rotate_points():
     """Closes the loop on real PIL.Image.rotate() (not just the point-space
     model of it): draw a white rectangle tilted by a known angle onto a
-    padded canvas the same way label-generator-api does (small unrotated
+    padded canvas the same way label-api does (small unrotated
     rect -> rotate(expand=True) -> paste), run it through `rotate_upright`,
     and confirm the white region's actual pixel bounding box in the result
     is axis-aligned and sized like the original unrotated rectangle."""
@@ -108,9 +108,9 @@ def test_rotate_upright_on_a_real_image_matches_rotate_points():
 
     # corners_to_angle_degrees expects [TL, TR, BR, BL] of the *unrotated* rect mapped through
     # the same rotation - reuse rotate_points (rotate_upright's point-space model) to build them,
-    # exactly mirroring label-generator-api's own corner construction.
+    # exactly mirroring label-api's own corner construction.
     # `rotate_points(X, a)` is defined to mirror `Image.rotate(a, expand=False)`'s own point
-    # mapping (see geometry.rotate_upright's docstring, and label-generator-api's
+    # mapping (see geometry.rotate_upright's docstring, and label-api's
     # `_rotated_sticker_corners`, which uses this identical formula and is verified against
     # real generated images in that service's test suite) - so the *same* +angle used above to
     # build `rotated` via `rect.rotate(angle, ...)` is what maps `rect`'s own corners into

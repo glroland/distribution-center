@@ -1,0 +1,11 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic-settings>=2.5
+pillow>=10.4
+numpy>=1.26
+# Multipart parsing for POST /infer's file upload (fastapi.UploadFile).
+python-multipart>=0.0.9
+# CPU-only inference for POST /infer (src/inference.py) - same base image
+# and unpinned-CUDA convention as vision-ml/requirements.txt, which trains
+# the checkpoints this loads.
+torch>=2.4

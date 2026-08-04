@@ -1,15 +1,20 @@
 import io
+import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
+from PIL import Image
 
 from .bulk import generate_bulk_zip
-from .models import BulkGenerateRequest
+from .inference import get_pipeline
+from .models import BulkGenerateRequest, SkuInferenceResult
 from .settings import settings
 from .stickers import ColorMode, ImageFormat, InvalidSkuError, generate_sticker_image
 
-app = FastAPI(title="Label Generator API")
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Label API")
 
 _MEDIA_TYPES = {"jpg": "image/jpeg", "png": "image/png"}
 
@@ -55,3 +60,38 @@ def generate_stickers_bulk(body: BulkGenerateRequest) -> FileResponse:
         include_manifest=body.include_manifest,
     )
     return FileResponse(zip_path, media_type="application/zip", filename=zip_path.name)
+
+
+@app.post("/infer")
+async def infer_sku(image: UploadFile = File(...)) -> SkuInferenceResult:
+    contents = await image.read()
+    logger.info(
+        "infer request received: filename=%r content_type=%r size_bytes=%d",
+        image.filename, image.content_type, len(contents),
+    )
+
+    try:
+        pil_image = Image.open(io.BytesIO(contents))
+        pil_image.load()
+    except Exception as exc:
+        logger.warning("infer request rejected: %r is not a readable image (%s)", image.filename, exc)
+        raise HTTPException(status_code=400, detail=f"invalid image: {exc}") from None
+
+    try:
+        pipeline = get_pipeline(
+            models_dir=Path(settings.INFERENCE_MODELS_DIR),
+            device=settings.INFERENCE_DEVICE,
+            pad_frac=settings.INFERENCE_PAD_FRAC,
+        )
+    except Exception as exc:
+        logger.error("infer request failed: SKU inference models unavailable (%s)", exc)
+        raise HTTPException(status_code=503, detail=f"SKU inference models unavailable: {exc}") from None
+
+    prediction = pipeline.predict(pil_image)
+    return SkuInferenceResult(
+        sku=prediction.sku,
+        confidence=prediction.confidence,
+        bbox=prediction.bbox,
+        angle_degrees=prediction.angle_degrees,
+        inference_ms=prediction.inference_ms,
+    )

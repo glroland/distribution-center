@@ -1,0 +1,9 @@
+apiVersion: v2
+name: labelApi
+description: >-
+  Sticker-photo generator and SKU inference utility -- synthesizes
+  camera-style photos of SKU stickers, and runs the vision-ml-trained
+  localize/orient/OCR pipeline locally against uploaded sticker photos.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

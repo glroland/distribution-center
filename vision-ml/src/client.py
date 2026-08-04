@@ -1,4 +1,4 @@
-"""Thin client for label-generator-api: single-sticker fetch (for live
+"""Thin client for label-api: single-sticker fetch (for live
 end-to-end eval) and bulk dataset download with ground-truth manifest (for
 training data).
 """
@@ -16,7 +16,7 @@ from PIL import Image
 
 from . import settings
 
-# label-generator-api's BulkGenerateRequest.items has max_length=200 - chunk larger
+# label-api's BulkGenerateRequest.items has max_length=200 - chunk larger
 # requests so `download_dataset` can be handed arbitrarily large SKU lists.
 _BULK_BATCH_LIMIT = 200
 
@@ -26,7 +26,7 @@ def fetch_sticker(sku: str, color_mode: str = "random", image_format: str = "jpg
     pipeline's held-out eval, not for building training data (use
     `download_dataset` for that; it's a single request per image otherwise)."""
     resp = requests.get(
-        f"{settings.LABEL_GENERATOR_API_URL}/stickers/{sku}",
+        f"{settings.LABEL_API_URL}/stickers/{sku}",
         params={"color_mode": color_mode, "image_format": image_format},
         timeout=30,
     )
@@ -59,7 +59,7 @@ def download_dataset(
 
     for batch_idx, batch_items in enumerate(_chunks(list(items), _BULK_BATCH_LIMIT)):
         resp = requests.post(
-            f"{settings.LABEL_GENERATOR_API_URL}/stickers/bulk",
+            f"{settings.LABEL_API_URL}/stickers/bulk",
             json={
                 "items": [{"sku": sku, "quantity": qty} for sku, qty in batch_items],
                 "color_mode": color_mode,

@@ -5,11 +5,11 @@ calls the same functions here.
 
 Corners are always `[top_left, top_right, bottom_right, bottom_left]` of the
 *unrotated* sticker rectangle, mapped through whatever rotation
-label-generator-api actually applied - see that service's
+label-api actually applied - see that service's
 `_rotated_sticker_corners` for how they're produced. `corners_to_angle_degrees`
 defines its own angle convention (the tilt of the top edge relative to
 horizontal); it does not need to, and does not, match
-label-generator-api's own `rotation_angle_degrees` field, which uses PIL's
+label-api's own `rotation_angle_degrees` field, which uses PIL's
 internal rotate() sign convention instead. Don't mix the two.
 """
 

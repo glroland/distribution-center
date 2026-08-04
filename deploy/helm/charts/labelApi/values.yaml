@@ -1,0 +1,21 @@
+# Default values for the labelApi subchart. The umbrella chart's
+# values.yaml overrides these under the `labelApi:` key; the port
+# itself lives under `global.labelApi.port` since dashboardUi (which
+# proxies sticker-photo requests to it) needs it too.
+
+enabled: true
+image:
+  repository: label-api
+replicaCount: 1
+# Bumped from the sticker-generator-only defaults (100m/128Mi requests,
+# 500m/512Mi limits) to cover the 3 PyTorch checkpoints src/inference.py
+# loads into memory for POST /infer -- CPU-only inference, no GPU needed.
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+route:
+  enabled: true

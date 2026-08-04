@@ -23,3 +23,11 @@ class BulkGenerateRequest(BaseModel):
     color_mode: ColorModeField = "random"
     image_format: ImageFormatField = "jpg"
     include_manifest: bool = False
+
+
+class SkuInferenceResult(BaseModel):
+    sku: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    bbox: tuple[float, float, float, float]
+    angle_degrees: float
+    inference_ms: float

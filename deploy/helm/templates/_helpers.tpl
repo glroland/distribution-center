@@ -55,10 +55,10 @@ Name of the global supervisor-api Service.
 {{- end -}}
 
 {{/*
-Name of the global label-generator-api Service.
+Name of the global label-api Service.
 */}}
-{{- define "adc.labelGeneratorApi.serviceName" -}}
-{{ include "adc.fullname" . }}-label-generator-api
+{{- define "adc.labelApi.serviceName" -}}
+{{ include "adc.fullname" . }}-label-api
 {{- end -}}
 
 {{/*

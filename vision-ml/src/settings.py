@@ -18,7 +18,7 @@ load_dotenv(find_dotenv(usecwd=True))
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-LABEL_GENERATOR_API_URL = os.environ.get("LABEL_GENERATOR_API_URL", "http://localhost:8005")
+LABEL_API_URL = os.environ.get("LABEL_API_URL", "http://localhost:8005")
 
 _data_dir = Path(os.environ.get("DATA_DIR", "data"))
 DATA_DIR = _data_dir if _data_dir.is_absolute() else PROJECT_ROOT / _data_dir
