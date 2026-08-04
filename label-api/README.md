@@ -153,6 +153,28 @@ If a checkpoint is missing from `INFERENCE_MODELS_DIR`, `/infer` returns
 / `03_sku_ocr.ipynb` (or its `src/pipeline.py` Kubeflow pipeline) and copying
 `vision-ml/data/models/*.pt` into `label-api/models/`.
 
+## MCP
+
+The service also exposes an MCP server (Streamable HTTP transport) at
+`http://localhost:8005/mcp`, in the same process as the REST API, sharing the
+same loaded models. This is what lets `local-dc-agent`'s fulfillment loop
+call SKU inference as an explicit tool during an agentic run, rather than
+this service being an implementation detail hidden behind hardcoded
+orchestration code.
+
+| Tool | Args | Description |
+|---|---|---|
+| `infer_sku` | `image_base64: str` | Same prediction as `POST /infer`, for a base64-encoded image instead of a multipart upload. Returns `{sku, confidence, bbox, angle_degrees, inference_ms}` |
+
+The expected caller is `local-inventory-robot-api`'s `get_item_photo` MCP
+tool, which returns a sticker photo the same way (base64) - see that
+service's README. `local-dc-agent`'s fulfillment policy chains the two:
+capture a photo of what was actually picked, then `infer_sku` it, to catch a
+mispick or a mislabeled shelf before shipping rather than after.
+
+Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
+Python SDK's `mcp.client.streamable_http.streamable_http_client`.
+
 ## Tests
 
 ```bash
@@ -160,7 +182,8 @@ pytest
 ```
 
 Covers the sticker generator (sizing, all-caps text, rotation never landing
-on horizontal, color/bw), the bulk zip packaging, the REST API, and SKU
+on horizontal, color/bw), the bulk zip packaging, the REST API, SKU
 inference (`tests/test_inference.py` - runs real predictions against the
 bundled checkpoints in `models/`, not mocks, plus the invalid-image and
-missing-models error paths).
+missing-models error paths), and the `infer_sku` MCP tool
+(`tests/test_mcp_server.py`).

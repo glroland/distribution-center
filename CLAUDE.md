@@ -98,16 +98,22 @@ orchestrates calls to the other services and serves a static UI
 (`src/static/`).
 
 `label-api` (renamed from `label-generator-api`) is also different: it's two
-standalone utilities in one service (no MCP, no LLM, no MLflow tracing).
+standalone utilities in one service (no LLM, no MLflow tracing).
 `src/stickers.py` renders a synthetic camera photo of a white SKU sticker
 with PIL/numpy, and `src/bulk.py` batches that into a zip on request —
-nothing else in the repo calls this half yet. `src/inference.py` is the
+nothing else in the repo calls this half via REST directly (see below for
+its MCP-exposed counterpart, `get_item_photo`). `src/inference.py` is the
 other half: it loads the 3 PyTorch checkpoints the `vision-ml` project
 trains (localize -> orient -> OCR) from `models/`, bundled into this
 service's own Docker image at build time, and runs them in-process against
-an uploaded sticker photo via `POST /infer` — a predicted SKU + confidence
-score, computed locally rather than by calling out to a shared inference
-service or model server.
+a sticker photo — a predicted SKU + confidence score, computed locally
+rather than by calling out to a shared inference service or model server.
+Unlike `po-ingest-api`/`local-wms-api`/etc., `label-api` exposes only one
+MCP tool (`infer_sku`, wrapping `src/inference.py`) alongside its REST
+surface (`POST /infer` does the same thing over multipart upload, for
+non-agentic callers) — the sticker-generation half stays REST-only, called
+by `local-inventory-robot-api`'s `get_item_photo` MCP tool and by
+`dashboard-ui`'s UI-preview proxy, neither of which goes through MCP.
 
 ### The dc-agent pipeline (`local-dc-agent`)
 
@@ -128,23 +134,34 @@ A2A message (PDF)
                 -> order_processing.process_order()           (subtotal/mismatch)
                 -> fulfillment.fulfill_order()                 [LLM tool-calling loop]
                      tools = local-wms-api + local-inventory-robot-api +
-                             local-shipping-api + supervisor-api (via MCP)
+                             local-shipping-api + supervisor-api +
+                             label-api (via MCP)
 ```
 
-Key detail: the fulfillment loop connects to all four downstream MCP servers
+Key detail: the fulfillment loop connects to all five downstream MCP servers
 once (`src/mcp_tools.py`) and reuses those connections for the worker's
 lifetime, with tool names prefixed by service (`wms__adjust_inventory`,
-`robot__plan_and_fetch_items`, `shipping__ship_order`,
-`supervisor__request_help`) so one OpenAI tool-calling loop can drive all
-four. The robot side is a single coarse-grained call: `plan_and_fetch_items`
-takes a full `{sku, qty}` list, and the robot works out visiting order,
-movement, capacity-driven dock round-trips, and delivery on its own rather
-than the LLM driving `move_robot`/`fetch_item` turn by turn. What it reports
-as *fetched_qty* per SKU — not the originally requested quantity — is what
-gets shipped and what decrements the WMS ledger. The loop finishes by
-calling a `record_fulfillment_result` tool with a structured per-item
-summary; if it stalls past `MAX_FULFILLMENT_TURNS`, the agent escalates to
-the supervisor directly and returns a degraded result instead of hanging.
+`robot__plan_and_fetch_items`, `robot__get_item_photo`, `label__infer_sku`,
+`shipping__ship_order`, `supervisor__request_help`) so one OpenAI
+tool-calling loop can drive all five. The robot side is a single
+coarse-grained call: `plan_and_fetch_items` takes a full `{sku, qty}` list,
+and the robot works out visiting order, movement, capacity-driven dock
+round-trips, and delivery on its own rather than the LLM driving
+`move_robot`/`fetch_item` turn by turn. What it reports as *fetched_qty* per
+SKU — not the originally requested quantity — is what's eligible to ship and
+decrement the WMS ledger, but only after a visual-verification step: the
+policy prompt (`fulfillment.py`'s `_POLICY_PROMPT`) requires calling
+`robot__get_item_photo` then `label__infer_sku` for every SKU actually
+fetched before shipping or decrementing it, and treats a returned SKU that
+doesn't match what was requested (or a low-confidence read) as a shortfall —
+same escalation path as an out-of-stock SKU — rather than shipping on trust
+that the shelf was labeled correctly. This is deliberately prompt-driven
+(the LLM decides to make these calls, per its system prompt) rather than
+hardcoded orchestration, so it stays a genuine agentic step rather than
+Python code silently doing the checking. The loop finishes by calling a
+`record_fulfillment_result` tool with a structured per-item summary; if it
+stalls past `MAX_FULFILLMENT_TURNS`, the agent escalates to the supervisor
+directly and returns a degraded result instead of hanging.
 
 Results come back as an A2A artifact: a `DataPart` with the full structured
 `ProcessOrderResult` JSON (including the `fulfillment` block) plus a

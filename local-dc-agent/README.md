@@ -31,7 +31,8 @@ A2A message (PDF)
                 -> order_processing.process_order()       (subtotal/mismatch)
                 -> fulfillment.fulfill_order()             [LLM tool-calling loop]
                      tools = local-wms-api + local-inventory-robot-api +
-                             local-shipping-api + supervisor-api (via MCP)
+                             local-shipping-api + supervisor-api +
+                             label-api (via MCP)
 ```
 
 ## How `process_purchase_order` works
@@ -49,37 +50,47 @@ A2A message (PDF)
    items, compared against any stated total (flagging `totals_mismatch` if
    they disagree), and a `dc_order_id` is assigned.
 5. A second, tool-calling LLM loop (`src/fulfillment.py`) fulfills the
-   order, using MCP tools exposed by four other services in this repo:
+   order, using MCP tools exposed by five other services in this repo:
    - [`local-wms-api`](../local-wms-api) — check on-hand quantity for each
      SKU before doing anything physical, and decrement it once stock has
-     actually been picked.
+     actually been picked and visually verified (see below).
    - [`local-inventory-robot-api`](../local-inventory-robot-api) — call
      `plan_and_fetch_items` once with every SKU/qty needed; the robot works
      out an efficient visiting order, moves, picks, makes extra dock
      round-trips on its own if capacity would otherwise be exceeded, and
      delivers everything at the end. What it reports as `fetched_qty` per
-     SKU — not the requested quantity — is what gets shipped and what
-     decrements the WMS ledger. Stock arriving via an approved inter-DC
-     transfer is placed on a shelf with `restock_shelf`, then picked up
-     with another `plan_and_fetch_items` call the normal way.
-   - [`local-shipping-api`](../local-shipping-api) — ship whatever was
-     delivered in one carrier handoff, returning a tracking number.
-   - [`supervisor-api`](../supervisor-api) — for a SKU that's short, first
-     try sourcing the shortfall from another DC via `request_transfer`; if
-     that comes back unavailable (or the SKU is unknown to the WMS at all),
-     escalate to a human via `request_help`, without blocking the rest of
-     the order.
+     SKU — not the requested quantity — is what's eligible to be shipped and
+     decrement the WMS ledger, once verified. Stock arriving via an approved
+     inter-DC transfer is placed on a shelf with `restock_shelf`, then
+     picked up with another `plan_and_fetch_items` call the normal way.
+     `get_item_photo` captures a photo of a picked SKU's shelf sticker, as if
+     by the robot's own camera, for the verification step below.
+   - [`label-api`](../label-api) — `infer_sku` reads the SKU printed on a
+     photo (e.g. one from `get_item_photo`) locally, against checkpoints
+     bundled into that service, and returns it with a confidence score. The
+     fulfillment policy chains `robot__get_item_photo` into `label__infer_sku`
+     for every SKU actually fetched, *before* it's shipped or decremented —
+     a returned SKU that doesn't match what was requested, or a low
+     confidence read, is treated as a mispick/mislabeled-shelf shortfall
+     rather than shipped on trust.
+   - [`local-shipping-api`](../local-shipping-api) — ship whatever passed
+     verification in one carrier handoff, returning a tracking number.
+   - [`supervisor-api`](../supervisor-api) — for a SKU that's short (out of
+     stock *or* failed visual verification), first try sourcing it from
+     another DC via `request_transfer`; if that comes back unavailable (or
+     the SKU is unknown to the WMS at all), escalate to a human via
+     `request_help`, without blocking the rest of the order.
 
-   The four servers' MCP tools are connected once (`src/mcp_tools.py`) and
+   The five servers' MCP tools are connected once (`src/mcp_tools.py`) and
    reused for the worker's lifetime, name-prefixed by service
-   (`wms__adjust_inventory`, `robot__fetch_item`, `shipping__ship_order`,
-   `supervisor__request_help`) so a single OpenAI tool-calling loop can
-   drive all four. The loop's system prompt is built from our own
-   fulfillment policy plus each server's own self-declared MCP
-   `instructions` string, so capacity/dock/carrier facts stay sourced from
-   the services themselves rather than duplicated here. The model finishes
-   by calling a `record_fulfillment_result` tool with a structured summary
-   of every line item's outcome. If the loop stalls past
+   (`wms__adjust_inventory`, `robot__fetch_item`, `robot__get_item_photo`,
+   `label__infer_sku`, `shipping__ship_order`, `supervisor__request_help`) so
+   a single OpenAI tool-calling loop can drive all five. The loop's system
+   prompt is built from our own fulfillment policy plus each server's own
+   self-declared MCP `instructions` string, so capacity/dock/carrier facts
+   stay sourced from the services themselves rather than duplicated here.
+   The model finishes by calling a `record_fulfillment_result` tool with a
+   structured summary of every line item's outcome. If the loop stalls past
    `MAX_FULFILLMENT_TURNS`, the agent escalates to the supervisor directly
    and returns a degraded result rather than hanging or failing the PO.
 6. The result is returned as an A2A artifact: a `DataPart` with the full
@@ -110,7 +121,7 @@ environment variables directly (env vars take precedence over `.env`).
 
 ## Run
 
-Fulfillment needs all four other services running too:
+Fulfillment needs all five other services running too:
 
 ```bash
 # in separate terminals
@@ -119,6 +130,7 @@ cd local-wms-api && python3 -m src
 cd local-inventory-robot-api && python3 -m src
 cd supervisor-api && python3 -m src
 cd local-shipping-api && python3 -m src
+cd label-api && python3 -m src
 
 # then
 export OPENAI_API_KEY=...
@@ -137,6 +149,7 @@ Starts the agent on `http://localhost:9100`. The agent card is served at
 | `ROBOT_API_URL` | `http://localhost:8002` | Base URL of `local-inventory-robot-api` |
 | `SUPERVISOR_API_URL` | `http://localhost:8003` | Base URL of `supervisor-api` |
 | `SHIPPING_API_URL` | `http://localhost:8004` | Base URL of `local-shipping-api` |
+| `LABEL_API_URL` | `http://localhost:8005` | Base URL of `label-api` |
 | `OPENAI_API_KEY` | *(none)* | Required to run extraction and fulfillment |
 | `OPENAI_MODEL` | `gpt-5` | Model used for both extraction and fulfillment |
 | `MAX_FULFILLMENT_TURNS` | `20` | Tool-call turns before the fulfillment loop auto-escalates and gives up |

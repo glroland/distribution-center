@@ -1,5 +1,6 @@
 import io
 import logging
+from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
@@ -8,13 +9,26 @@ from PIL import Image
 
 from .bulk import generate_bulk_zip
 from .inference import get_pipeline
+from .mcp_server import build_mcp_server
 from .models import BulkGenerateRequest, SkuInferenceResult
 from .settings import settings
 from .stickers import ColorMode, ImageFormat, InvalidSkuError, generate_sticker_image
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Label API")
+mcp_server = build_mcp_server()
+mcp_app = mcp_server.streamable_http_app()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
+        yield
+
+
+app = FastAPI(title="Label API", lifespan=lifespan)
+app.mount("/mcp", mcp_app)
 
 _MEDIA_TYPES = {"jpg": "image/jpeg", "png": "image/png"}
 

@@ -1,3 +1,7 @@
+import base64
+import logging
+
+import httpx
 from mcp.server.fastmcp import FastMCP as MCPServer
 
 from .robot import InventoryRobot, RobotStatus
@@ -5,6 +9,8 @@ from .settings import settings
 from .tracing import configure_tracing, tool_trace
 
 configure_tracing()
+
+logger = logging.getLogger(__name__)
 
 
 def _status_dict(status: RobotStatus) -> dict:
@@ -52,10 +58,13 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
             "available for manual control if you need it, but plan_and_fetch_items "
             "is the normal way to fulfil a pick run. Every pick (whether via "
             "fetch_item or a plan_and_fetch_items trace step) comes back with "
-            "sticker_available: true, meaning a photo of that SKU's shelf sticker "
-            "can be previewed via the label generator service - purely a UI/audit "
-            "aid, nothing you need to act on. Call reset_robot to restore "
-            "the demo to its starting state."
+            "sticker_available: true, meaning a photo of that SKU's shelf sticker, "
+            "as the robot's camera would have captured it, can be retrieved with "
+            "get_item_photo. Pass that photo's image_base64 to label-api's "
+            "infer_sku tool to visually verify a pick actually matches the SKU "
+            "you intended to fetch before shipping it - don't just trust that "
+            "the shelf you picked from was labeled correctly. Call reset_robot "
+            "to restore the demo to its starting state."
         ),
         host=settings.HOST,
         streamable_http_path="/",
@@ -117,8 +126,8 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         load them onto the robot. Fails if the SKU isn't stocked there, there isn't
         enough on hand, or it would exceed the robot's carry capacity. The response
         includes sticker_available: true - a photo of the SKU's shelf sticker, as the
-        robot's camera would have captured it, can be viewed via the label generator
-        service (dashboard UIs surface this as a preview)."""
+        robot's camera would have captured it, can be retrieved with get_item_photo
+        and checked against label-api's infer_sku tool to verify the pick."""
         return {**_status_dict(robot.pick(sku, qty)), "sticker_available": True}
 
     @mcp_server.tool()
@@ -135,8 +144,9 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         anywhere, or not in sufficient quantity; decide what to do about the
         shortfall yourself (e.g. request a supervisor transfer). Each "pick" step
         in trace includes sticker_available: true - a photo of that SKU's shelf
-        sticker, as the robot's camera would have captured it, can be viewed via
-        the label generator service (dashboard UIs surface this as a preview)."""
+        sticker, as the robot's camera would have captured it, can be retrieved
+        with get_item_photo and checked against label-api's infer_sku tool to
+        verify the pick."""
         result = await robot.run_pick_plan([(item["sku"], item["qty"]) for item in items])
         return {
             "items": result["items"],
@@ -149,6 +159,35 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
                 for step in result["trace"]
             ],
             "final_status": _status_dict(result["final_status"]),
+        }
+
+    @mcp_server.tool()
+    @tool_trace
+    async def get_item_photo(sku: str) -> dict:
+        """Capture a photo of `sku`'s shelf sticker, as if by the robot's own
+        camera - call this right after picking a SKU (sticker_available: true
+        on the pick result) to get an image to visually verify the pick with.
+        Returns {"sku", "image_base64", "media_type"}; pass image_base64
+        straight to label-api's infer_sku tool - if what it reads back doesn't
+        match the SKU you intended to fetch, or its confidence is low, that's
+        a real mispick or mislabeled-shelf signal, not something to ignore.
+        Fails if label-api is unreachable or returns an error."""
+        url = f"{settings.LABEL_API_URL}/stickers/{sku}"
+        logger.info("Capturing shelf sticker photo for %s via %s", sku, url)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+        if response.status_code != 200:
+            logger.warning(
+                "Photo capture failed for %s: label-api returned %d: %s",
+                sku, response.status_code, response.text,
+            )
+            raise RuntimeError(
+                f"label-api returned {response.status_code} generating a photo for {sku}: {response.text}"
+            )
+        return {
+            "sku": sku,
+            "image_base64": base64.b64encode(response.content).decode("ascii"),
+            "media_type": response.headers.get("content-type", "image/jpeg"),
         }
 
     @mcp_server.tool()

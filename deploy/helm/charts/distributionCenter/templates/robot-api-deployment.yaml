@@ -2,6 +2,7 @@
 {{- $root := $ }}
 {{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "robot-api") }}
 {{- $cmName := printf "%s-%s-robot-shelves" (include "adc.fullname" $root) $dc.name }}
+{{- $labelApiSvc := include "adc.labelApi.serviceName" $root }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -62,6 +63,8 @@ spec:
               value: {{ $dc.robotApi.dock.y | quote }}
             - name: CARRY_CAPACITY
               value: {{ $dc.robotApi.carryCapacity | quote }}
+            - name: LABEL_API_URL
+              value: http://{{ $labelApiSvc }}:{{ $root.Values.global.labelApi.port }}
             {{- include "adc.mlflow.envVars" $root | nindent 12 }}
           volumeMounts:
             - name: shelves-data

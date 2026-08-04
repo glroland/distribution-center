@@ -382,3 +382,15 @@ async def test_missing_api_key_raises_fulfillment_error(monkeypatch) -> None:
 
     with pytest.raises(FulfillmentError):
         await fulfill_order(_order(), _FakeTools())
+
+
+def test_policy_prompt_requires_visual_pick_verification_before_shipping() -> None:
+    """Locks in intent: the fulfillment policy must route through the robot's
+    photo-capture tool and label-api's inference tool before a pick is
+    trusted enough to decrement the ledger or ship - not just fetched_qty."""
+    prompt = fulfillment_module._POLICY_PROMPT
+
+    assert "robot__get_item_photo" in prompt
+    assert "label__infer_sku" in prompt
+    assert prompt.index("robot__get_item_photo") < prompt.index("wms__adjust_inventory")
+    assert prompt.index("robot__get_item_photo") < prompt.index("shipping__ship_order")

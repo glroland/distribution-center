@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     ROBOT_API_URL: str = "http://localhost:8002"
     SUPERVISOR_API_URL: str = "http://localhost:8003"
     SHIPPING_API_URL: str = "http://localhost:8004"
+    LABEL_API_URL: str = "http://localhost:8005"
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-5"
     OPENAI_BASE_URL: str | None = None

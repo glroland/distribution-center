@@ -1,10 +1,13 @@
 import asyncio
+import base64
 import json
 
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
+from src import mcp_server as mcp_server_module
 from src.app import mcp_server, robot
+from src.settings import settings
 
 
 @pytest.fixture(autouse=True)
@@ -158,6 +161,52 @@ def test_plan_and_fetch_items_tool() -> None:
 def test_plan_and_fetch_items_tool_reports_shortfall() -> None:
     body = _call("plan_and_fetch_items", {"items": [{"sku": "does-not-exist", "qty": 3}]})
     assert body["items"] == [{"sku": "does-not-exist", "requested_qty": 3, "fetched_qty": 0}]
+
+
+class _FakeResponse:
+    def __init__(self, status_code: int, content: bytes, headers: dict | None = None):
+        self.status_code = status_code
+        self.content = content
+        self.headers = headers or {}
+        self.text = content.decode(errors="replace")
+
+
+class _FakeAsyncClient:
+    response: _FakeResponse | None = None
+    last_url: str | None = None
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        return False
+
+    async def get(self, url: str):
+        _FakeAsyncClient.last_url = url
+        return _FakeAsyncClient.response
+
+
+def test_get_item_photo_tool(monkeypatch) -> None:
+    monkeypatch.setattr(mcp_server_module.httpx, "AsyncClient", _FakeAsyncClient)
+    _FakeAsyncClient.response = _FakeResponse(200, b"fake-jpeg-bytes", {"content-type": "image/jpeg"})
+
+    body = _call("get_item_photo", {"sku": "SKU-1001"})
+
+    assert _FakeAsyncClient.last_url == f"{settings.LABEL_API_URL}/stickers/SKU-1001"
+    assert body["sku"] == "SKU-1001"
+    assert base64.b64decode(body["image_base64"]) == b"fake-jpeg-bytes"
+    assert body["media_type"] == "image/jpeg"
+
+
+def test_get_item_photo_tool_raises_on_label_api_error(monkeypatch) -> None:
+    monkeypatch.setattr(mcp_server_module.httpx, "AsyncClient", _FakeAsyncClient)
+    _FakeAsyncClient.response = _FakeResponse(400, b"bad sku")
+
+    with pytest.raises(ToolError):
+        _call("get_item_photo", {"sku": "  "})
 
 
 def test_reset_robot_tool() -> None:

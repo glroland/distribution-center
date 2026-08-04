@@ -43,6 +43,7 @@ class McpToolRouter:
             "robot": settings.ROBOT_API_URL,
             "shipping": settings.SHIPPING_API_URL,
             "supervisor": settings.SUPERVISOR_API_URL,
+            "label": settings.LABEL_API_URL,
         }
         for label, base_url in server_urls.items():
             logger.info("Connecting to MCP server %s at %s", label, base_url)

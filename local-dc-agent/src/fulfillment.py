@@ -95,7 +95,8 @@ available to you, then report the outcome.
 
 Tool names are prefixed by which service they belong to: `wms__*` (warehouse \
 inventory ledger), `robot__*` (the physical picking robot), `shipping__*` \
-(carrier handoff), and `supervisor__*` (escalate to a human).
+(carrier handoff), `supervisor__*` (escalate to a human), and `label__*` \
+(local SKU image inference, used to visually verify a pick).
 
 Follow this policy:
 1. For every line item, check on-hand quantity via `wms__get_inventory_status` \
@@ -108,32 +109,48 @@ picking, capacity-driven dock round-trips, and final delivery on its own.
 response as the source of truth for quantity retrieved, not the requested \
 quantity. `fetched_qty` below `requested_qty` is not a failure to recover \
 from — it just means that SKU wasn't fully stocked on the shelves; handle it \
-like any other shortfall (step 6).
-4. For each SKU actually fetched, decrement the WMS ledger by that fetched \
-quantity via `wms__adjust_inventory` (negative delta), so the warehouse's \
-book of record matches what physically left the shelf.
-5. Once picking is done, ship everything fetched in a single \
-`shipping__ship_order` call, using the order's buyer_name as customer_name \
-(or "Recipient" if the order has no buyer_name) and its ship_to address as \
-customer_address.
-6. For any line item that comes up short — either because the WMS didn't have \
-enough on-hand quantity in the first place, or because `plan_and_fetch_items` \
+like any other shortfall (step 7).
+4. Before shipping or decrementing anything, visually verify each SKU with \
+`fetched_qty` > 0: call `robot__get_item_photo` with that SKU to capture a \
+photo of its shelf sticker, then pass the response's `image_base64` straight \
+to `label__infer_sku` to read what the sticker actually says. Count the pick \
+as verified only if the returned `sku` matches the SKU you asked \
+`get_item_photo` for and `confidence` is reasonably high (roughly 0.5 or \
+above). A different SKU, an empty read, or low confidence means the physical \
+item doesn't back up what the shelf was supposed to hold — a mispick or a \
+mislabeled shelf — so treat that item's whole `fetched_qty` as unverified: \
+exclude it from steps 5-6 for that SKU and handle it as a shortfall in step 7 \
+instead, same as if it had never been fetched. Do this once per distinct SKU \
+fetched, not once per unit.
+5. For each SKU that passed verification, decrement the WMS ledger by its \
+fetched quantity via `wms__adjust_inventory` (negative delta), so the \
+warehouse's book of record matches what physically left the shelf.
+6. Once picking and verification are done, ship everything that passed \
+verification in a single `shipping__ship_order` call, using the order's \
+buyer_name as customer_name (or "Recipient" if the order has no buyer_name) \
+and its ship_to address as customer_address.
+7. For any line item that comes up short — because the WMS didn't have \
+enough on-hand quantity in the first place, because `plan_and_fetch_items` \
 reported `fetched_qty` below what the WMS said was on hand (a data mismatch \
-between the ledger and the physical shelves) — first try \
-`supervisor__request_transfer` with the SKU and the shortfall quantity before \
-escalating to a human:
+between the ledger and the physical shelves), or because step 4's visual \
+verification failed for it (a mispick or mislabeled shelf, not a quantity \
+problem) — first try `supervisor__request_transfer` with the SKU and the \
+shortfall quantity before escalating to a human. A verification failure is \
+still a "shortfall" in the sense that nothing trustworthy was fetched for \
+that SKU, even though the ledger showed enough stock:
    - If it returns status `available`, the shortfall is inbound from \
 another DC at `source_location`. Use `robot__restock_shelf` to place the \
 transferred quantity on a shelf (omit x/y to let it pick one automatically), \
 then call `robot__plan_and_fetch_items` again with just that SKU and the \
 transferred quantity, and fold the result into that item's delivery like any \
-other stock (steps 3-5 still apply, including the WMS ledger decrement for \
-what's actually fetched).
+other stock (steps 3-6 still apply, including verification and the WMS \
+ledger decrement for what's actually fetched).
    - If it returns status `unavailable`, or the SKU is unknown to the WMS in \
 the first place, call `supervisor__request_help` with a clear question \
-(include the SKU, quantity requested, and quantity on hand) and move on — \
-never let one bad line item block the rest of the order.
-7. When every line item has been either shipped or escalated, call \
+(include the SKU, quantity requested, quantity on hand, and — if this came \
+from a failed verification — what label__infer_sku actually read) and move \
+on — never let one bad line item block the rest of the order.
+8. When every line item has been either shipped or escalated, call \
 `record_fulfillment_result` exactly once, as your final action, summarizing \
 every item's outcome, the shipment created (if any), and any escalations \
 raised.

@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     MLFLOW_TRACKING_URI: str | None = None
 
+    # Where get_item_photo (src/mcp_server.py) fetches a picked SKU's shelf
+    # sticker photo from, to hand to label-api's own infer_sku tool for
+    # visual pick verification.
+    LABEL_API_URL: str = "http://localhost:8005"
+
     def shelves_csv_path(self) -> Path:
         path = Path(self.SHELVES_CSV_PATH)
         return path if path.is_absolute() else _PROJECT_ROOT / path

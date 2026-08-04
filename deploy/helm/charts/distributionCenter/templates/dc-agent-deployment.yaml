@@ -6,6 +6,7 @@
 {{- $shippingSvc := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "shipping-api") }}
 {{- $poIngestSvc := include "adc.poIngestApi.serviceName" $root }}
 {{- $supervisorSvc := include "adc.supervisorApi.serviceName" $root }}
+{{- $labelApiSvc := include "adc.labelApi.serviceName" $root }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -67,6 +68,8 @@ spec:
               value: http://{{ $poIngestSvc }}:{{ $root.Values.global.poIngestApi.port }}
             - name: SUPERVISOR_API_URL
               value: http://{{ $supervisorSvc }}:{{ $root.Values.global.supervisorApi.port }}
+            - name: LABEL_API_URL
+              value: http://{{ $labelApiSvc }}:{{ $root.Values.global.labelApi.port }}
             - name: AGENT_URL
               value: http://{{ $svcName }}:{{ $dc.dcAgent.port }}/
             - name: MAX_FULFILLMENT_TURNS
