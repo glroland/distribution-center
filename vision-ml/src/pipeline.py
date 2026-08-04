@@ -51,11 +51,17 @@ from kfp import compiler, dsl
 from kfp.dsl import Dataset, Input, Metrics, Model, Output
 
 # Image built from this project's own Containerfile (installs requirements.txt
-# and copies src/ - see that file). Override at compile time, e.g.:
-#   VISION_ML_TRAINER_IMAGE=quay.io/you/vision-ml-trainer:1.2.3 python -m src.pipeline
+# and copies src/ - see that file), built and pushed by deploy/Jenkinsfile's
+# "vision-ml-trainer" stage to this repo's shared registry (same host as
+# every other service's image - see deploy/helm/values.yaml's
+# global.imageRegistry), tagged `latest` (kept current on every Jenkins
+# build) so a pipeline.yaml compiled once against the default below doesn't
+# need recompiling/re-importing after each build. Override at compile time
+# for a pinned build, e.g.:
+#   VISION_ML_TRAINER_IMAGE=registry.home.glroland.com/distribution-center/vision-ml-trainer:42 python -m src.pipeline
 TRAINER_IMAGE = os.environ.get(
     "VISION_ML_TRAINER_IMAGE",
-    "image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest",
+    "registry.home.glroland.com/distribution-center/vision-ml-trainer:latest",
 )
 
 

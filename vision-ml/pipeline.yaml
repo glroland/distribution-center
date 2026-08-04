@@ -4,7 +4,7 @@
 # Inputs:
 #    catalog_qty_per_sku: int [Default: 40.0]
 #    catalog_skus: list [Default: ['SKU-1001', 'SKU-1002', 'SKU-1003', 'SKU-1004', 'SKU-1005', 'SKU-1006', 'SKU-1007', 'SKU-1008', 'SKU-1009', 'SKU-1010', 'SKU-1011', 'SKU-1012', 'SKU-1013', 'SKU-1014', 'SKU-1015', 'SKU-1016', 'SKU-1017', 'SKU-1018', 'SKU-1019', 'SKU-1020']]
-#    label_generator_api_url: str [Default: 'http://localhost:8005']
+#    label_api_url: str [Default: 'http://localhost:8005']
 #    localizer_batch_size: int [Default: 32.0]
 #    localizer_epochs: int [Default: 15.0]
 #    localizer_lr: float [Default: 0.001]
@@ -72,7 +72,7 @@ components:
           parameterType: NUMBER_INTEGER
         catalog_skus:
           parameterType: LIST
-        label_generator_api_url:
+        label_api_url:
           parameterType: STRING
         split_seed:
           parameterType: NUMBER_INTEGER
@@ -266,7 +266,7 @@ deploymentSpec:
         - -c
         - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
           \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
-          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
           \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
           $0\" \"$@\"\n"
         - sh
@@ -299,7 +299,7 @@ deploymentSpec:
           \ value)\n\n    client.set_terminated(parent_run_id, status=\"FINISHED\"\
           )\n\n    url = f\"{mlflow_tracking_uri.rstrip('/')}/#/experiments/{experiment_id}/runs/{parent_run_id}\"\
           \n    print(f\"MLflow run: {url}\")\n    return url\n\n"
-        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+        image: registry.home.glroland.com/distribution-center/vision-ml-trainer:latest
     exec-generate-dataset:
       container:
         args:
@@ -312,7 +312,7 @@ deploymentSpec:
         - -c
         - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
           \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
-          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
           \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
           $0\" \"$@\"\n"
         - sh
@@ -326,22 +326,22 @@ deploymentSpec:
 
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
-          \ *\n\ndef generate_dataset(\n    label_generator_api_url: str,\n    catalog_skus:\
+          \ *\n\ndef generate_dataset(\n    label_api_url: str,\n    catalog_skus:\
           \ list[str],\n    catalog_qty_per_sku: int,\n    synthetic_num_skus: int,\n\
           \    synthetic_qty_per_sku: int,\n    val_frac: float,\n    test_frac: float,\n\
           \    split_seed: int,\n    raw_data: Output[Dataset],\n) -> None:\n    import\
           \ json\n    import os\n    import random\n    from pathlib import Path\n\
-          \n    os.environ[\"LABEL_GENERATOR_API_URL\"] = label_generator_api_url\n\
-          \    from src import client, datasets  # noqa: E402 - needs LABEL_GENERATOR_API_URL\
-          \ set first\n\n    random.seed(split_seed)\n    dest_dir = Path(raw_data.path)\n\
-          \n    # notebook cell: catalog_numbers/candidate_numbers/synthetic_skus/items\n\
-          \    catalog_numbers = {int(sku.split(\"-\")[1]) for sku in catalog_skus}\n\
-          \    candidate_numbers = [n for n in range(1000, 10000) if n not in catalog_numbers]\n\
-          \    synthetic_numbers = random.sample(candidate_numbers, synthetic_num_skus)\n\
-          \    synthetic_skus = [f\"SKU-{n}\" for n in synthetic_numbers]\n\n    items\
-          \ = [(sku, catalog_qty_per_sku) for sku in catalog_skus] + [\n        (sku,\
-          \ synthetic_qty_per_sku) for sku in synthetic_skus\n    ]\n\n    manifest_path\
-          \ = client.download_dataset(items, dest_dir=dest_dir)\n    records = datasets.load_manifest(manifest_path)\n\
+          \n    os.environ[\"LABEL_API_URL\"] = label_api_url\n    from src import\
+          \ client, datasets  # noqa: E402 - needs LABEL_API_URL set first\n\n   \
+          \ random.seed(split_seed)\n    dest_dir = Path(raw_data.path)\n\n    # notebook\
+          \ cell: catalog_numbers/candidate_numbers/synthetic_skus/items\n    catalog_numbers\
+          \ = {int(sku.split(\"-\")[1]) for sku in catalog_skus}\n    candidate_numbers\
+          \ = [n for n in range(1000, 10000) if n not in catalog_numbers]\n    synthetic_numbers\
+          \ = random.sample(candidate_numbers, synthetic_num_skus)\n    synthetic_skus\
+          \ = [f\"SKU-{n}\" for n in synthetic_numbers]\n\n    items = [(sku, catalog_qty_per_sku)\
+          \ for sku in catalog_skus] + [\n        (sku, synthetic_qty_per_sku) for\
+          \ sku in synthetic_skus\n    ]\n\n    manifest_path = client.download_dataset(items,\
+          \ dest_dir=dest_dir)\n    records = datasets.load_manifest(manifest_path)\n\
           \n    train_records, val_records, test_records = datasets.split_records(\n\
           \        records, val_frac=val_frac, test_frac=test_frac, seed=split_seed,\
           \ held_out_skus=catalog_skus,\n    )\n    splits = {\n        \"train_skus\"\
@@ -350,7 +350,7 @@ deploymentSpec:
           ] for r in test_records}),\n        \"catalog_skus\": catalog_skus,\n  \
           \  }\n    (dest_dir / \"splits.json\").write_text(json.dumps(splits, indent=2))\n\
           \    print(f\"generated {len(records)} images -> {dest_dir}\")\n\n"
-        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+        image: registry.home.glroland.com/distribution-center/vision-ml-trainer:latest
     exec-start-pipeline-run:
       container:
         args:
@@ -363,7 +363,7 @@ deploymentSpec:
         - -c
         - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
           \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
-          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
           \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
           $0\" \"$@\"\n"
         - sh
@@ -391,7 +391,7 @@ deploymentSpec:
           \ all 3 are done.\n    run = mlflow.start_run(run_name=run_name, experiment_id=experiment_id)\n\
           \n    Outputs = namedtuple(\"Outputs\", [\"run_id\", \"experiment_id\"])\n\
           \    return Outputs(run.info.run_id, experiment_id)\n\n"
-        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+        image: registry.home.glroland.com/distribution-center/vision-ml-trainer:latest
     exec-train-localizer:
       container:
         args:
@@ -404,7 +404,7 @@ deploymentSpec:
         - -c
         - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
           \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
-          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
           \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
           $0\" \"$@\"\n"
         - sh
@@ -486,7 +486,7 @@ deploymentSpec:
           best_val_iou\", best_val_iou)\n    print(f\"saved checkpoint (best val_iou={best_val_iou:.3f})\"\
           )\n\n    Outputs = namedtuple(\"Outputs\", [\"run_id\", \"best_val_iou\"\
           ])\n    return Outputs(run_id, best_val_iou)\n\n"
-        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+        image: registry.home.glroland.com/distribution-center/vision-ml-trainer:latest
     exec-train-ocr:
       container:
         args:
@@ -499,7 +499,7 @@ deploymentSpec:
         - -c
         - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
           \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
-          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
           \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
           $0\" \"$@\"\n"
         - sh
@@ -612,7 +612,7 @@ deploymentSpec:
           exact_match_accuracy\"])\n    print(f\"saved checkpoint (best val_exact_match={best_val_exact_match:.3f})\"\
           )\n\n    Outputs = namedtuple(\"Outputs\", [\"run_id\", \"best_val_exact_match_accuracy\"\
           ])\n    return Outputs(run_id, best_val_exact_match)\n\n"
-        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+        image: registry.home.glroland.com/distribution-center/vision-ml-trainer:latest
     exec-train-orientation:
       container:
         args:
@@ -625,7 +625,7 @@ deploymentSpec:
         - -c
         - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
           \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
-          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
           \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
           $0\" \"$@\"\n"
         - sh
@@ -708,7 +708,7 @@ deploymentSpec:
           \    print(f\"saved checkpoint (best val_angle_error={best_val_angle_error:.2f}deg)\"\
           )\n\n    Outputs = namedtuple(\"Outputs\", [\"run_id\", \"best_val_angle_error_deg\"\
           ])\n    return Outputs(run_id, best_val_angle_error)\n\n"
-        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+        image: registry.home.glroland.com/distribution-center/vision-ml-trainer:latest
 pipelineInfo:
   description: Trains the 3-stage SKU sticker extraction pipeline (localize, orient,
     OCR) and logs all three as nested MLflow runs under one parent run.
@@ -785,8 +785,8 @@ root:
               componentInputParameter: catalog_qty_per_sku
             catalog_skus:
               componentInputParameter: catalog_skus
-            label_generator_api_url:
-              componentInputParameter: label_generator_api_url
+            label_api_url:
+              componentInputParameter: label_api_url
             split_seed:
               componentInputParameter: split_seed
             synthetic_num_skus:
@@ -978,7 +978,7 @@ root:
         - SKU-1020
         isOptional: true
         parameterType: LIST
-      label_generator_api_url:
+      label_api_url:
         defaultValue: http://localhost:8005
         isOptional: true
         parameterType: STRING
@@ -1083,4 +1083,4 @@ root:
       Output:
         parameterType: STRING
 schemaVersion: 2.1.0
-sdkVersion: kfp-2.16.1
+sdkVersion: kfp-2.17.0

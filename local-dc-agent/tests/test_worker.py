@@ -73,6 +73,78 @@ async def test_on_event_fires_for_each_pipeline_stage(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_start_does_not_block_on_slow_mcp_connect(monkeypatch) -> None:
+    """A pod coming up before its downstream MCP servers do must not hang or
+    fail app startup -- start() should return immediately and let connecting
+    happen in the background, with is_ready() reporting the real state."""
+    connect_gate = asyncio.Event()
+
+    async def slow_connect() -> None:
+        await connect_gate.wait()
+
+    worker = OrderWorker()
+    monkeypatch.setattr(worker._router, "connect", slow_connect)
+
+    await asyncio.wait_for(worker.start(), timeout=1.0)
+    assert worker.is_ready() is False
+
+    connect_gate.set()
+    await asyncio.sleep(0.05)
+    assert worker.is_ready() is True
+
+    await worker.stop()
+
+
+@pytest.mark.asyncio
+async def test_stop_does_not_propagate_errors_from_cancelling_a_slow_connect(monkeypatch) -> None:
+    """Cancelling the background task while it's mid-connection-attempt can
+    surface as something other than a clean CancelledError (in production,
+    anyio's task-group teardown can turn it into an ExceptionGroup wrapping a
+    connection error). stop() must swallow that -- it's tearing down a
+    discarded, in-progress connection attempt, not a reason for pod shutdown
+    itself to blow up."""
+
+    async def raise_on_close() -> None:
+        raise RuntimeError("simulated: anyio task-group teardown noise on cancel")
+
+    worker = OrderWorker()
+    monkeypatch.setattr(worker._router, "connect", asyncio.Event().wait)  # blocks forever until cancelled
+    monkeypatch.setattr(worker._router, "close", raise_on_close)
+
+    await worker.start()
+    await asyncio.sleep(0.05)
+
+    await worker.stop()  # must not raise
+
+    assert worker._task is None
+
+
+@pytest.mark.asyncio
+async def test_jobs_submitted_before_ready_are_processed_once_connected(monkeypatch) -> None:
+    extract_log: list = []
+    _stub_pipeline(monkeypatch, extract_log)
+
+    connect_gate = asyncio.Event()
+
+    async def gated_connect() -> None:
+        await connect_gate.wait()
+
+    worker = OrderWorker()
+    monkeypatch.setattr(worker._router, "connect", gated_connect)
+    await worker.start()
+
+    submit_future = asyncio.ensure_future(worker.submit(b"%PDF-fake", "po.pdf"))
+    await asyncio.sleep(0.05)
+    assert not submit_future.done()  # queued, waiting on MCP connectivity
+
+    connect_gate.set()
+    result = await asyncio.wait_for(submit_future, timeout=1.0)
+
+    assert result.fulfillment.order_status == "shipped"
+    await worker.stop()
+
+
+@pytest.mark.asyncio
 async def test_worker_processes_jobs_serially_in_submission_order(monkeypatch) -> None:
     extract_log: list = []
     _stub_pipeline(monkeypatch, extract_log, filename_as_po_number=True)

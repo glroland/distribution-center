@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
@@ -14,6 +15,13 @@ configure_tracing()
 logger = logging.getLogger(__name__)
 
 _TOOL_NAME_SEPARATOR = "__"
+# A dependent MCP server (wms/robot/shipping/supervisor/label) is commonly
+# still starting up when dc-agent's pod comes up during a fresh deploy or a
+# cluster restart, since nothing enforces Kubernetes start-up ordering across
+# services. Retrying with backoff here means that race resolves itself
+# instead of leaving the agent permanently wedged.
+_CONNECT_RETRY_INITIAL_DELAY_SECONDS = 1.0
+_CONNECT_RETRY_MAX_DELAY_SECONDS = 30.0
 
 
 class ToolCallError(Exception):
@@ -33,7 +41,11 @@ class McpToolRouter:
     server. Connections are opened once and reused for the router's lifetime."""
 
     def __init__(self) -> None:
-        self._stack = AsyncExitStack()
+        # Each server's transport/session context is kept in its own stack,
+        # opened only once that server's connection attempt actually succeeds
+        # (see _connect_with_retry) -- that way a failed attempt never leaks
+        # a half-open connection into the router's lifetime.
+        self._server_stacks: list[AsyncExitStack] = []
         self._servers: dict[str, _Server] = {}
         self._tools: list[dict] = []
 
@@ -46,13 +58,8 @@ class McpToolRouter:
             "label": settings.LABEL_API_URL,
         }
         for label, base_url in server_urls.items():
-            logger.info("Connecting to MCP server %s at %s", label, base_url)
-            read_stream, write_stream, _ = await self._stack.enter_async_context(
-                streamable_http_client(f"{base_url}/mcp")
-            )
-            session = await self._stack.enter_async_context(ClientSession(read_stream, write_stream))
-            init_result = await session.initialize()
-            self._servers[label] = _Server(label=label, session=session, instructions=init_result.instructions)
+            session, instructions = await self._connect_with_retry(label, base_url)
+            self._servers[label] = _Server(label=label, session=session, instructions=instructions)
 
             listed = await session.list_tools()
             for tool in listed.tools:
@@ -68,8 +75,53 @@ class McpToolRouter:
                 )
             logger.info("Connected to %s: %d tool(s) registered", label, len(listed.tools))
 
+    async def _connect_with_retry(self, label: str, base_url: str) -> tuple[ClientSession, str | None]:
+        """Connects to one MCP server, retrying with capped exponential backoff
+        until it succeeds. Never gives up -- an unreachable server here is
+        assumed to be a start-up ordering race (server not scheduled yet, still
+        booting, etc.) rather than a permanent misconfiguration, so this blocks
+        the caller rather than raising and killing the whole agent."""
+        delay = _CONNECT_RETRY_INITIAL_DELAY_SECONDS
+        attempt = 1
+        while True:
+            attempt_stack = AsyncExitStack()
+            succeeded = False
+            try:
+                logger.info("Connecting to MCP server %s at %s (attempt %d)", label, base_url, attempt)
+                read_stream, write_stream, _ = await attempt_stack.enter_async_context(
+                    streamable_http_client(f"{base_url}/mcp")
+                )
+                session = await attempt_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                init_result = await session.initialize()
+                succeeded = True
+            except Exception as exc:  # noqa: BLE001 - any failure here means "not reachable yet", retry
+                logger.warning(
+                    "MCP server %s at %s not reachable yet (%s); retrying in %.1fs",
+                    label, base_url, exc, delay,
+                )
+            finally:
+                # Must close a failed attempt's contexts here, even when the
+                # exception is a CancelledError (e.g. pod shutdown mid-retry)
+                # that the `except Exception` clause above doesn't catch --
+                # otherwise its anyio cancel scope is left open, which
+                # corrupts cleanup ordering for every later close() call on
+                # this task (surfacing as an unrelated-looking RuntimeError
+                # far away, at shutdown).
+                if not succeeded:
+                    await attempt_stack.aclose()
+
+            if succeeded:
+                self._server_stacks.append(attempt_stack)
+                return session, init_result.instructions
+
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, _CONNECT_RETRY_MAX_DELAY_SECONDS)
+            attempt += 1
+
     async def close(self) -> None:
-        await self._stack.aclose()
+        for stack in reversed(self._server_stacks):
+            await stack.aclose()
+        self._server_stacks.clear()
 
     def list_openai_tools(self) -> list[dict]:
         return list(self._tools)

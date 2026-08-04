@@ -72,8 +72,15 @@ notebooks' one-experiment-per-stage layout, and the pipeline's own output is
 that parent run's MLflow URL. Checkpoints are logged both as MLflow
 artifacts and as native KFP `Output[Model]` artifacts.
 
+`deploy/Jenkinsfile`'s "vision-ml-trainer" stage builds this `Containerfile`
+and pushes it to this repo's shared registry (`global.imageRegistry` in
+`deploy/helm/values.yaml`) as both `:$BUILD_NUMBER` and `:latest` - the
+`:latest` tag is what `src/pipeline.py`'s `TRAINER_IMAGE` default points at,
+so a `pipeline.yaml` compiled once keeps working after later Jenkins builds
+without needing to be recompiled/re-imported. To build/push by hand instead
+(or point at a pinned build number):
+
 ```bash
-# Build & push the training image (registry/tag of your choice)
 docker build -t <registry>/vision-ml-trainer:latest -f Containerfile .
 docker push <registry>/vision-ml-trainer:latest
 

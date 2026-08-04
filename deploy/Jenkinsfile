@@ -111,6 +111,17 @@ pipeline
          }
       }
 
+      stage('Create Docker Image for vision-ml-trainer')
+      {
+         steps
+         {
+            sh 'cd vision-ml ; docker build --no-cache -f Containerfile . --tag vision-ml-trainer:$BUILD_NUMBER'
+            sh 'cd vision-ml ; docker save vision-ml-trainer:$BUILD_NUMBER > vision-ml-trainer-dockerimage.tar'
+            step(followSymlinks: false, artifacts: 'vision-ml/vision-ml-trainer-dockerimage.tar', $class: 'ArtifactArchiver')
+            sh 'cd vision-ml ; docker rmi vision-ml-trainer:$BUILD_NUMBER'
+         }
+      }
+
       stage('Reload then push images to quay')
       {
          steps
@@ -166,6 +177,21 @@ pipeline
                   sh 'docker rmi label-api:$BUILD_NUMBER'
                   sh 'docker push registry.home.glroland.com/distribution-center/label-api:$BUILD_NUMBER'
                   sh 'docker rmi registry.home.glroland.com/distribution-center/label-api:$BUILD_NUMBER'
+
+                  sh 'docker load -i vision-ml/vision-ml-trainer-dockerimage.tar'
+                  sh 'docker tag vision-ml-trainer:$BUILD_NUMBER registry.home.glroland.com/distribution-center/vision-ml-trainer:$BUILD_NUMBER'
+                  sh 'docker rmi vision-ml-trainer:$BUILD_NUMBER'
+                  sh 'docker push registry.home.glroland.com/distribution-center/vision-ml-trainer:$BUILD_NUMBER'
+
+                  // Also tagged+pushed as :latest (unlike the services above, this
+                  // image isn't deployed via deploy/helm's global.imageTag - it's
+                  // referenced directly by vision-ml/src/pipeline.py's TRAINER_IMAGE
+                  // default, baked into pipeline.yaml at compile time, so :latest
+                  // needs to stay current for that default to keep working).
+                  sh 'docker tag registry.home.glroland.com/distribution-center/vision-ml-trainer:$BUILD_NUMBER registry.home.glroland.com/distribution-center/vision-ml-trainer:latest'
+                  sh 'docker push registry.home.glroland.com/distribution-center/vision-ml-trainer:latest'
+                  sh 'docker rmi registry.home.glroland.com/distribution-center/vision-ml-trainer:$BUILD_NUMBER'
+                  sh 'docker rmi registry.home.glroland.com/distribution-center/vision-ml-trainer:latest'
                }
             }
          }

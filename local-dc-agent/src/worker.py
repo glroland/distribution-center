@@ -37,18 +37,45 @@ class OrderWorker:
         self._queue: asyncio.Queue[ProcessingJob] = asyncio.Queue()
         self._router = McpToolRouter()
         self._task: asyncio.Task | None = None
+        self._ready = asyncio.Event()
 
     async def start(self) -> None:
-        await self._router.connect()
-        self._task = asyncio.create_task(self._run())
-        logger.info("Order worker started")
+        # Connecting to the downstream MCP servers can block for a while (it
+        # retries internally -- see McpToolRouter._connect_with_retry) if this
+        # pod came up before they did, e.g. during a fresh deploy or a cluster
+        # restart. Run that -- and the queue-draining loop it gates -- as a
+        # background task so ASGI/app startup itself returns immediately: the
+        # process starts serving HTTP (health checks, agent card) right away,
+        # and is_ready() reports the real MCP-connectivity state in the
+        # meantime instead of the whole app failing to start.
+        self._task = asyncio.create_task(self._connect_and_run())
+        logger.info("Order worker starting (connecting to MCP servers in the background)")
 
     async def stop(self) -> None:
         if self._task is not None:
             self._task.cancel()
+            # Wait for the task to actually unwind (rather than closing the
+            # router here) so McpToolRouter.close() runs inside the same task
+            # that opened its connections -- anyio's cancel scopes require
+            # being entered and exited from the same asyncio task, so closing
+            # them from this (different) task raises RuntimeError.
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                # A cancellation landing mid-connection-attempt can surface as
+                # an ExceptionGroup from anyio's task-group teardown (e.g. a
+                # connection error that was already in flight) rather than a
+                # clean CancelledError. That's a discarded, in-progress
+                # connection attempt being abandoned -- not a reason to fail
+                # shutdown -- so log it and move on.
+                logger.exception("Order worker's background task raised while shutting down")
             self._task = None
-        await self._router.close()
         logger.info("Order worker stopped")
+
+    def is_ready(self) -> bool:
+        return self._ready.is_set()
 
     async def submit(
         self, pdf_bytes: bytes, filename: str, on_event: OnEvent | None = None
@@ -59,6 +86,15 @@ class OrderWorker:
             ProcessingJob(pdf_bytes=pdf_bytes, filename=filename, future=future, on_event=on_event)
         )
         return await future
+
+    async def _connect_and_run(self) -> None:
+        try:
+            await self._router.connect()
+            self._ready.set()
+            logger.info("Order worker connected to all MCP servers; processing queued jobs")
+            await self._run()
+        finally:
+            await self._router.close()
 
     async def _run(self) -> None:
         while True:

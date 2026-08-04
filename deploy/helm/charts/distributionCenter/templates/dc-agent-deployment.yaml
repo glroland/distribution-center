@@ -87,14 +87,27 @@ spec:
                   key: {{ $root.Values.global.openai.existingSecretKey }}
             {{- include "adc.mlflow.envVars" $root | nindent 12 }}
           readinessProbe:
+            # /ready reflects whether the worker has finished connecting to
+            # every downstream MCP server (wms/robot/shipping/supervisor/
+            # label). It's expected to fail for a while after a fresh deploy
+            # or cluster restart if this pod comes up before those do --
+            # McpToolRouter retries those connections with backoff in the
+            # background instead of crashing, so traffic just isn't routed
+            # here until it's actually able to process orders.
             httpGet:
-              path: /.well-known/agent-card.json
+              path: /ready
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+            failureThreshold: 30
           livenessProbe:
+            # Deliberately independent of MCP connectivity (unlike
+            # readinessProbe) -- this must only catch a genuinely wedged
+            # process, not a slow/unavailable downstream dependency that's
+            # still being retried, or Kubernetes would kill and restart a pod
+            # that's correctly waiting rather than broken.
             httpGet:
-              path: /.well-known/agent-card.json
+              path: /health
               port: http
             initialDelaySeconds: 15
             periodSeconds: 20
