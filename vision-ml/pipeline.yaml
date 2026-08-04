@@ -1,0 +1,1086 @@
+# PIPELINE DEFINITION
+# Name: vision-ml-training
+# Description: Trains the 3-stage SKU sticker extraction pipeline (localize, orient, OCR) and logs all three as nested MLflow runs under one parent run.
+# Inputs:
+#    catalog_qty_per_sku: int [Default: 40.0]
+#    catalog_skus: list [Default: ['SKU-1001', 'SKU-1002', 'SKU-1003', 'SKU-1004', 'SKU-1005', 'SKU-1006', 'SKU-1007', 'SKU-1008', 'SKU-1009', 'SKU-1010', 'SKU-1011', 'SKU-1012', 'SKU-1013', 'SKU-1014', 'SKU-1015', 'SKU-1016', 'SKU-1017', 'SKU-1018', 'SKU-1019', 'SKU-1020']]
+#    label_generator_api_url: str [Default: 'http://localhost:8005']
+#    localizer_batch_size: int [Default: 32.0]
+#    localizer_epochs: int [Default: 15.0]
+#    localizer_lr: float [Default: 0.001]
+#    mlflow_experiment_name: str [Default: 'vision-ml']
+#    mlflow_tracking_auth: str [Default: 'kubernetes-namespaced']
+#    mlflow_tracking_token: str [Default: '']
+#    mlflow_tracking_uri: str [Default: 'https://rh-ai.apps.ocp.home.glroland.com/mlflow']
+#    mlflow_workspace: str [Default: 'distribution-center']
+#    ocr_angle_jitter_std: float [Default: 0.0]
+#    ocr_batch_size: int [Default: 32.0]
+#    ocr_epochs: int [Default: 40.0]
+#    ocr_lr: float [Default: 0.001]
+#    ocr_pad_frac: float [Default: 0.2]
+#    ocr_rnn_hidden: int [Default: 128.0]
+#    orientation_batch_size: int [Default: 32.0]
+#    orientation_epochs: int [Default: 30.0]
+#    orientation_lr: float [Default: 0.001]
+#    orientation_pad_frac: float [Default: 0.2]
+#    random_seed: int [Default: 0.0]
+#    split_seed: int [Default: 0.0]
+#    synthetic_num_skus: int [Default: 800.0]
+#    synthetic_qty_per_sku: int [Default: 8.0]
+#    test_frac: float [Default: 0.05]
+#    val_frac: float [Default: 0.1]
+# Outputs:
+#    Output: str
+components:
+  comp-finalize-pipeline-run:
+    executorLabel: exec-finalize-pipeline-run
+    inputDefinitions:
+      parameters:
+        experiment_id:
+          parameterType: STRING
+        localizer_best_val_iou:
+          parameterType: NUMBER_DOUBLE
+        localizer_run_id:
+          parameterType: STRING
+        mlflow_tracking_auth:
+          parameterType: STRING
+        mlflow_tracking_token:
+          parameterType: STRING
+        mlflow_tracking_uri:
+          parameterType: STRING
+        mlflow_workspace:
+          parameterType: STRING
+        ocr_best_val_exact_match_accuracy:
+          parameterType: NUMBER_DOUBLE
+        ocr_run_id:
+          parameterType: STRING
+        orientation_best_val_angle_error_deg:
+          parameterType: NUMBER_DOUBLE
+        orientation_run_id:
+          parameterType: STRING
+        parent_run_id:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+  comp-generate-dataset:
+    executorLabel: exec-generate-dataset
+    inputDefinitions:
+      parameters:
+        catalog_qty_per_sku:
+          parameterType: NUMBER_INTEGER
+        catalog_skus:
+          parameterType: LIST
+        label_generator_api_url:
+          parameterType: STRING
+        split_seed:
+          parameterType: NUMBER_INTEGER
+        synthetic_num_skus:
+          parameterType: NUMBER_INTEGER
+        synthetic_qty_per_sku:
+          parameterType: NUMBER_INTEGER
+        test_frac:
+          parameterType: NUMBER_DOUBLE
+        val_frac:
+          parameterType: NUMBER_DOUBLE
+    outputDefinitions:
+      artifacts:
+        raw_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-start-pipeline-run:
+    executorLabel: exec-start-pipeline-run
+    inputDefinitions:
+      parameters:
+        mlflow_experiment_name:
+          parameterType: STRING
+        mlflow_tracking_auth:
+          parameterType: STRING
+        mlflow_tracking_token:
+          parameterType: STRING
+        mlflow_tracking_uri:
+          parameterType: STRING
+        mlflow_workspace:
+          parameterType: STRING
+        run_name:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        experiment_id:
+          parameterType: STRING
+        run_id:
+          parameterType: STRING
+  comp-train-localizer:
+    executorLabel: exec-train-localizer
+    inputDefinitions:
+      artifacts:
+        raw_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        batch_size:
+          parameterType: NUMBER_INTEGER
+        epochs:
+          parameterType: NUMBER_INTEGER
+        lr:
+          parameterType: NUMBER_DOUBLE
+        mlflow_experiment_id:
+          parameterType: STRING
+        mlflow_tracking_auth:
+          parameterType: STRING
+        mlflow_tracking_token:
+          parameterType: STRING
+        mlflow_tracking_uri:
+          parameterType: STRING
+        mlflow_workspace:
+          parameterType: STRING
+        parent_run_id:
+          parameterType: STRING
+        random_seed:
+          parameterType: NUMBER_INTEGER
+    outputDefinitions:
+      artifacts:
+        checkpoint:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+        metrics:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+      parameters:
+        best_val_iou:
+          parameterType: NUMBER_DOUBLE
+        run_id:
+          parameterType: STRING
+  comp-train-ocr:
+    executorLabel: exec-train-ocr
+    inputDefinitions:
+      artifacts:
+        raw_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        angle_jitter_std:
+          parameterType: NUMBER_DOUBLE
+        batch_size:
+          parameterType: NUMBER_INTEGER
+        epochs:
+          parameterType: NUMBER_INTEGER
+        lr:
+          parameterType: NUMBER_DOUBLE
+        mlflow_experiment_id:
+          parameterType: STRING
+        mlflow_tracking_auth:
+          parameterType: STRING
+        mlflow_tracking_token:
+          parameterType: STRING
+        mlflow_tracking_uri:
+          parameterType: STRING
+        mlflow_workspace:
+          parameterType: STRING
+        pad_frac:
+          parameterType: NUMBER_DOUBLE
+        parent_run_id:
+          parameterType: STRING
+        random_seed:
+          parameterType: NUMBER_INTEGER
+        rnn_hidden:
+          parameterType: NUMBER_INTEGER
+    outputDefinitions:
+      artifacts:
+        checkpoint:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+        metrics:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+      parameters:
+        best_val_exact_match_accuracy:
+          parameterType: NUMBER_DOUBLE
+        run_id:
+          parameterType: STRING
+  comp-train-orientation:
+    executorLabel: exec-train-orientation
+    inputDefinitions:
+      artifacts:
+        raw_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        batch_size:
+          parameterType: NUMBER_INTEGER
+        epochs:
+          parameterType: NUMBER_INTEGER
+        lr:
+          parameterType: NUMBER_DOUBLE
+        mlflow_experiment_id:
+          parameterType: STRING
+        mlflow_tracking_auth:
+          parameterType: STRING
+        mlflow_tracking_token:
+          parameterType: STRING
+        mlflow_tracking_uri:
+          parameterType: STRING
+        mlflow_workspace:
+          parameterType: STRING
+        pad_frac:
+          parameterType: NUMBER_DOUBLE
+        parent_run_id:
+          parameterType: STRING
+        random_seed:
+          parameterType: NUMBER_INTEGER
+    outputDefinitions:
+      artifacts:
+        checkpoint:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+        metrics:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+      parameters:
+        best_val_angle_error_deg:
+          parameterType: NUMBER_DOUBLE
+        run_id:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-finalize-pipeline-run:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - finalize_pipeline_run
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef finalize_pipeline_run(\n    mlflow_tracking_uri: str,\n    mlflow_workspace:\
+          \ str,\n    mlflow_tracking_token: str,\n    mlflow_tracking_auth: str,\n\
+          \    experiment_id: str,\n    parent_run_id: str,\n    localizer_run_id:\
+          \ str,\n    localizer_best_val_iou: float,\n    orientation_run_id: str,\n\
+          \    orientation_best_val_angle_error_deg: float,\n    ocr_run_id: str,\n\
+          \    ocr_best_val_exact_match_accuracy: float,\n) -> str:\n    from mlflow.tracking\
+          \ import MlflowClient\n\n    from src import tracking\n\n    tracking.configure_mlflow_env(mlflow_tracking_uri,\
+          \ mlflow_workspace, mlflow_tracking_token, mlflow_tracking_auth)\n    client\
+          \ = MlflowClient(tracking_uri=mlflow_tracking_uri)\n\n    for key, value\
+          \ in {\n        \"localizer_best_val_iou\": localizer_best_val_iou,\n  \
+          \      \"orientation_best_val_angle_error_deg\": orientation_best_val_angle_error_deg,\n\
+          \        \"ocr_best_val_exact_match_accuracy\": ocr_best_val_exact_match_accuracy,\n\
+          \    }.items():\n        client.log_metric(parent_run_id, key, value)\n\n\
+          \    for key, value in {\n        \"localizer_run_id\": localizer_run_id,\n\
+          \        \"orientation_run_id\": orientation_run_id,\n        \"ocr_run_id\"\
+          : ocr_run_id,\n    }.items():\n        client.set_tag(parent_run_id, key,\
+          \ value)\n\n    client.set_terminated(parent_run_id, status=\"FINISHED\"\
+          )\n\n    url = f\"{mlflow_tracking_uri.rstrip('/')}/#/experiments/{experiment_id}/runs/{parent_run_id}\"\
+          \n    print(f\"MLflow run: {url}\")\n    return url\n\n"
+        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+    exec-generate-dataset:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - generate_dataset
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef generate_dataset(\n    label_generator_api_url: str,\n    catalog_skus:\
+          \ list[str],\n    catalog_qty_per_sku: int,\n    synthetic_num_skus: int,\n\
+          \    synthetic_qty_per_sku: int,\n    val_frac: float,\n    test_frac: float,\n\
+          \    split_seed: int,\n    raw_data: Output[Dataset],\n) -> None:\n    import\
+          \ json\n    import os\n    import random\n    from pathlib import Path\n\
+          \n    os.environ[\"LABEL_GENERATOR_API_URL\"] = label_generator_api_url\n\
+          \    from src import client, datasets  # noqa: E402 - needs LABEL_GENERATOR_API_URL\
+          \ set first\n\n    random.seed(split_seed)\n    dest_dir = Path(raw_data.path)\n\
+          \n    # notebook cell: catalog_numbers/candidate_numbers/synthetic_skus/items\n\
+          \    catalog_numbers = {int(sku.split(\"-\")[1]) for sku in catalog_skus}\n\
+          \    candidate_numbers = [n for n in range(1000, 10000) if n not in catalog_numbers]\n\
+          \    synthetic_numbers = random.sample(candidate_numbers, synthetic_num_skus)\n\
+          \    synthetic_skus = [f\"SKU-{n}\" for n in synthetic_numbers]\n\n    items\
+          \ = [(sku, catalog_qty_per_sku) for sku in catalog_skus] + [\n        (sku,\
+          \ synthetic_qty_per_sku) for sku in synthetic_skus\n    ]\n\n    manifest_path\
+          \ = client.download_dataset(items, dest_dir=dest_dir)\n    records = datasets.load_manifest(manifest_path)\n\
+          \n    train_records, val_records, test_records = datasets.split_records(\n\
+          \        records, val_frac=val_frac, test_frac=test_frac, seed=split_seed,\
+          \ held_out_skus=catalog_skus,\n    )\n    splits = {\n        \"train_skus\"\
+          : sorted({r[\"sku\"] for r in train_records}),\n        \"val_skus\": sorted({r[\"\
+          sku\"] for r in val_records}),\n        \"test_skus\": sorted({r[\"sku\"\
+          ] for r in test_records}),\n        \"catalog_skus\": catalog_skus,\n  \
+          \  }\n    (dest_dir / \"splits.json\").write_text(json.dumps(splits, indent=2))\n\
+          \    print(f\"generated {len(records)} images -> {dest_dir}\")\n\n"
+        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+    exec-start-pipeline-run:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - start_pipeline_run
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef start_pipeline_run(\n    mlflow_tracking_uri: str,\n    mlflow_workspace:\
+          \ str,\n    mlflow_tracking_token: str,\n    mlflow_tracking_auth: str,\n\
+          \    mlflow_experiment_name: str,\n    run_name: str,\n) -> NamedTuple(\"\
+          Outputs\", [(\"run_id\", str), (\"experiment_id\", str)]):  # noqa: F821\n\
+          \    from collections import namedtuple\n\n    import mlflow\n\n    from\
+          \ src import tracking\n\n    tracking.configure_mlflow_env(mlflow_tracking_uri,\
+          \ mlflow_workspace, mlflow_tracking_token, mlflow_tracking_auth)\n    mlflow.set_tracking_uri(mlflow_tracking_uri)\n\
+          \    experiment_id = mlflow.set_experiment(mlflow_experiment_name).experiment_id\n\
+          \    # Left RUNNING on purpose - each stage's component is a separate process/pod\n\
+          \    # and attaches to this run by id+tag rather than by staying inside\
+          \ a `with`\n    # block here. finalize_pipeline_run marks it FINISHED once\
+          \ all 3 are done.\n    run = mlflow.start_run(run_name=run_name, experiment_id=experiment_id)\n\
+          \n    Outputs = namedtuple(\"Outputs\", [\"run_id\", \"experiment_id\"])\n\
+          \    return Outputs(run.info.run_id, experiment_id)\n\n"
+        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+    exec-train-localizer:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_localizer
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_localizer(\n    raw_data: Input[Dataset],\n    mlflow_tracking_uri:\
+          \ str,\n    mlflow_workspace: str,\n    mlflow_tracking_token: str,\n  \
+          \  mlflow_tracking_auth: str,\n    mlflow_experiment_id: str,\n    parent_run_id:\
+          \ str,\n    epochs: int,\n    lr: float,\n    batch_size: int,\n    random_seed:\
+          \ int,\n    checkpoint: Output[Model],\n    metrics: Output[Metrics],\n\
+          ) -> NamedTuple(\"Outputs\", [(\"run_id\", str), (\"best_val_iou\", float)]):\
+          \  # noqa: F821\n    import json\n    import random\n    from collections\
+          \ import namedtuple\n    from pathlib import Path\n\n    import mlflow\n\
+          \    import torch\n    from torch import nn\n    from torch.utils.data import\
+          \ DataLoader\n\n    from src import datasets, models, tracking\n\n    tracking.configure_mlflow_env(mlflow_tracking_uri,\
+          \ mlflow_workspace, mlflow_tracking_token, mlflow_tracking_auth)\n    mlflow.set_tracking_uri(mlflow_tracking_uri)\n\
+          \n    random.seed(random_seed)\n    torch.manual_seed(random_seed)\n   \
+          \ DEVICE = \"cuda\" if torch.cuda.is_available() else \"cpu\"\n\n    raw_dir\
+          \ = Path(raw_data.path)\n    records = datasets.load_manifest(raw_dir /\
+          \ \"manifest.jsonl\")\n    splits = json.loads((raw_dir / \"splits.json\"\
+          ).read_text())\n\n    def _records_for(skus):\n        sku_set = set(skus)\n\
+          \        return [r for r in records if r[\"sku\"] in sku_set]\n\n    train_records\
+          \ = _records_for(splits[\"train_skus\"])\n    val_records = _records_for(splits[\"\
+          val_skus\"])\n    print(f\"train: {len(train_records)} images   val: {len(val_records)}\
+          \ images\")\n\n    train_ds = datasets.LocalizationDataset(train_records,\
+          \ raw_dir)\n    val_ds = datasets.LocalizationDataset(val_records, raw_dir)\n\
+          \    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)\n\
+          \    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)\n\
+          \n    def batch_iou(pred: torch.Tensor, target: torch.Tensor) -> float:\n\
+          \        px0, py0, px1, py1 = pred.unbind(-1)\n        tx0, ty0, tx1, ty1\
+          \ = target.unbind(-1)\n        ix0, iy0 = torch.maximum(px0, tx0), torch.maximum(py0,\
+          \ ty0)\n        ix1, iy1 = torch.minimum(px1, tx1), torch.minimum(py1, ty1)\n\
+          \        intersection = (ix1 - ix0).clamp(min=0) * (iy1 - iy0).clamp(min=0)\n\
+          \        pred_area = (px1 - px0).clamp(min=0) * (py1 - py0).clamp(min=0)\n\
+          \        target_area = (tx1 - tx0).clamp(min=0) * (ty1 - ty0).clamp(min=0)\n\
+          \        union = (pred_area + target_area - intersection).clamp(min=1e-6)\n\
+          \        return (intersection / union).mean().item()\n\n    model = models.LocalizerNet().to(DEVICE)\n\
+          \    optimizer = torch.optim.Adam(model.parameters(), lr=lr)\n    loss_fn\
+          \ = nn.SmoothL1Loss()\n\n    run = mlflow.start_run(\n        experiment_id=mlflow_experiment_id,\n\
+          \        run_name=\"localizer\",\n        tags={\"mlflow.parentRunId\":\
+          \ parent_run_id},\n    )\n\n    best_val_iou = -1.0\n    best_state_dict\
+          \ = None\n    with run:\n        mlflow.log_params(\n            {\"stage\"\
+          : \"localizer\", \"epochs\": epochs, \"batch_size\": batch_size, \"lr\"\
+          : lr,\n             \"model\": \"LocalizerNet\", \"random_seed\": random_seed}\n\
+          \        )\n\n        for epoch in range(epochs):\n            model.train()\n\
+          \            train_loss_total = 0.0\n            for images, targets in\
+          \ train_loader:\n                images, targets = images.to(DEVICE), targets.to(DEVICE)\n\
+          \                optimizer.zero_grad()\n                preds = model(images)\n\
+          \                loss = loss_fn(preds, targets)\n                loss.backward()\n\
+          \                optimizer.step()\n                train_loss_total += loss.item()\
+          \ * images.size(0)\n            train_loss = train_loss_total / len(train_ds)\n\
+          \n            model.eval()\n            val_loss_total = 0.0\n         \
+          \   val_iou_total = 0.0\n            with torch.no_grad():\n           \
+          \     for images, targets in val_loader:\n                    images, targets\
+          \ = images.to(DEVICE), targets.to(DEVICE)\n                    preds = model(images)\n\
+          \                    val_loss_total += loss_fn(preds, targets).item() *\
+          \ images.size(0)\n                    val_iou_total += batch_iou(preds,\
+          \ targets) * images.size(0)\n            val_loss = val_loss_total / len(val_ds)\n\
+          \            val_iou = val_iou_total / len(val_ds)\n\n            is_best\
+          \ = val_iou > best_val_iou\n            if is_best:\n                best_val_iou\
+          \ = val_iou\n                best_state_dict = {k: v.detach().cpu().clone()\
+          \ for k, v in model.state_dict().items()}\n            print(f\"epoch {epoch\
+          \ + 1:2d}/{epochs}  train_loss={train_loss:.4f}  val_loss={val_loss:.4f}\
+          \  \"\n                  f\"val_iou={val_iou:.3f}{'  (best)' if is_best\
+          \ else ''}\")\n\n            mlflow.log_metrics({\"train_loss\": train_loss,\
+          \ \"val_loss\": val_loss, \"val_iou\": val_iou}, step=epoch)\n\n       \
+          \ model.load_state_dict(best_state_dict)\n        torch.save(model.state_dict(),\
+          \ checkpoint.path)\n        mlflow.log_metric(\"best_val_iou\", best_val_iou)\n\
+          \        mlflow.log_artifact(checkpoint.path, artifact_path=\"checkpoints\"\
+          )\n        run_id = mlflow.active_run().info.run_id\n\n    metrics.log_metric(\"\
+          best_val_iou\", best_val_iou)\n    print(f\"saved checkpoint (best val_iou={best_val_iou:.3f})\"\
+          )\n\n    Outputs = namedtuple(\"Outputs\", [\"run_id\", \"best_val_iou\"\
+          ])\n    return Outputs(run_id, best_val_iou)\n\n"
+        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+    exec-train-ocr:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_ocr
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_ocr(\n    raw_data: Input[Dataset],\n    mlflow_tracking_uri:\
+          \ str,\n    mlflow_workspace: str,\n    mlflow_tracking_token: str,\n  \
+          \  mlflow_tracking_auth: str,\n    mlflow_experiment_id: str,\n    parent_run_id:\
+          \ str,\n    epochs: int,\n    lr: float,\n    batch_size: int,\n    pad_frac:\
+          \ float,\n    angle_jitter_std: float,\n    rnn_hidden: int,\n    random_seed:\
+          \ int,\n    checkpoint: Output[Model],\n    metrics: Output[Metrics],\n\
+          ) -> NamedTuple(\"Outputs\", [(\"run_id\", str), (\"best_val_exact_match_accuracy\"\
+          , float)]):  # noqa: F821\n    import json\n    import random\n    from\
+          \ collections import namedtuple\n    from pathlib import Path\n\n    import\
+          \ mlflow\n    import torch\n    from torch.utils.data import DataLoader\n\
+          \n    from src import datasets, models, tracking\n\n    tracking.configure_mlflow_env(mlflow_tracking_uri,\
+          \ mlflow_workspace, mlflow_tracking_token, mlflow_tracking_auth)\n    mlflow.set_tracking_uri(mlflow_tracking_uri)\n\
+          \n    random.seed(random_seed)\n    torch.manual_seed(random_seed)\n   \
+          \ # Unlike the notebook (pinned to CPU: nn.CTCLoss has no *MPS* kernel),\
+          \ CUDA\n    # supports CTCLoss fine, so this stage uses the GPU too when\
+          \ one's available.\n    DEVICE = \"cuda\" if torch.cuda.is_available() else\
+          \ \"cpu\"\n\n    raw_dir = Path(raw_data.path)\n    records = datasets.load_manifest(raw_dir\
+          \ / \"manifest.jsonl\")\n    splits = json.loads((raw_dir / \"splits.json\"\
+          ).read_text())\n\n    def _records_for(skus):\n        sku_set = set(skus)\n\
+          \        return [r for r in records if r[\"sku\"] in sku_set]\n\n    train_records\
+          \ = _records_for(splits[\"train_skus\"])\n    val_records = _records_for(splits[\"\
+          val_skus\"])\n    catalog_records = _records_for(splits[\"catalog_skus\"\
+          ])\n    print(f\"train: {len(train_records)} images, {len(splits['train_skus'])}\
+          \ SKUs\")\n    print(f\"val:   {len(val_records)} images, {len(splits['val_skus'])}\
+          \ SKUs\")\n    print(f\"catalog (held out, real product SKUs): {len(catalog_records)}\
+          \ images, {len(splits['catalog_skus'])} SKUs\")\n\n    def _make_ocr_dataset(records):\n\
+          \        # angle_jitter_std defaults to 0.0, not OcrDataset's own default\
+          \ of 8.0\n        # - see 03_sku_ocr.ipynb's cell 4 comment: rotation jitter\
+          \ broke this\n        # architecture's training (unlike OrientationNet's\
+          \ global average\n        # pooling, the CRNN reads left-to-right through\
+          \ vertical column slices).\n        return datasets.OcrDataset(records,\
+          \ raw_dir, pad_frac=pad_frac, angle_jitter_std=angle_jitter_std)\n\n   \
+          \ train_ds = _make_ocr_dataset(train_records)\n    val_ds = _make_ocr_dataset(val_records)\n\
+          \    catalog_ds = _make_ocr_dataset(catalog_records)\n\n    train_loader\
+          \ = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=datasets.ocr_collate)\n\
+          \    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,\
+          \ collate_fn=datasets.ocr_collate)\n    catalog_loader = DataLoader(catalog_ds,\
+          \ batch_size=batch_size, shuffle=False, collate_fn=datasets.ocr_collate)\n\
+          \n    def _levenshtein(a: str, b: str) -> int:\n        if len(a) < len(b):\n\
+          \            a, b = b, a\n        previous = list(range(len(b) + 1))\n \
+          \       for i, ca in enumerate(a, start=1):\n            current = [i] +\
+          \ [0] * len(b)\n            for j, cb in enumerate(b, start=1):\n      \
+          \          cost = 0 if ca == cb else 1\n                current[j] = min(previous[j]\
+          \ + 1, current[j - 1] + 1, previous[j - 1] + cost)\n            previous\
+          \ = current\n        return previous[-1]\n\n    @torch.no_grad()\n    def\
+          \ evaluate(model, loader) -> dict:\n        model.eval()\n        total_chars\
+          \ = 0\n        total_edits = 0\n        exact_matches = 0\n        total\
+          \ = 0\n        for images, _targets, _lengths, skus in loader:\n       \
+          \     images = images.to(DEVICE)\n            log_probs = model(images)\n\
+          \            preds = models.greedy_ctc_decode(log_probs)\n            for\
+          \ pred, truth in zip(preds, skus):\n                total_edits += _levenshtein(pred,\
+          \ truth)\n                total_chars += len(truth)\n                exact_matches\
+          \ += int(pred == truth)\n                total += 1\n        return {\n\
+          \            \"cer\": total_edits / max(total_chars, 1),\n            \"\
+          exact_match_accuracy\": exact_matches / max(total, 1),\n        }\n\n  \
+          \  model = models.CRNNReader(rnn_hidden=rnn_hidden).to(DEVICE)\n    optimizer\
+          \ = torch.optim.Adam(model.parameters(), lr=lr)\n    ctc_loss = torch.nn.CTCLoss(blank=models.BLANK_IDX,\
+          \ zero_infinity=True)\n\n    run = mlflow.start_run(\n        experiment_id=mlflow_experiment_id,\n\
+          \        run_name=\"ocr\",\n        tags={\"mlflow.parentRunId\": parent_run_id},\n\
+          \    )\n\n    best_val_exact_match = -1.0\n    best_state_dict = None\n\
+          \    with run:\n        mlflow.log_params(\n            {\"stage\": \"ocr\"\
+          , \"epochs\": epochs, \"batch_size\": batch_size, \"lr\": lr, \"pad_frac\"\
+          : pad_frac,\n             \"angle_jitter_std\": angle_jitter_std, \"rnn_hidden\"\
+          : rnn_hidden, \"model\": \"CRNNReader\",\n             \"random_seed\":\
+          \ random_seed}\n        )\n\n        for epoch in range(epochs):\n     \
+          \       model.train()\n            train_loss_total = 0.0\n            n_images\
+          \ = 0\n            for images, targets, target_lengths, _skus in train_loader:\n\
+          \                images, targets, target_lengths = images.to(DEVICE), targets.to(DEVICE),\
+          \ target_lengths.to(DEVICE)\n                optimizer.zero_grad()\n   \
+          \             log_probs = model(images)  # (T, B, C)\n                input_lengths\
+          \ = torch.full((images.size(0),), log_probs.size(0), dtype=torch.long, device=DEVICE)\n\
+          \                loss = ctc_loss(log_probs, targets, input_lengths, target_lengths)\n\
+          \                loss.backward()\n                optimizer.step()\n   \
+          \             train_loss_total += loss.item() * images.size(0)\n       \
+          \         n_images += images.size(0)\n            train_loss = train_loss_total\
+          \ / n_images\n\n            val_metrics = evaluate(model, val_loader)\n\
+          \            is_best = val_metrics[\"exact_match_accuracy\"] > best_val_exact_match\n\
+          \            if is_best:\n                best_val_exact_match = val_metrics[\"\
+          exact_match_accuracy\"]\n                best_state_dict = {k: v.detach().cpu().clone()\
+          \ for k, v in model.state_dict().items()}\n            print(f\"epoch {epoch\
+          \ + 1:2d}/{epochs}  train_loss={train_loss:.4f}  \"\n                  f\"\
+          val_cer={val_metrics['cer']:.3f}  val_exact_match={val_metrics['exact_match_accuracy']:.3f}\"\
+          \n                  f\"{'  (best)' if is_best else ''}\")\n\n          \
+          \  mlflow.log_metrics({\"train_loss\": train_loss, **{f\"val_{k}\": v for\
+          \ k, v in val_metrics.items()}}, step=epoch)\n\n        model.load_state_dict(best_state_dict)\n\
+          \        torch.save(model.state_dict(), checkpoint.path)\n        mlflow.log_metric(\"\
+          best_val_exact_match_accuracy\", best_val_exact_match)\n\n        # Bonus\
+          \ eval from 03_sku_ocr.ipynb cell 11: accuracy on the real product\n   \
+          \     # catalog, which no split ever trains on - the number that actually\n\
+          \        # matters for this stage, since the synthetic val split is easier.\n\
+          \        catalog_metrics = evaluate(model, catalog_loader)\n        mlflow.log_metrics({f\"\
+          catalog_{k}\": v for k, v in catalog_metrics.items()})\n        print(\"\
+          real catalog (never trained on):\", catalog_metrics)\n\n        mlflow.log_artifact(checkpoint.path,\
+          \ artifact_path=\"checkpoints\")\n        run_id = mlflow.active_run().info.run_id\n\
+          \n    metrics.log_metric(\"best_val_exact_match_accuracy\", best_val_exact_match)\n\
+          \    metrics.log_metric(\"catalog_exact_match_accuracy\", catalog_metrics[\"\
+          exact_match_accuracy\"])\n    print(f\"saved checkpoint (best val_exact_match={best_val_exact_match:.3f})\"\
+          )\n\n    Outputs = namedtuple(\"Outputs\", [\"run_id\", \"best_val_exact_match_accuracy\"\
+          ])\n    return Outputs(run_id, best_val_exact_match)\n\n"
+        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+    exec-train-orientation:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_orientation
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_orientation(\n    raw_data: Input[Dataset],\n    mlflow_tracking_uri:\
+          \ str,\n    mlflow_workspace: str,\n    mlflow_tracking_token: str,\n  \
+          \  mlflow_tracking_auth: str,\n    mlflow_experiment_id: str,\n    parent_run_id:\
+          \ str,\n    epochs: int,\n    lr: float,\n    batch_size: int,\n    pad_frac:\
+          \ float,\n    random_seed: int,\n    checkpoint: Output[Model],\n    metrics:\
+          \ Output[Metrics],\n) -> NamedTuple(\"Outputs\", [(\"run_id\", str), (\"\
+          best_val_angle_error_deg\", float)]):  # noqa: F821\n    import json\n \
+          \   import math\n    import random\n    from collections import namedtuple\n\
+          \    from pathlib import Path\n\n    import mlflow\n    import torch\n \
+          \   from torch import nn\n    from torch.utils.data import DataLoader\n\n\
+          \    from src import datasets, models, tracking\n\n    tracking.configure_mlflow_env(mlflow_tracking_uri,\
+          \ mlflow_workspace, mlflow_tracking_token, mlflow_tracking_auth)\n    mlflow.set_tracking_uri(mlflow_tracking_uri)\n\
+          \n    random.seed(random_seed)\n    torch.manual_seed(random_seed)\n   \
+          \ DEVICE = \"cuda\" if torch.cuda.is_available() else \"cpu\"\n\n    raw_dir\
+          \ = Path(raw_data.path)\n    records = datasets.load_manifest(raw_dir /\
+          \ \"manifest.jsonl\")\n    splits = json.loads((raw_dir / \"splits.json\"\
+          ).read_text())\n\n    def _records_for(skus):\n        sku_set = set(skus)\n\
+          \        return [r for r in records if r[\"sku\"] in sku_set]\n\n    train_records\
+          \ = _records_for(splits[\"train_skus\"])\n    val_records = _records_for(splits[\"\
+          val_skus\"])\n    print(f\"train: {len(train_records)} images   val: {len(val_records)}\
+          \ images\")\n\n    train_ds = datasets.OrientationDataset(train_records,\
+          \ raw_dir, pad_frac=pad_frac)\n    val_ds = datasets.OrientationDataset(val_records,\
+          \ raw_dir, pad_frac=pad_frac)\n    train_loader = DataLoader(train_ds, batch_size=batch_size,\
+          \ shuffle=True)\n    val_loader = DataLoader(val_ds, batch_size=batch_size,\
+          \ shuffle=False)\n\n    def angular_error_degrees(pred: torch.Tensor, target:\
+          \ torch.Tensor) -> float:\n        pred_angle = torch.atan2(pred[:, 0],\
+          \ pred[:, 1])\n        target_angle = torch.atan2(target[:, 0], target[:,\
+          \ 1])\n        diff = torch.atan2(torch.sin(pred_angle - target_angle),\
+          \ torch.cos(pred_angle - target_angle))\n        return diff.abs().mean().item()\
+          \ * 180 / math.pi\n\n    model = models.OrientationNet().to(DEVICE)\n  \
+          \  optimizer = torch.optim.Adam(model.parameters(), lr=lr)\n    loss_fn\
+          \ = nn.MSELoss()\n\n    run = mlflow.start_run(\n        experiment_id=mlflow_experiment_id,\n\
+          \        run_name=\"orientation\",\n        tags={\"mlflow.parentRunId\"\
+          : parent_run_id},\n    )\n\n    best_val_angle_error = float(\"inf\")\n\
+          \    best_state_dict = None\n    with run:\n        mlflow.log_params(\n\
+          \            {\"stage\": \"orientation\", \"epochs\": epochs, \"batch_size\"\
+          : batch_size, \"lr\": lr,\n             \"pad_frac\": pad_frac, \"model\"\
+          : \"OrientationNet\", \"random_seed\": random_seed}\n        )\n\n     \
+          \   for epoch in range(epochs):\n            model.train()\n           \
+          \ train_loss_total = 0.0\n            for images, targets in train_loader:\n\
+          \                images, targets = images.to(DEVICE), targets.to(DEVICE)\n\
+          \                optimizer.zero_grad()\n                preds = model(images)\n\
+          \                loss = loss_fn(preds, targets)\n                loss.backward()\n\
+          \                optimizer.step()\n                train_loss_total += loss.item()\
+          \ * images.size(0)\n            train_loss = train_loss_total / len(train_ds)\n\
+          \n            model.eval()\n            val_loss_total = 0.0\n         \
+          \   val_angle_total = 0.0\n            with torch.no_grad():\n         \
+          \       for images, targets in val_loader:\n                    images,\
+          \ targets = images.to(DEVICE), targets.to(DEVICE)\n                    preds\
+          \ = model(images)\n                    val_loss_total += loss_fn(preds,\
+          \ targets).item() * images.size(0)\n                    val_angle_total\
+          \ += angular_error_degrees(preds, targets) * images.size(0)\n          \
+          \  val_loss = val_loss_total / len(val_ds)\n            val_angle_error\
+          \ = val_angle_total / len(val_ds)\n\n            is_best = val_angle_error\
+          \ < best_val_angle_error\n            if is_best:\n                best_val_angle_error\
+          \ = val_angle_error\n                best_state_dict = {k: v.detach().cpu().clone()\
+          \ for k, v in model.state_dict().items()}\n            print(f\"epoch {epoch\
+          \ + 1:2d}/{epochs}  train_loss={train_loss:.4f}  val_loss={val_loss:.4f}\
+          \  \"\n                  f\"val_angle_error={val_angle_error:.2f}deg{' \
+          \ (best)' if is_best else ''}\")\n\n            mlflow.log_metrics(\n  \
+          \              {\"train_loss\": train_loss, \"val_loss\": val_loss, \"val_angle_error_deg\"\
+          : val_angle_error}, step=epoch\n            )\n\n        model.load_state_dict(best_state_dict)\n\
+          \        torch.save(model.state_dict(), checkpoint.path)\n        mlflow.log_metric(\"\
+          best_val_angle_error_deg\", best_val_angle_error)\n        mlflow.log_artifact(checkpoint.path,\
+          \ artifact_path=\"checkpoints\")\n        run_id = mlflow.active_run().info.run_id\n\
+          \n    metrics.log_metric(\"best_val_angle_error_deg\", best_val_angle_error)\n\
+          \    print(f\"saved checkpoint (best val_angle_error={best_val_angle_error:.2f}deg)\"\
+          )\n\n    Outputs = namedtuple(\"Outputs\", [\"run_id\", \"best_val_angle_error_deg\"\
+          ])\n    return Outputs(run_id, best_val_angle_error)\n\n"
+        image: image-registry.openshift-image-registry.svc:5000/distribution-center/vision-ml-trainer:latest
+pipelineInfo:
+  description: Trains the 3-stage SKU sticker extraction pipeline (localize, orient,
+    OCR) and logs all three as nested MLflow runs under one parent run.
+  name: vision-ml-training
+root:
+  dag:
+    outputs:
+      parameters:
+        Output:
+          valueFromParameter:
+            outputParameterKey: Output
+            producerSubtask: finalize-pipeline-run
+    tasks:
+      finalize-pipeline-run:
+        cachingOptions: {}
+        componentRef:
+          name: comp-finalize-pipeline-run
+        dependentTasks:
+        - start-pipeline-run
+        - train-localizer
+        - train-ocr
+        - train-orientation
+        inputs:
+          parameters:
+            experiment_id:
+              taskOutputParameter:
+                outputParameterKey: experiment_id
+                producerTask: start-pipeline-run
+            localizer_best_val_iou:
+              taskOutputParameter:
+                outputParameterKey: best_val_iou
+                producerTask: train-localizer
+            localizer_run_id:
+              taskOutputParameter:
+                outputParameterKey: run_id
+                producerTask: train-localizer
+            mlflow_tracking_auth:
+              componentInputParameter: mlflow_tracking_auth
+            mlflow_tracking_token:
+              componentInputParameter: mlflow_tracking_token
+            mlflow_tracking_uri:
+              componentInputParameter: mlflow_tracking_uri
+            mlflow_workspace:
+              componentInputParameter: mlflow_workspace
+            ocr_best_val_exact_match_accuracy:
+              taskOutputParameter:
+                outputParameterKey: best_val_exact_match_accuracy
+                producerTask: train-ocr
+            ocr_run_id:
+              taskOutputParameter:
+                outputParameterKey: run_id
+                producerTask: train-ocr
+            orientation_best_val_angle_error_deg:
+              taskOutputParameter:
+                outputParameterKey: best_val_angle_error_deg
+                producerTask: train-orientation
+            orientation_run_id:
+              taskOutputParameter:
+                outputParameterKey: run_id
+                producerTask: train-orientation
+            parent_run_id:
+              taskOutputParameter:
+                outputParameterKey: run_id
+                producerTask: start-pipeline-run
+        taskInfo:
+          name: finalize-pipeline-run
+      generate-dataset:
+        cachingOptions: {}
+        componentRef:
+          name: comp-generate-dataset
+        inputs:
+          parameters:
+            catalog_qty_per_sku:
+              componentInputParameter: catalog_qty_per_sku
+            catalog_skus:
+              componentInputParameter: catalog_skus
+            label_generator_api_url:
+              componentInputParameter: label_generator_api_url
+            split_seed:
+              componentInputParameter: split_seed
+            synthetic_num_skus:
+              componentInputParameter: synthetic_num_skus
+            synthetic_qty_per_sku:
+              componentInputParameter: synthetic_qty_per_sku
+            test_frac:
+              componentInputParameter: test_frac
+            val_frac:
+              componentInputParameter: val_frac
+        taskInfo:
+          name: generate-dataset
+      start-pipeline-run:
+        cachingOptions: {}
+        componentRef:
+          name: comp-start-pipeline-run
+        inputs:
+          parameters:
+            mlflow_experiment_name:
+              componentInputParameter: mlflow_experiment_name
+            mlflow_tracking_auth:
+              componentInputParameter: mlflow_tracking_auth
+            mlflow_tracking_token:
+              componentInputParameter: mlflow_tracking_token
+            mlflow_tracking_uri:
+              componentInputParameter: mlflow_tracking_uri
+            mlflow_workspace:
+              componentInputParameter: mlflow_workspace
+            run_name:
+              runtimeValue:
+                constant: vision-ml-training
+        taskInfo:
+          name: start-pipeline-run
+      train-localizer:
+        cachingOptions: {}
+        componentRef:
+          name: comp-train-localizer
+        dependentTasks:
+        - generate-dataset
+        - start-pipeline-run
+        inputs:
+          artifacts:
+            raw_data:
+              taskOutputArtifact:
+                outputArtifactKey: raw_data
+                producerTask: generate-dataset
+          parameters:
+            batch_size:
+              componentInputParameter: localizer_batch_size
+            epochs:
+              componentInputParameter: localizer_epochs
+            lr:
+              componentInputParameter: localizer_lr
+            mlflow_experiment_id:
+              taskOutputParameter:
+                outputParameterKey: experiment_id
+                producerTask: start-pipeline-run
+            mlflow_tracking_auth:
+              componentInputParameter: mlflow_tracking_auth
+            mlflow_tracking_token:
+              componentInputParameter: mlflow_tracking_token
+            mlflow_tracking_uri:
+              componentInputParameter: mlflow_tracking_uri
+            mlflow_workspace:
+              componentInputParameter: mlflow_workspace
+            parent_run_id:
+              taskOutputParameter:
+                outputParameterKey: run_id
+                producerTask: start-pipeline-run
+            random_seed:
+              componentInputParameter: random_seed
+        taskInfo:
+          name: train-localizer
+      train-ocr:
+        cachingOptions: {}
+        componentRef:
+          name: comp-train-ocr
+        dependentTasks:
+        - generate-dataset
+        - start-pipeline-run
+        inputs:
+          artifacts:
+            raw_data:
+              taskOutputArtifact:
+                outputArtifactKey: raw_data
+                producerTask: generate-dataset
+          parameters:
+            angle_jitter_std:
+              componentInputParameter: ocr_angle_jitter_std
+            batch_size:
+              componentInputParameter: ocr_batch_size
+            epochs:
+              componentInputParameter: ocr_epochs
+            lr:
+              componentInputParameter: ocr_lr
+            mlflow_experiment_id:
+              taskOutputParameter:
+                outputParameterKey: experiment_id
+                producerTask: start-pipeline-run
+            mlflow_tracking_auth:
+              componentInputParameter: mlflow_tracking_auth
+            mlflow_tracking_token:
+              componentInputParameter: mlflow_tracking_token
+            mlflow_tracking_uri:
+              componentInputParameter: mlflow_tracking_uri
+            mlflow_workspace:
+              componentInputParameter: mlflow_workspace
+            pad_frac:
+              componentInputParameter: ocr_pad_frac
+            parent_run_id:
+              taskOutputParameter:
+                outputParameterKey: run_id
+                producerTask: start-pipeline-run
+            random_seed:
+              componentInputParameter: random_seed
+            rnn_hidden:
+              componentInputParameter: ocr_rnn_hidden
+        taskInfo:
+          name: train-ocr
+      train-orientation:
+        cachingOptions: {}
+        componentRef:
+          name: comp-train-orientation
+        dependentTasks:
+        - generate-dataset
+        - start-pipeline-run
+        inputs:
+          artifacts:
+            raw_data:
+              taskOutputArtifact:
+                outputArtifactKey: raw_data
+                producerTask: generate-dataset
+          parameters:
+            batch_size:
+              componentInputParameter: orientation_batch_size
+            epochs:
+              componentInputParameter: orientation_epochs
+            lr:
+              componentInputParameter: orientation_lr
+            mlflow_experiment_id:
+              taskOutputParameter:
+                outputParameterKey: experiment_id
+                producerTask: start-pipeline-run
+            mlflow_tracking_auth:
+              componentInputParameter: mlflow_tracking_auth
+            mlflow_tracking_token:
+              componentInputParameter: mlflow_tracking_token
+            mlflow_tracking_uri:
+              componentInputParameter: mlflow_tracking_uri
+            mlflow_workspace:
+              componentInputParameter: mlflow_workspace
+            pad_frac:
+              componentInputParameter: orientation_pad_frac
+            parent_run_id:
+              taskOutputParameter:
+                outputParameterKey: run_id
+                producerTask: start-pipeline-run
+            random_seed:
+              componentInputParameter: random_seed
+        taskInfo:
+          name: train-orientation
+  inputDefinitions:
+    parameters:
+      catalog_qty_per_sku:
+        defaultValue: 40.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      catalog_skus:
+        defaultValue:
+        - SKU-1001
+        - SKU-1002
+        - SKU-1003
+        - SKU-1004
+        - SKU-1005
+        - SKU-1006
+        - SKU-1007
+        - SKU-1008
+        - SKU-1009
+        - SKU-1010
+        - SKU-1011
+        - SKU-1012
+        - SKU-1013
+        - SKU-1014
+        - SKU-1015
+        - SKU-1016
+        - SKU-1017
+        - SKU-1018
+        - SKU-1019
+        - SKU-1020
+        isOptional: true
+        parameterType: LIST
+      label_generator_api_url:
+        defaultValue: http://localhost:8005
+        isOptional: true
+        parameterType: STRING
+      localizer_batch_size:
+        defaultValue: 32.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      localizer_epochs:
+        defaultValue: 15.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      localizer_lr:
+        defaultValue: 0.001
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+      mlflow_experiment_name:
+        defaultValue: vision-ml
+        isOptional: true
+        parameterType: STRING
+      mlflow_tracking_auth:
+        defaultValue: kubernetes-namespaced
+        isOptional: true
+        parameterType: STRING
+      mlflow_tracking_token:
+        defaultValue: ''
+        isOptional: true
+        parameterType: STRING
+      mlflow_tracking_uri:
+        defaultValue: https://rh-ai.apps.ocp.home.glroland.com/mlflow
+        isOptional: true
+        parameterType: STRING
+      mlflow_workspace:
+        defaultValue: distribution-center
+        isOptional: true
+        parameterType: STRING
+      ocr_angle_jitter_std:
+        defaultValue: 0.0
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+      ocr_batch_size:
+        defaultValue: 32.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      ocr_epochs:
+        defaultValue: 40.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      ocr_lr:
+        defaultValue: 0.001
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+      ocr_pad_frac:
+        defaultValue: 0.2
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+      ocr_rnn_hidden:
+        defaultValue: 128.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      orientation_batch_size:
+        defaultValue: 32.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      orientation_epochs:
+        defaultValue: 30.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      orientation_lr:
+        defaultValue: 0.001
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+      orientation_pad_frac:
+        defaultValue: 0.2
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+      random_seed:
+        defaultValue: 0.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      split_seed:
+        defaultValue: 0.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      synthetic_num_skus:
+        defaultValue: 800.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      synthetic_qty_per_sku:
+        defaultValue: 8.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      test_frac:
+        defaultValue: 0.05
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+      val_frac:
+        defaultValue: 0.1
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+  outputDefinitions:
+    parameters:
+      Output:
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.16.1
