@@ -17,6 +17,12 @@ RUN mkdir -p /.cache && chmod -R 777 /.cache
 
 ENV HOST=0.0.0.0
 ENV PORT=8000
+# Docling's layout/VLM/classification models default to torch.compile()-ing
+# themselves on first use, which needs a C++ compiler (g++) to JIT CPU
+# kernels via torch._inductor. This image doesn't ship a compiler, so
+# conversion fails with InvalidCxxCompiler. Disable compilation instead of
+# adding build-essential to the runtime image.
+ENV DOCLING_INFERENCE_COMPILE_TORCH_MODELS=false
 EXPOSE 8000
 
 CMD ["python", "-m", "src"]
