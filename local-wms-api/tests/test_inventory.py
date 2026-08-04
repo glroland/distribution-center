@@ -68,6 +68,22 @@ def test_increment_non_positive_qty_raises() -> None:
         store.increment("SKU-1001", 0)
 
 
+def test_boost_raises_items_below_target() -> None:
+    store = _store()
+    changed = store.boost(1_000_000)
+    assert changed == 18
+    assert store.get_quantity("SKU-1001") == 1_000_000
+    assert store.get_quantity("SKU-1004") == 1_000_000
+
+
+def test_boost_leaves_items_already_at_or_above_target() -> None:
+    store = _store()
+    store.increment("SKU-1001", 999_950)  # 60 + 999_950 = 1_000_010
+    changed = store.boost(1_000_000)
+    assert store.get_quantity("SKU-1001") == 1_000_010
+    assert changed == 17
+
+
 def test_reset_restores_initial_state() -> None:
     store = _store()
     store.increment("SKU-1001", 500)

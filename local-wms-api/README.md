@@ -54,6 +54,7 @@ source of truth for `POST /inventory/reset`.
 | `GET` | `/inventory/{sku}` | Get on-hand quantity and bin location for a SKU (404 if unknown) |
 | `POST` | `/inventory/{sku}/increment` | Body `{"qty": int}` (`qty > 0`); receive stock for a SKU |
 | `POST` | `/inventory/{sku}/decrement` | Body `{"qty": int}` (`qty > 0`); ship stock for a SKU (400 if it would go below zero) |
+| `POST` | `/inventory/boost` | Body `{"target_qty": int}` (default `1_000_000`); raise every SKU's on-hand quantity up to at least `target_qty`, leaving items already above it untouched - a demo convenience for sidestepping stockouts |
 | `POST` | `/inventory/reset` | Reload inventory from the seed CSV, discarding all changes |
 
 ```bash

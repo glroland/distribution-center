@@ -243,6 +243,19 @@ class InventoryRobot:
         logger.info("Restocked %d of %s at %s", qty, sku, location)
         return location
 
+    def boost_shelves(self, target_qty: int) -> int:
+        """Raise every currently-stocked shelf slot up to at least `target_qty`,
+        leaving slots already at or above it untouched. Returns the number of
+        slots changed."""
+        changed = 0
+        for stock in self._shelves.values():
+            for sku, qty in stock.items():
+                if qty < target_qty:
+                    stock[sku] = target_qty
+                    changed += 1
+        logger.info("Boosted shelves: %d slots raised to >= %d", changed, target_qty)
+        return changed
+
     def deliver(self) -> tuple[dict[str, int], RobotStatus]:
         """Drop everything the robot is carrying, only allowed at the dock."""
         if (self._x, self._y) != self._dock:

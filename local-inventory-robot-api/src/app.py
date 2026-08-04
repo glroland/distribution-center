@@ -4,6 +4,8 @@ from fastapi import FastAPI, HTTPException
 
 from .mcp_server import build_mcp_server
 from .models import (
+    BoostRequest,
+    BoostResponse,
     DeliverResponse,
     ItemLocationResponse,
     LocationResponse,
@@ -129,6 +131,12 @@ def restock(body: RestockRequest) -> ShelfStockResponse:
     except ShelfSpaceExhaustedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None
     return ShelfStockResponse(location_x=loc_x, location_y=loc_y, stock=robot.get_shelf_stock((loc_x, loc_y)))
+
+
+@app.post("/shelves/boost", response_model=BoostResponse)
+def boost_shelves(body: BoostRequest) -> BoostResponse:
+    changed = robot.boost_shelves(body.target_qty)
+    return BoostResponse(status="ok", changed=changed)
 
 
 @app.post("/deliver", response_model=DeliverResponse)

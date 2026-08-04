@@ -73,6 +73,28 @@ def test_increment_rejects_non_positive_qty() -> None:
     assert resp.status_code == 422
 
 
+def test_boost_inventory() -> None:
+    resp = client.post("/inventory/boost", json={"target_qty": 1_000_000})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+    assert resp.json()["changed"] == 18
+
+    resp = client.get("/inventory/SKU-1004")
+    assert resp.json()["on_hand_qty"] == 1_000_000
+
+
+def test_boost_inventory_uses_default_target() -> None:
+    resp = client.post("/inventory/boost", json={})
+    assert resp.status_code == 200
+    resp = client.get("/inventory/SKU-1001")
+    assert resp.json()["on_hand_qty"] == 1_000_000
+
+
+def test_boost_inventory_rejects_non_positive_target() -> None:
+    resp = client.post("/inventory/boost", json={"target_qty": 0})
+    assert resp.status_code == 422
+
+
 def test_reset_inventory() -> None:
     client.post("/inventory/SKU-1001/increment", json={"qty": 500})
     resp = client.post("/inventory/reset")

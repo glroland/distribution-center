@@ -12,6 +12,15 @@ class QuantityRequest(BaseModel):
     qty: int = Field(gt=0)
 
 
+class BoostRequest(BaseModel):
+    target_qty: int = Field(default=1_000_000, gt=0)
+
+
+class BoostResponse(BaseModel):
+    status: str
+    changed: int
+
+
 class LocationResponse(BaseModel):
     location_name: str
 

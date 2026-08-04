@@ -72,6 +72,17 @@ class InventoryStore:
         logger.info("Incremented %s by %d -> %d on hand", sku, qty, item.on_hand_qty)
         return item
 
+    def boost(self, target_qty: int) -> int:
+        """Raise every item's on-hand quantity up to at least `target_qty`, leaving
+        items already at or above it untouched. Returns the number of items changed."""
+        changed = 0
+        for item in self._items.values():
+            if item.on_hand_qty < target_qty:
+                item.on_hand_qty = target_qty
+                changed += 1
+        logger.info("Boosted inventory: %d items raised to >= %d", changed, target_qty)
+        return changed
+
     def decrement(self, sku: str, qty: int) -> InventoryItem:
         if qty <= 0:
             raise ValueError("qty must be positive")

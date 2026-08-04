@@ -40,6 +40,7 @@ async function api(path, opts) {
 
 async function init() {
   $("#reset-btn").addEventListener("click", onReset);
+  $("#boost-toggle").addEventListener("change", onToggleBoost);
   $("#po-select").addEventListener("change", onSelectPo);
   $("#send-btn").addEventListener("click", onSendPo);
   $("#dc-select").addEventListener("change", onSelectDc);
@@ -84,6 +85,7 @@ async function onSelectDc(e) {
 async function loadDc(name) {
   state.currentDc = state.dcs.find((dc) => dc.name === name);
   $("#dc-subtitle").textContent = `${state.currentDc.display_name} · ${state.currentDc.location_name}`;
+  $("#boost-toggle").checked = false;
 
   const [pos, mapData, inventory] = await Promise.all([
     api(`/api/dcs/${name}/pos`),
@@ -798,6 +800,7 @@ async function onReset() {
   if (state.run) state.run.source.close();
   state.run = null;
 
+  $("#boost-toggle").checked = false;
   await loadDc(state.currentDc.name);
 
   resetRunUi();
@@ -812,6 +815,29 @@ async function onReset() {
 
   state.helpRequests = {};
   renderHelpRequests();
+}
+
+async function onToggleBoost(e) {
+  const checkbox = e.target;
+  if (!state.currentDc) {
+    checkbox.checked = false;
+    return;
+  }
+  const enabled = checkbox.checked;
+  checkbox.disabled = true;
+  try {
+    await api(`/api/dcs/${state.currentDc.name}/inventory-boost`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    await refreshIdleSnapshots();
+  } catch (err) {
+    console.warn("inventory boost toggle failed", err);
+    checkbox.checked = !enabled;
+  } finally {
+    checkbox.disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------------------

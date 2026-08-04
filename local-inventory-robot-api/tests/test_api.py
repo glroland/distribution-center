@@ -170,6 +170,27 @@ def test_restock_rejects_non_positive_qty() -> None:
     assert resp.status_code == 422
 
 
+def test_boost_shelves() -> None:
+    resp = client.post("/shelves/boost", json={"target_qty": 1_000_000})
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok", "changed": 19}
+
+    resp = client.get("/shelf", params={"x": 1, "y": 1})
+    assert resp.json()["stock"] == {"SKU-1001": 1_000_000}
+
+
+def test_boost_shelves_uses_default_target() -> None:
+    resp = client.post("/shelves/boost", json={})
+    assert resp.status_code == 200
+    resp = client.get("/shelf", params={"x": 1, "y": 1})
+    assert resp.json()["stock"]["SKU-1001"] == 1_000_000
+
+
+def test_boost_shelves_rejects_non_positive_target() -> None:
+    resp = client.post("/shelves/boost", json={"target_qty": 0})
+    assert resp.status_code == 422
+
+
 def test_reset() -> None:
     _goto(1, 1)
     client.post("/pick", json={"sku": "SKU-1001", "qty": 10})

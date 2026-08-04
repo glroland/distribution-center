@@ -89,6 +89,7 @@ the dock in one straight move regardless of what's on the rows in between.
 | `POST` | `/pick` | Body `{"sku": str, "qty": int}` (`qty > 0`); pick stock off the shelf at the robot's current location (404 unknown SKU there, 400 insufficient stock or over capacity) |
 | `POST` | `/restock` | Body `{"sku": str, "qty": int, "x": int \| None, "y": int \| None}`; place newly arrived stock on a shelf - `x`/`y` must both be given or both omitted (400 otherwise); omitted auto-picks a cell already stocking `sku`, else the first empty non-dock cell (400 for an out-of-bounds or dock location, 409 if no empty cell exists) |
 | `POST` | `/deliver` | Drop everything the robot is carrying (400 unless at the dock) |
+| `POST` | `/shelves/boost` | Body `{"target_qty": int}` (default `1_000_000`); raise every currently-stocked shelf slot up to at least `target_qty`, leaving slots already above it untouched - a demo convenience for sidestepping stockouts |
 | `POST` | `/reset` | Reload shelf stock from the seed CSV and return the robot to the dock, empty-handed |
 
 ```bash

@@ -16,6 +16,7 @@ from .warehouse_map import scan_shelf_grid
 logger = logging.getLogger(__name__)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
+_BOOST_TARGET_QTY = 1_000_000
 
 app = FastAPI(title="DC Demo Dashboard")
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
@@ -116,6 +117,35 @@ async def reset_dc(name: str) -> dict:
         ):
             try:
                 response = await client.post(url)
+                results[label] = response.status_code == 200
+            except httpx.HTTPError as exc:
+                results[label] = False
+                results[f"{label}_error"] = str(exc)
+    return results
+
+
+@app.post("/api/dcs/{name}/inventory-boost")
+async def set_inventory_boost(name: str, request: Request) -> dict:
+    dc = _get_dc(name)
+    body = await request.json()
+    enabled = bool(body.get("enabled"))
+
+    if enabled:
+        calls = (
+            ("inventory", f"{dc.wms_url}/inventory/boost", {"target_qty": _BOOST_TARGET_QTY}),
+            ("shelves", f"{dc.robot_url}/shelves/boost", {"target_qty": _BOOST_TARGET_QTY}),
+        )
+    else:
+        calls = (
+            ("inventory", f"{dc.wms_url}/inventory/reset", None),
+            ("shelves", f"{dc.robot_url}/reset", None),
+        )
+
+    results: dict = {"enabled": enabled}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for label, url, json_body in calls:
+            try:
+                response = await client.post(url, json=json_body)
                 results[label] = response.status_code == 200
             except httpx.HTTPError as exc:
                 results[label] = False

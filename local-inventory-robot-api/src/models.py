@@ -48,5 +48,14 @@ class DeliverResponse(BaseModel):
     status: RobotStatusResponse
 
 
+class BoostRequest(BaseModel):
+    target_qty: int = Field(default=1_000_000, gt=0)
+
+
+class BoostResponse(BaseModel):
+    status: str
+    changed: int
+
+
 class ResetResponse(BaseModel):
     status: str

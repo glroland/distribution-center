@@ -228,6 +228,22 @@ def test_restock_raises_when_grid_has_no_empty_cell() -> None:
         robot.restock("SKU-9999", 1)
 
 
+def test_boost_shelves_raises_slots_below_target() -> None:
+    robot = _robot()
+    changed = robot.boost_shelves(1_000_000)
+    assert changed == 19
+    assert robot.get_shelf_stock((1, 1))["SKU-1001"] == 1_000_000
+    assert robot.get_shelf_stock((5, 9))["SKU-1001"] == 1_000_000
+
+
+def test_boost_shelves_leaves_slots_already_at_or_above_target() -> None:
+    robot = _robot()
+    robot.restock("SKU-1001", 999_950, location=(1, 1))  # 50 + 999_950 = 1_000_000
+    changed = robot.boost_shelves(1_000_000)
+    assert robot.get_shelf_stock((1, 1))["SKU-1001"] == 1_000_000
+    assert changed == 18
+
+
 def test_snapshot_reports_grid_dock_and_all_occupied_shelves() -> None:
     robot = _robot()
     snapshot = robot.snapshot()

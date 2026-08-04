@@ -4,7 +4,14 @@ from fastapi import FastAPI, HTTPException
 
 from .inventory import InsufficientQuantityError, InventoryStore, SkuNotFoundError
 from .mcp_server import build_mcp_server
-from .models import InventoryItemResponse, LocationResponse, QuantityRequest, ResetResponse
+from .models import (
+    BoostRequest,
+    BoostResponse,
+    InventoryItemResponse,
+    LocationResponse,
+    QuantityRequest,
+    ResetResponse,
+)
 from .settings import settings
 from .tracing import configure_tracing
 
@@ -76,6 +83,12 @@ def decrement_inventory(sku: str, body: QuantityRequest) -> InventoryItemRespons
     except InsufficientQuantityError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     return _to_response(item)
+
+
+@app.post("/inventory/boost", response_model=BoostResponse)
+def boost_inventory(body: BoostRequest) -> BoostResponse:
+    changed = store.boost(body.target_qty)
+    return BoostResponse(status="ok", changed=changed)
 
 
 @app.post("/inventory/reset", response_model=ResetResponse)
