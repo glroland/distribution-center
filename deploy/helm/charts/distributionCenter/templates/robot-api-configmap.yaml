@@ -1,18 +1,13 @@
-{{- range $dc := .Values.centers }}
-{{- $root := $ }}
-{{- $cmName := printf "%s-%s-robot-shelves" (include "adc.fullname" $root) $dc.name }}
----
+{{- $cmName := printf "%s-robot-shelves" (include "adc.fullname" $) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ $cmName }}
   labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
+    {{- include "adc.commonLabels" . | nindent 4 }}
     app.kubernetes.io/name: robot-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: robot-api
-    distribution-center: {{ $dc.name }}
 data:
   shelves.csv: |
-    {{- $dc.robotApi.shelvesCsv | nindent 4 }}
-{{- end }}
+    {{- .Values.robotApi.shelvesCsv | nindent 4 }}

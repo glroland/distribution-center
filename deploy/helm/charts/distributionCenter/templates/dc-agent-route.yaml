@@ -1,18 +1,14 @@
-{{- range $dc := .Values.centers }}
-{{- $root := $ }}
-{{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "dc-agent") }}
-{{- if and $root.Values.global.openshift.routes.enabled $dc.dcAgent.route.enabled }}
----
+{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "dc-agent") }}
+{{- if and .Values.global.openshift.routes.enabled .Values.dcAgent.route.enabled }}
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: {{ $svcName }}
   labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
+    {{- include "adc.commonLabels" . | nindent 4 }}
     app.kubernetes.io/name: dc-agent
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: dc-agent
-    distribution-center: {{ $dc.name }}
 spec:
   to:
     kind: Service
@@ -20,7 +16,6 @@ spec:
   port:
     targetPort: http
   tls:
-    termination: {{ $root.Values.global.openshift.routes.tls.termination }}
-    insecureEdgeTerminationPolicy: {{ $root.Values.global.openshift.routes.tls.insecureEdgeTerminationPolicy }}
-{{- end }}
+    termination: {{ .Values.global.openshift.routes.tls.termination }}
+    insecureEdgeTerminationPolicy: {{ .Values.global.openshift.routes.tls.insecureEdgeTerminationPolicy }}
 {{- end }}

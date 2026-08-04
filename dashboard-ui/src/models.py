@@ -2,9 +2,9 @@ from pydantic import BaseModel
 
 
 class DistributionCenter(BaseModel):
-    """A distribution center this dashboard can send purchase orders to. Each one is
-    a self-contained set of services (dc-agent, WMS, robot, shipping) - mirrors the
-    `distributionCenters` list in deploy/helm/values.yaml, one entry per DC."""
+    """The distribution center this dashboard sends purchase orders to - a
+    self-contained set of services (dc-agent, WMS, robot, shipping). Mirrors the
+    `distributionCenter` block in deploy/helm/values.yaml."""
 
     name: str
     display_name: str

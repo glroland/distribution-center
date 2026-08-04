@@ -201,16 +201,15 @@ pick-and-ship path and the supervisor-escalation path in the same run.
 
 `deploy/helm` is a Helm chart with subcharts under `charts/` for
 `poIngestApi`, `supervisorApi`, and `dashboardUi` (cluster-shared
-singletons) and `distributionCenter` (one instance per DC — dc-agent, wms,
+singletons) and `distributionCenter` (the single DC — dc-agent, wms,
 robot, shipping together). `values.yaml`'s `global` section is the only
 values shared automatically across subcharts (e.g. `global.poIngestApi.port`
-so a `distributionCenter` subchart's dc-agent can address the shared ingest
-service). Locally, `dashboard-ui/src/settings.py`'s hardcoded
-`DISTRIBUTION_CENTERS` list mirrors `distributionCenter.centers` in
-`values.yaml` by hand; in the chart, `dashboardUi.distributionCenters`
-(itself hand-mirroring `distributionCenter.centers` — Helm only shares
-`global` values across subcharts) is rendered into a
-`DISTRIBUTION_CENTERS_JSON` env var that `settings.py` parses instead,
-pointing at each DC's in-cluster Service DNS rather than `localhost`. Both
-mirrors must be kept in sync by hand when adding a DC. `deploy/Jenkinsfile`
-builds/archives a Docker image per service.
+so the `distributionCenter` subchart's dc-agent can address the shared
+ingest service). Locally, `dashboard-ui/src/settings.py`'s hardcoded
+`DISTRIBUTION_CENTER` mirrors the `distributionCenter` block in
+`values.yaml` by hand; in the chart, `dashboardUi.distributionCenter`
+(itself hand-mirroring `distributionCenter` — Helm only shares `global`
+values across subcharts) is rendered into a `DISTRIBUTION_CENTER_JSON` env
+var that `settings.py` parses instead, pointing at the DC's in-cluster
+Service DNS rather than `localhost`. Both mirrors must be kept in sync by
+hand. `deploy/Jenkinsfile` builds/archives a Docker image per service.

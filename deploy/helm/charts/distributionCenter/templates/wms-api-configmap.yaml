@@ -1,18 +1,13 @@
-{{- range $dc := .Values.centers }}
-{{- $root := $ }}
-{{- $cmName := printf "%s-%s-wms-inventory" (include "adc.fullname" $root) $dc.name }}
----
+{{- $cmName := printf "%s-wms-inventory" (include "adc.fullname" $) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ $cmName }}
   labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
+    {{- include "adc.commonLabels" . | nindent 4 }}
     app.kubernetes.io/name: wms-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: wms-api
-    distribution-center: {{ $dc.name }}
 data:
   inventory.csv: |
-    {{- $dc.wmsApi.inventoryCsv | nindent 4 }}
-{{- end }}
+    {{- .Values.wmsApi.inventoryCsv | nindent 4 }}

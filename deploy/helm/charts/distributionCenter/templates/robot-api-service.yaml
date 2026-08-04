@@ -1,24 +1,18 @@
-{{- range $dc := .Values.centers }}
-{{- $root := $ }}
-{{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "robot-api") }}
----
+{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "robot-api") }}
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ $svcName }}
   labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
+    {{- include "adc.commonLabels" . | nindent 4 }}
     app.kubernetes.io/name: robot-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: robot-api
-    distribution-center: {{ $dc.name }}
 spec:
   selector:
     app.kubernetes.io/name: robot-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
-    distribution-center: {{ $dc.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
   ports:
     - name: http
-      port: {{ $dc.robotApi.port }}
+      port: {{ .Values.robotApi.port }}
       targetPort: http
-{{- end }}

@@ -7,10 +7,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .models import DistributionCenter
 from .po_catalog import PurchaseOrderNotFoundError, list_purchase_orders, resolve_purchase_order_path
 from .run_manager import run_manager, stream_events
-from .settings import DC_BY_NAME, DISTRIBUTION_CENTERS, settings
+from .settings import DISTRIBUTION_CENTER, settings
 from .warehouse_map import scan_shelf_grid
 
 logger = logging.getLogger(__name__)
@@ -20,13 +19,6 @@ _BOOST_TARGET_QTY = 1_000_000
 
 app = FastAPI(title="DC Demo Dashboard")
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
-
-
-def _get_dc(name: str) -> DistributionCenter:
-    dc = DC_BY_NAME.get(name)
-    if dc is None:
-        raise HTTPException(status_code=404, detail=f"Unknown distribution center: {name}")
-    return dc
 
 
 async def _proxy_get(url: str, params: dict | None = None) -> JSONResponse:
@@ -54,25 +46,22 @@ def index() -> FileResponse:
     return FileResponse(_STATIC_DIR / "index.html")
 
 
-@app.get("/api/dcs")
-async def get_distribution_centers() -> list[dict]:
-    centers = []
-    for dc in DISTRIBUTION_CENTERS:
-        location_name = dc.display_name
-        try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                response = await client.get(f"{dc.wms_url}/location")
-                if response.status_code == 200:
-                    location_name = response.json().get("location_name", location_name)
-        except httpx.HTTPError:
-            pass
-        centers.append({**dc.model_dump(), "location_name": location_name})
-    return centers
+@app.get("/api/dc")
+async def get_distribution_center() -> dict:
+    dc = DISTRIBUTION_CENTER
+    location_name = dc.display_name
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{dc.wms_url}/location")
+            if response.status_code == 200:
+                location_name = response.json().get("location_name", location_name)
+    except httpx.HTTPError:
+        pass
+    return {**dc.model_dump(), "location_name": location_name}
 
 
-@app.get("/api/dcs/{name}/pos")
-def get_purchase_orders(name: str) -> list[dict]:
-    _get_dc(name)
+@app.get("/api/pos")
+def get_purchase_orders() -> list[dict]:
     return [po.model_dump() for po in list_purchase_orders()]
 
 
@@ -85,28 +74,25 @@ def get_purchase_order_file(filename: str) -> FileResponse:
     return FileResponse(path, media_type="application/pdf")
 
 
-@app.get("/api/dcs/{name}/map")
-async def get_warehouse_map(name: str) -> dict:
-    dc = _get_dc(name)
-    return await scan_shelf_grid(dc)
+@app.get("/api/map")
+async def get_warehouse_map() -> dict:
+    return await scan_shelf_grid(DISTRIBUTION_CENTER)
 
 
-@app.get("/api/dcs/{name}/inventory")
-async def get_inventory(name: str) -> JSONResponse:
-    dc = _get_dc(name)
-    return await _proxy_get(f"{dc.wms_url}/inventory")
+@app.get("/api/inventory")
+async def get_inventory() -> JSONResponse:
+    return await _proxy_get(f"{DISTRIBUTION_CENTER.wms_url}/inventory")
 
 
-@app.get("/api/dcs/{name}/shipments")
-async def get_shipments(name: str, po_number: str | None = None) -> JSONResponse:
-    dc = _get_dc(name)
+@app.get("/api/shipments")
+async def get_shipments(po_number: str | None = None) -> JSONResponse:
     params = {"po_number": po_number} if po_number else None
-    return await _proxy_get(f"{dc.shipping_url}/shipments", params=params)
+    return await _proxy_get(f"{DISTRIBUTION_CENTER.shipping_url}/shipments", params=params)
 
 
-@app.post("/api/dcs/{name}/reset")
-async def reset_dc(name: str) -> dict:
-    dc = _get_dc(name)
+@app.post("/api/reset")
+async def reset_dc() -> dict:
+    dc = DISTRIBUTION_CENTER
     results = {}
     async with httpx.AsyncClient(timeout=10.0) as client:
         for label, url in (
@@ -124,9 +110,9 @@ async def reset_dc(name: str) -> dict:
     return results
 
 
-@app.post("/api/dcs/{name}/inventory-boost")
-async def set_inventory_boost(name: str, request: Request) -> dict:
-    dc = _get_dc(name)
+@app.post("/api/inventory-boost")
+async def set_inventory_boost(request: Request) -> dict:
+    dc = DISTRIBUTION_CENTER
     body = await request.json()
     enabled = bool(body.get("enabled"))
 
@@ -185,19 +171,17 @@ async def resolve_help_request(request_id: int, request: Request) -> JSONRespons
 @app.post("/api/runs")
 async def create_run(request: Request) -> dict:
     body = await request.json()
-    dc_name = body.get("dc")
     filename = body.get("filename")
-    if not dc_name or not filename:
-        raise HTTPException(status_code=400, detail="Both 'dc' and 'filename' are required")
+    if not filename:
+        raise HTTPException(status_code=400, detail="'filename' is required")
 
-    dc = _get_dc(dc_name)
     try:
         resolve_purchase_order_path(filename)
     except PurchaseOrderNotFoundError:
         raise HTTPException(status_code=404, detail=f"Unknown PO file: {filename}") from None
 
-    run = run_manager.start_run(dc, filename)
-    logger.info("Run %s created for dc=%s, po=%s", run.id, dc_name, filename)
+    run = run_manager.start_run(filename)
+    logger.info("Run %s created for po=%s", run.id, filename)
     return {"run_id": run.id}
 
 
@@ -206,7 +190,7 @@ def get_run(run_id: str) -> dict:
     run = run_manager.get(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Unknown run")
-    return {"run_id": run.id, "dc": run.dc_name, "po_filename": run.po_filename, "done": run.done}
+    return {"run_id": run.id, "po_filename": run.po_filename, "done": run.done}
 
 
 @app.get("/api/runs/{run_id}/stream")

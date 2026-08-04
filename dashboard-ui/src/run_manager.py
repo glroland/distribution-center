@@ -6,9 +6,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from .agent_client import AgentCallError, process_purchase_order
-from .models import DistributionCenter
 from .po_catalog import read_purchase_order_bytes
-from .settings import settings
+from .settings import DISTRIBUTION_CENTER, settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,6 @@ _RUN_RETENTION_SECONDS = 600
 @dataclass
 class Run:
     id: str
-    dc_name: str
     po_filename: str
     events: list[dict] = field(default_factory=list)
     subscribers: list[asyncio.Queue] = field(default_factory=list)
@@ -66,11 +64,11 @@ class RunManager:
     def get(self, run_id: str) -> Run | None:
         return self._runs.get(run_id)
 
-    def start_run(self, dc: DistributionCenter, po_filename: str) -> Run:
+    def start_run(self, po_filename: str) -> Run:
         self._evict_stale()
-        run = Run(id=uuid.uuid4().hex, dc_name=dc.name, po_filename=po_filename)
+        run = Run(id=uuid.uuid4().hex, po_filename=po_filename)
         self._runs[run.id] = run
-        asyncio.create_task(self._execute(run, dc, po_filename))
+        asyncio.create_task(self._execute(run, po_filename))
         return run
 
     def _evict_stale(self) -> None:
@@ -79,9 +77,9 @@ class RunManager:
         for run_id in stale:
             del self._runs[run_id]
 
-    async def _execute(self, run: Run, dc: DistributionCenter, po_filename: str) -> None:
-        logger.info("Run %s started: dc=%s, po=%s", run.id, dc.name, po_filename)
-        await run.publish("run_started", {"dc": dc.name, "po_filename": po_filename})
+    async def _execute(self, run: Run, po_filename: str) -> None:
+        logger.info("Run %s started: po=%s", run.id, po_filename)
+        await run.publish("run_started", {"po_filename": po_filename})
         try:
             pdf_bytes = read_purchase_order_bytes(po_filename)
         except Exception as exc:
@@ -93,7 +91,7 @@ class RunManager:
         webhook_url = f"{settings.PUBLIC_URL.rstrip('/')}/api/internal/events/{run.id}"
         try:
             outcome = await process_purchase_order(
-                dc.agent_url, pdf_bytes, po_filename, progress_webhook=webhook_url
+                DISTRIBUTION_CENTER.agent_url, pdf_bytes, po_filename, progress_webhook=webhook_url
             )
             logger.info("Run %s complete: state=%s", run.id, outcome.get("state"))
             await run.publish("run_complete", outcome)

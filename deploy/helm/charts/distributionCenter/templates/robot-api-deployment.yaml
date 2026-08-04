@@ -1,71 +1,65 @@
-{{- range $dc := .Values.centers }}
-{{- $root := $ }}
-{{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "robot-api") }}
-{{- $cmName := printf "%s-%s-robot-shelves" (include "adc.fullname" $root) $dc.name }}
-{{- $labelApiSvc := include "adc.labelApi.serviceName" $root }}
----
+{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "robot-api") }}
+{{- $cmName := printf "%s-robot-shelves" (include "adc.fullname" $) }}
+{{- $labelApiSvc := include "adc.labelApi.serviceName" $ }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $svcName }}
   labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
+    {{- include "adc.commonLabels" . | nindent 4 }}
     app.kubernetes.io/name: robot-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: robot-api
-    distribution-center: {{ $dc.name }}
   annotations:
-    distribution-center/display-name: {{ $dc.displayName | quote }}
+    distribution-center/display-name: {{ .Values.displayName | quote }}
 spec:
   replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: robot-api
-      app.kubernetes.io/instance: {{ $root.Release.Name }}
-      distribution-center: {{ $dc.name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: robot-api
-        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: robot-api
-        distribution-center: {{ $dc.name }}
     spec:
-      {{- with $root.Values.global.imagePullSecrets }}
+      {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- include "adc.podSecurityContext" $root | nindent 8 }}
+        {{- include "adc.podSecurityContext" . | nindent 8 }}
       containers:
         - name: robot-api
-          image: {{ include "adc.image" (dict "root" $root "image" $dc.robotApi.image) }}
-          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          image: {{ include "adc.image" (dict "root" $ "image" .Values.robotApi.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext:
-            {{- include "adc.containerSecurityContext" $root | nindent 12 }}
+            {{- include "adc.containerSecurityContext" . | nindent 12 }}
           ports:
             - name: http
-              containerPort: {{ $dc.robotApi.port }}
+              containerPort: {{ .Values.robotApi.port }}
           env:
             - name: HOST
               value: "0.0.0.0"
             - name: PORT
-              value: {{ $dc.robotApi.port | quote }}
+              value: {{ .Values.robotApi.port | quote }}
             - name: SHELVES_CSV_PATH
               value: data/shelves.csv
             - name: GRID_WIDTH
-              value: {{ $dc.robotApi.grid.width | quote }}
+              value: {{ .Values.robotApi.grid.width | quote }}
             - name: GRID_HEIGHT
-              value: {{ $dc.robotApi.grid.height | quote }}
+              value: {{ .Values.robotApi.grid.height | quote }}
             - name: DOCK_X
-              value: {{ $dc.robotApi.dock.x | quote }}
+              value: {{ .Values.robotApi.dock.x | quote }}
             - name: DOCK_Y
-              value: {{ $dc.robotApi.dock.y | quote }}
+              value: {{ .Values.robotApi.dock.y | quote }}
             - name: CARRY_CAPACITY
-              value: {{ $dc.robotApi.carryCapacity | quote }}
+              value: {{ .Values.robotApi.carryCapacity | quote }}
             - name: LABEL_API_URL
-              value: http://{{ $labelApiSvc }}:{{ $root.Values.global.labelApi.port }}
-            {{- include "adc.mlflow.envVars" $root | nindent 12 }}
+              value: http://{{ $labelApiSvc }}:{{ .Values.global.labelApi.port }}
+            {{- include "adc.mlflow.envVars" . | nindent 12 }}
           volumeMounts:
             - name: shelves-data
               mountPath: /app/data/shelves.csv
@@ -83,9 +77,8 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
-            {{- toYaml $dc.robotApi.resources | nindent 12 }}
+            {{- toYaml .Values.robotApi.resources | nindent 12 }}
       volumes:
         - name: shelves-data
           configMap:
             name: {{ $cmName }}
-{{- end }}

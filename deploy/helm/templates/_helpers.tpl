@@ -73,11 +73,11 @@ Name of the OpenAI secret consumed by dc-agent deployments.
 {{- end -}}
 
 {{/*
-Per-distribution-center Service name for a given component suffix.
-Usage: {{ include "adc.dc.serviceName" (dict "root" $ "dc" . "component" "wms-api") }}
+Distribution-center component Service name for a given component suffix.
+Usage: {{ include "adc.distributionCenter.serviceName" (dict "root" $ "component" "wms-api") }}
 */}}
-{{- define "adc.dc.serviceName" -}}
-{{ include "adc.fullname" .root }}-{{ .dc.name }}-{{ .component }}
+{{- define "adc.distributionCenter.serviceName" -}}
+{{ include "adc.fullname" .root }}-{{ .component }}
 {{- end -}}
 
 {{/*

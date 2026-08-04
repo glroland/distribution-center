@@ -1,9 +1,9 @@
 # Dashboard UI
 
 A single-page control room for running and watching the distribution center
-demo: pick a purchase order and a distribution center, send it, and watch it
-move through ingest, LLM extraction, inventory checks, robot picking,
-shipping, and any human-in-the-loop escalation - live, in the browser.
+demo: pick a purchase order, send it, and watch it move through ingest, LLM
+extraction, inventory checks, robot picking, shipping, and any
+human-in-the-loop escalation - live, in the browser.
 
 This service is a thin backend-for-frontend. It doesn't own any business
 state itself; it orchestrates calls to the other services in this repo and
@@ -67,15 +67,12 @@ Starts on `http://localhost:8090` - open that in a browser.
 | `LABEL_API_URL` | `http://localhost:8005` | Base URL of `label-api`, proxied by `GET /api/stickers/{sku}` for the sticker-photo preview |
 | `PO_DIRS` | `target/pos,test-po-generator/output` | Comma-separated *additional* directories (relative to the repo root) to look for demo PO PDFs, on top of the packaged `data/pos/` (always searched, not configurable) |
 
-## Distribution centers
+## Distribution center
 
-`src/settings.py`'s `DISTRIBUTION_CENTERS` list is the dashboard's registry of
-selectable DCs - name, display name, and the agent/WMS/robot/shipping URLs
-for that DC's stack, mirroring `deploy/helm/values.yaml`'s
-`distributionCenters` list. Only one DC (`distribution-center-a`, matching
-the default local ports) is defined out of the box; add another entry to
-make a second one selectable in the UI once you're running a second stack on
-different ports.
+`src/settings.py`'s `DISTRIBUTION_CENTER` is the dashboard's registry of the
+one DC it talks to - name, display name, and the agent/WMS/robot/shipping
+URLs for its stack, mirroring `deploy/helm/values.yaml`'s
+`distributionCenter` block.
 
 ## API
 
@@ -83,17 +80,17 @@ All under `/api`:
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/dcs` | List configured distribution centers |
-| `GET` | `/dcs/{name}/pos` | List available PO PDFs |
+| `GET` | `/dc` | Distribution center info (name, URLs, live location) |
+| `GET` | `/pos` | List available PO PDFs |
 | `GET` | `/pos/{filename}/file` | Raw PDF bytes, for browser preview |
-| `GET` | `/dcs/{name}/map` | Full shelf grid scan + live robot status |
-| `GET` | `/dcs/{name}/inventory` | WMS ledger passthrough |
-| `GET` | `/dcs/{name}/shipments?po_number=` | Shipments passthrough |
-| `POST` | `/dcs/{name}/reset` | Reset inventory, robot, and shipments for a DC |
+| `GET` | `/map` | Full shelf grid scan + live robot status |
+| `GET` | `/inventory` | WMS ledger passthrough |
+| `GET` | `/shipments?po_number=` | Shipments passthrough |
+| `POST` | `/reset` | Reset inventory, robot, and shipments |
 | `GET` | `/help-requests?status=` | Supervisor help requests passthrough |
 | `GET` | `/stickers/{sku}?color_mode=&image_format=` | Sticker photo passthrough to `label-api`, for the "captured sticker photo" preview on each robot pick |
 | `POST` | `/help-requests/{id}/resolve` | Resolve a help request |
-| `POST` | `/runs` | Body `{"dc": str, "filename": str}`; starts sending a PO, returns `{"run_id"}` |
+| `POST` | `/runs` | Body `{"filename": str}`; starts sending a PO, returns `{"run_id"}` |
 | `GET` | `/runs/{run_id}/stream` | SSE stream of that run's events |
 | `POST` | `/internal/events/{run_id}` | Webhook target the dc-agent posts progress events to |
 

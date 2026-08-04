@@ -49,32 +49,27 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# One entry per distribution center, mirroring deploy/helm/values.yaml's
-# `distributionCenters` list. Add another entry here (with its own agent/wms/robot/
-# shipping URLs) to make a second DC selectable in the UI.
-_DEFAULT_DISTRIBUTION_CENTERS = [
-    DistributionCenter(
-        name="distribution-center-a",
-        display_name="Distribution Center A",
-        agent_url="http://localhost:9100",
-        wms_url="http://localhost:8001",
-        robot_url="http://localhost:8002",
-        shipping_url="http://localhost:8004",
-        grid_width=10,
-        grid_height=10,
-        dock_x=0,
-        dock_y=0,
-    )
-]
-
-# In Kubernetes the DCs live at in-cluster Service DNS names rather than
-# localhost, so the Helm chart (deploy/helm/charts/dashboardUi) renders this
-# list as JSON instead of hand-editing this file per deployment.
-_distribution_centers_json = os.environ.get("DISTRIBUTION_CENTERS_JSON")
-DISTRIBUTION_CENTERS: list[DistributionCenter] = (
-    [DistributionCenter(**entry) for entry in json.loads(_distribution_centers_json)]
-    if _distribution_centers_json
-    else _DEFAULT_DISTRIBUTION_CENTERS
+# The one distribution center this dashboard talks to, mirroring
+# deploy/helm/values.yaml's `distributionCenter` block.
+_DEFAULT_DISTRIBUTION_CENTER = DistributionCenter(
+    name="distribution-center-a",
+    display_name="Distribution Center A",
+    agent_url="http://localhost:9100",
+    wms_url="http://localhost:8001",
+    robot_url="http://localhost:8002",
+    shipping_url="http://localhost:8004",
+    grid_width=10,
+    grid_height=10,
+    dock_x=0,
+    dock_y=0,
 )
 
-DC_BY_NAME: dict[str, DistributionCenter] = {dc.name: dc for dc in DISTRIBUTION_CENTERS}
+# In Kubernetes the DC lives at in-cluster Service DNS names rather than
+# localhost, so the Helm chart (deploy/helm/charts/dashboardUi) renders this
+# as JSON instead of hand-editing this file per deployment.
+_distribution_center_json = os.environ.get("DISTRIBUTION_CENTER_JSON")
+DISTRIBUTION_CENTER: DistributionCenter = (
+    DistributionCenter(**json.loads(_distribution_center_json))
+    if _distribution_center_json
+    else _DEFAULT_DISTRIBUTION_CENTER
+)

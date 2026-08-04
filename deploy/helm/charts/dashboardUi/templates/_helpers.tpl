@@ -6,20 +6,19 @@ Name of this dashboard's own Service.
 {{- end -}}
 
 {{/*
-Renders .Values.distributionCenters as the JSON array dashboard-ui/src/settings.py's
-DISTRIBUTION_CENTERS_JSON expects: one object per DC with the field names
-DistributionCenter (src/models.py) requires, urls pointing at each DC's
-in-cluster Service DNS names via the shared adc.dc.serviceName helper.
+Renders .Values.distributionCenter as the JSON object dashboard-ui/src/settings.py's
+DISTRIBUTION_CENTER_JSON expects: the field names DistributionCenter
+(src/models.py) requires, urls pointing at the DC's in-cluster Service DNS
+names via the shared adc.distributionCenter.serviceName helper.
 */}}
-{{- define "adc.dashboardUi.distributionCentersJson" -}}
+{{- define "adc.dashboardUi.distributionCenterJson" -}}
 {{- $root := . -}}
-{{- $entries := list -}}
-{{- range $dc := .Values.distributionCenters -}}
-{{- $agentSvc := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "dc-agent") -}}
-{{- $wmsSvc := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "wms-api") -}}
-{{- $robotSvc := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "robot-api") -}}
-{{- $shippingSvc := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "shipping-api") -}}
-{{- $entries = append $entries (dict
+{{- $dc := .Values.distributionCenter -}}
+{{- $agentSvc := include "adc.distributionCenter.serviceName" (dict "root" $root "component" "dc-agent") -}}
+{{- $wmsSvc := include "adc.distributionCenter.serviceName" (dict "root" $root "component" "wms-api") -}}
+{{- $robotSvc := include "adc.distributionCenter.serviceName" (dict "root" $root "component" "robot-api") -}}
+{{- $shippingSvc := include "adc.distributionCenter.serviceName" (dict "root" $root "component" "shipping-api") -}}
+{{- toJson (dict
     "name" $dc.name
     "display_name" $dc.displayName
     "agent_url" (printf "http://%s:%v" $agentSvc $dc.dcAgentPort)
@@ -31,6 +30,4 @@ in-cluster Service DNS names via the shared adc.dc.serviceName helper.
     "dock_x" $dc.dock.x
     "dock_y" (index $dc.dock "y")
   ) -}}
-{{- end -}}
-{{- toJson $entries -}}
 {{- end -}}

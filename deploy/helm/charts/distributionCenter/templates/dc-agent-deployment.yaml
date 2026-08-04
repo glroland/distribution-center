@@ -1,91 +1,85 @@
-{{- range $dc := .Values.centers }}
-{{- $root := $ }}
-{{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "dc-agent") }}
-{{- $wmsSvc := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "wms-api") }}
-{{- $robotSvc := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "robot-api") }}
-{{- $shippingSvc := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "shipping-api") }}
-{{- $poIngestSvc := include "adc.poIngestApi.serviceName" $root }}
-{{- $supervisorSvc := include "adc.supervisorApi.serviceName" $root }}
-{{- $labelApiSvc := include "adc.labelApi.serviceName" $root }}
----
+{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "dc-agent") }}
+{{- $wmsSvc := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "wms-api") }}
+{{- $robotSvc := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "robot-api") }}
+{{- $shippingSvc := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "shipping-api") }}
+{{- $poIngestSvc := include "adc.poIngestApi.serviceName" $ }}
+{{- $supervisorSvc := include "adc.supervisorApi.serviceName" $ }}
+{{- $labelApiSvc := include "adc.labelApi.serviceName" $ }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $svcName }}
   labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
+    {{- include "adc.commonLabels" . | nindent 4 }}
     app.kubernetes.io/name: dc-agent
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: dc-agent
-    distribution-center: {{ $dc.name }}
   annotations:
-    distribution-center/display-name: {{ $dc.displayName | quote }}
+    distribution-center/display-name: {{ .Values.displayName | quote }}
 spec:
   replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: dc-agent
-      app.kubernetes.io/instance: {{ $root.Release.Name }}
-      distribution-center: {{ $dc.name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: dc-agent
-        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: dc-agent
-        distribution-center: {{ $dc.name }}
     spec:
-      {{- with $root.Values.global.imagePullSecrets }}
+      {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- include "adc.podSecurityContext" $root | nindent 8 }}
+        {{- include "adc.podSecurityContext" . | nindent 8 }}
       containers:
         - name: dc-agent
-          image: {{ include "adc.image" (dict "root" $root "image" $dc.dcAgent.image) }}
-          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          image: {{ include "adc.image" (dict "root" $ "image" .Values.dcAgent.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext:
-            {{- include "adc.containerSecurityContext" $root | nindent 12 }}
+            {{- include "adc.containerSecurityContext" . | nindent 12 }}
           ports:
             - name: http
-              containerPort: {{ $dc.dcAgent.port }}
+              containerPort: {{ .Values.dcAgent.port }}
           env:
             - name: HOST
               value: "0.0.0.0"
             - name: PORT
-              value: {{ $dc.dcAgent.port | quote }}
+              value: {{ .Values.dcAgent.port | quote }}
             # Wired to the other local-* components within this same
             # distribution center grouping.
             - name: WMS_API_URL
-              value: http://{{ $wmsSvc }}:{{ $dc.wmsApi.port }}
+              value: http://{{ $wmsSvc }}:{{ .Values.wmsApi.port }}
             - name: ROBOT_API_URL
-              value: http://{{ $robotSvc }}:{{ $dc.robotApi.port }}
+              value: http://{{ $robotSvc }}:{{ .Values.robotApi.port }}
             - name: SHIPPING_API_URL
-              value: http://{{ $shippingSvc }}:{{ $dc.shippingApi.port }}
+              value: http://{{ $shippingSvc }}:{{ .Values.shippingApi.port }}
             # Wired to the cluster-wide global services.
             - name: PO_INGEST_API_URL
-              value: http://{{ $poIngestSvc }}:{{ $root.Values.global.poIngestApi.port }}
+              value: http://{{ $poIngestSvc }}:{{ .Values.global.poIngestApi.port }}
             - name: SUPERVISOR_API_URL
-              value: http://{{ $supervisorSvc }}:{{ $root.Values.global.supervisorApi.port }}
+              value: http://{{ $supervisorSvc }}:{{ .Values.global.supervisorApi.port }}
             - name: LABEL_API_URL
-              value: http://{{ $labelApiSvc }}:{{ $root.Values.global.labelApi.port }}
+              value: http://{{ $labelApiSvc }}:{{ .Values.global.labelApi.port }}
             - name: AGENT_URL
-              value: http://{{ $svcName }}:{{ $dc.dcAgent.port }}/
+              value: http://{{ $svcName }}:{{ .Values.dcAgent.port }}/
             - name: MAX_FULFILLMENT_TURNS
-              value: {{ $dc.dcAgent.maxFulfillmentTurns | quote }}
+              value: {{ .Values.dcAgent.maxFulfillmentTurns | quote }}
             - name: OPENAI_MODEL
-              value: {{ $root.Values.global.openai.model | quote }}
-            {{- if $root.Values.global.openai.baseUrl }}
+              value: {{ .Values.global.openai.model | quote }}
+            {{- if .Values.global.openai.baseUrl }}
             - name: OPENAI_BASE_URL
-              value: {{ $root.Values.global.openai.baseUrl | quote }}
+              value: {{ .Values.global.openai.baseUrl | quote }}
             {{- end }}
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "adc.openai.secretName" $root }}
-                  key: {{ $root.Values.global.openai.existingSecretKey }}
-            {{- include "adc.mlflow.envVars" $root | nindent 12 }}
+                  name: {{ include "adc.openai.secretName" . }}
+                  key: {{ .Values.global.openai.existingSecretKey }}
+            {{- include "adc.mlflow.envVars" . | nindent 12 }}
           readinessProbe:
             # /ready reflects whether the worker has finished connecting to
             # every downstream MCP server (wms/robot/shipping/supervisor/
@@ -112,5 +106,4 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
-            {{- toYaml $dc.dcAgent.resources | nindent 12 }}
-{{- end }}
+            {{- toYaml .Values.dcAgent.resources | nindent 12 }}

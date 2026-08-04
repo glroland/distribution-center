@@ -6,21 +6,17 @@ subchart per component group, under `charts/`:
 - **`charts/poIngestApi`** -- the global PO submission entry point (singleton).
 - **`charts/supervisorApi`** -- the global human-escalation service (singleton).
 - **`charts/dashboardUi`** -- the demo control room UI (singleton). Its
-  `DISTRIBUTION_CENTERS_JSON` env var is rendered from
-  `dashboardUi.distributionCenters` in `values.yaml`, which hand-mirrors
-  `distributionCenter.centers` (name + ports) so it can address each DC's
-  in-cluster Service DNS -- see `charts/dashboardUi/values.yaml` for why
-  this can't just reference `distributionCenter.centers` directly.
-- **`charts/distributionCenter`** -- one or more self-contained "local"
-  groupings, each rendering `local-dc-agent`, `local-wms-api`,
+  `DISTRIBUTION_CENTER_JSON` env var is rendered from
+  `dashboardUi.distributionCenter` in `values.yaml`, which hand-mirrors
+  `distributionCenter` (name + ports) so it can address the DC's in-cluster
+  Service DNS -- see `charts/dashboardUi/values.yaml` for why this can't
+  just reference `distributionCenter` directly.
+- **`charts/distributionCenter`** -- the single self-contained "local"
+  grouping, rendering `local-dc-agent`, `local-wms-api`,
   `local-inventory-robot-api`, `local-shipping-api` with 1 replica each. The
-  `local-*` components in a distribution center are wired to talk only to
-  each other (plus the two global services) via in-cluster Service DNS;
-  they never reach across into another distribution center's grouping.
-  Driven entirely by the `distributionCenter.centers` list in the umbrella
-  chart's `values.yaml` -- ships with one entry, "Distribution Center A".
-  Add more entries to that list to stand up additional, fully isolated
-  distribution centers; no template changes or new files required.
+  `local-*` components are wired to talk only to each other (plus the two
+  global services) via in-cluster Service DNS. Driven by the
+  `distributionCenter` block in the umbrella chart's `values.yaml`.
 
 Values under `global:` (image registry/pull settings, security context,
 OpenShift route settings, OpenAI settings) are shared automatically across
@@ -29,10 +25,8 @@ one subchart by name (`poIngestApi:`, `supervisorApi:`,
 `distributionCenter:`) and overrides that subchart's own defaults.
 
 Per-service inventory/shelf data is seeded from ConfigMaps
-(`distributionCenter.centers[].wmsApi.inventoryCsv`,
-`...robotApi.shelvesCsv` in `values.yaml`), mounted over each container's
-`data/*.csv` path -- override these per distribution center to give each
-one its own starting inventory.
+(`distributionCenter.wmsApi.inventoryCsv`, `...robotApi.shelvesCsv` in
+`values.yaml`), mounted over each container's `data/*.csv` path.
 
 ## Build and push images
 
@@ -98,20 +92,6 @@ alongside MLflow, set `global.mlflow.otlpEndpoint` (and `otlpHeaders` if
 needed); leave both empty to skip OTLP entirely. Set
 `global.mlflow.enabled=false` to omit all of this and run without tracing.
 
-## Adding a distribution center
-
-Copy the `distributionCenter.centers[0]` block in `values.yaml`, give it a
-new `name` (used to derive Service/ConfigMap names -- keep it a short,
-DNS-safe slug) and `displayName`, and adjust `locationName` /
-`inventoryCsv` / `shelvesCsv` as needed. Each distribution center gets its
-own fully-namespaced set of Deployments, Services, and ConfigMaps -- no
-manual wiring, and no new subchart or dependency entry required.
-
-Also copy the matching `dashboardUi.distributionCenters[0]` block, using the
-same `name` and matching ports, so the new DC becomes selectable in the
-dashboard UI -- this list is hand-mirrored rather than shared automatically
-(see `charts/dashboardUi/values.yaml`).
-
 ## Notes for OpenShift
 
 - Containers run with a hardened `securityContext` (non-root, all
@@ -119,7 +99,7 @@ dashboard UI -- this list is hand-mirrored rather than shared automatically
   `runAsUser`/`fsGroup` unset so the project's `restricted-v2` SCC assigns
   them -- no `anyuid` SCC binding required.
 - `route.openshift.io/v1` Routes are created for `po-ingest-api` (PO
-  submission entry point), `dashboard-ui` (the demo UI), and each
+  submission entry point), `dashboard-ui` (the demo UI), and the
   distribution center's `dc-agent` (A2A endpoint) by default; toggle via
   `global.openshift.routes.enabled` and each component's `route.enabled`.
   Set `global.openshift.routes.enabled=false` to deploy to plain Kubernetes

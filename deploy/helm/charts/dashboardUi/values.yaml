@@ -16,23 +16,23 @@ resources:
 route:
   enabled: true
 
-# One entry per distribution center this dashboard can send purchase orders
-# to. Hand-mirrors `distributionCenter.centers` in the umbrella chart's
-# values.yaml (same reason `dashboard-ui/src/settings.py`'s
-# DISTRIBUTION_CENTERS list is hand-mirrored for local dev -- Helm only
-# shares `global` values across subcharts, never one subchart's values with
-# another) -- add an entry here whenever you add one there, using the same
-# `name` and matching ports so the in-cluster Service DNS names line up.
-distributionCenters:
-  - name: distribution-center-a
-    displayName: "Distribution Center A"
-    dcAgentPort: 9100
-    wmsApiPort: 8001
-    robotApiPort: 8002
-    shippingApiPort: 8004
-    grid:
-      width: 10
-      height: 10
-    dock:
-      x: 0
-      "y": 0
+# The distribution center this dashboard sends purchase orders to.
+# Hand-mirrors `distributionCenter` in the umbrella chart's values.yaml (same
+# reason `dashboard-ui/src/settings.py`'s DISTRIBUTION_CENTER is
+# hand-mirrored for local dev -- Helm only shares `global` values across
+# subcharts, never one subchart's values with another) -- keep the `name`
+# and ports in sync with that block so the in-cluster Service DNS names
+# line up.
+distributionCenter:
+  name: distribution-center-a
+  displayName: "Distribution Center A"
+  dcAgentPort: 9100
+  wmsApiPort: 8001
+  robotApiPort: 8002
+  shippingApiPort: 8004
+  grid:
+    width: 10
+    height: 10
+  dock:
+    x: 0
+    "y": 0

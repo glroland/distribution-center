@@ -52,8 +52,8 @@ spec:
               value: http://{{ include "adc.poIngestApi.serviceName" . }}:{{ .Values.global.poIngestApi.port }}
             - name: LABEL_API_URL
               value: http://{{ include "adc.labelApi.serviceName" . }}:{{ .Values.global.labelApi.port }}
-            - name: DISTRIBUTION_CENTERS_JSON
-              value: {{ include "adc.dashboardUi.distributionCentersJson" . | quote }}
+            - name: DISTRIBUTION_CENTER_JSON
+              value: {{ include "adc.dashboardUi.distributionCenterJson" . | quote }}
           readinessProbe:
             httpGet:
               path: /

@@ -1,60 +1,54 @@
-{{- range $dc := .Values.centers }}
-{{- $root := $ }}
-{{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "wms-api") }}
-{{- $cmName := printf "%s-%s-wms-inventory" (include "adc.fullname" $root) $dc.name }}
----
+{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "wms-api") }}
+{{- $cmName := printf "%s-wms-inventory" (include "adc.fullname" $) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $svcName }}
   labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
+    {{- include "adc.commonLabels" . | nindent 4 }}
     app.kubernetes.io/name: wms-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: wms-api
-    distribution-center: {{ $dc.name }}
   annotations:
-    distribution-center/display-name: {{ $dc.displayName | quote }}
+    distribution-center/display-name: {{ .Values.displayName | quote }}
 spec:
   replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: wms-api
-      app.kubernetes.io/instance: {{ $root.Release.Name }}
-      distribution-center: {{ $dc.name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: wms-api
-        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: wms-api
-        distribution-center: {{ $dc.name }}
     spec:
-      {{- with $root.Values.global.imagePullSecrets }}
+      {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- include "adc.podSecurityContext" $root | nindent 8 }}
+        {{- include "adc.podSecurityContext" . | nindent 8 }}
       containers:
         - name: wms-api
-          image: {{ include "adc.image" (dict "root" $root "image" $dc.wmsApi.image) }}
-          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          image: {{ include "adc.image" (dict "root" $ "image" .Values.wmsApi.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext:
-            {{- include "adc.containerSecurityContext" $root | nindent 12 }}
+            {{- include "adc.containerSecurityContext" . | nindent 12 }}
           ports:
             - name: http
-              containerPort: {{ $dc.wmsApi.port }}
+              containerPort: {{ .Values.wmsApi.port }}
           env:
             - name: HOST
               value: "0.0.0.0"
             - name: PORT
-              value: {{ $dc.wmsApi.port | quote }}
+              value: {{ .Values.wmsApi.port | quote }}
             - name: LOCATION_NAME
-              value: {{ $dc.locationName | quote }}
+              value: {{ .Values.locationName | quote }}
             - name: INVENTORY_CSV_PATH
               value: data/inventory.csv
-            {{- include "adc.mlflow.envVars" $root | nindent 12 }}
+            {{- include "adc.mlflow.envVars" . | nindent 12 }}
           volumeMounts:
             - name: inventory-data
               mountPath: /app/data/inventory.csv
@@ -72,9 +66,8 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
-            {{- toYaml $dc.wmsApi.resources | nindent 12 }}
+            {{- toYaml .Values.wmsApi.resources | nindent 12 }}
       volumes:
         - name: inventory-data
           configMap:
             name: {{ $cmName }}
-{{- end }}

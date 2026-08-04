@@ -115,23 +115,23 @@ dashboardUi:
       memory: 512Mi
   route:
     enabled: true
-  # Hand-mirrors distributionCenter.centers below (name + ports) so this
-  # dashboard can address each DC's in-cluster services -- see
+  # Hand-mirrors distributionCenter below (name + ports) so this dashboard
+  # can address the DC's in-cluster services -- see
   # charts/dashboardUi/values.yaml for why this can't just reference
-  # distributionCenter.centers directly.
-  distributionCenters:
-    - name: distribution-center-a
-      displayName: "Distribution Center A"
-      dcAgentPort: 9100
-      wmsApiPort: 8001
-      robotApiPort: 8002
-      shippingApiPort: 8004
-      grid:
-        width: 10
-        height: 10
-      dock:
-        x: 0
-        "y": 0
+  # distributionCenter directly.
+  distributionCenter:
+    name: distribution-center-a
+    displayName: "Distribution Center A"
+    dcAgentPort: 9100
+    wmsApiPort: 8001
+    robotApiPort: 8002
+    shippingApiPort: 8004
+    grid:
+      width: 10
+      height: 10
+    dock:
+      x: 0
+      "y": 0
 
 labelApi:
   enabled: true
@@ -149,117 +149,113 @@ labelApi:
     enabled: true
 
 # ---------------------------------------------------------------------------
-# Distribution centers (charts/distributionCenter subchart). Each entry in
-# centers is a self-contained "local" grouping: one dc-agent, wms-api,
-# robot-api, and shipping-api, wired to talk only to each other (plus the
-# two global services above). Add more entries here to stand up additional
-# distribution centers -- no template changes required.
+# Distribution center (charts/distributionCenter subchart): one dc-agent,
+# wms-api, robot-api, and shipping-api, wired to talk only to each other
+# (plus the two global services above).
 # ---------------------------------------------------------------------------
 
 distributionCenter:
-  centers:
-    - name: distribution-center-a
-      displayName: "Distribution Center A"
-      locationName: DC-VIRTUAL-01
+  name: distribution-center-a
+  displayName: "Distribution Center A"
+  locationName: DC-VIRTUAL-01
 
-      dcAgent:
-        image:
-          repository: local-dc-agent
-        port: 9100
-        maxFulfillmentTurns: 1000
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-        route:
-          enabled: true
+  dcAgent:
+    image:
+      repository: local-dc-agent
+    port: 9100
+    maxFulfillmentTurns: 1000
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    route:
+      enabled: true
 
-      wmsApi:
-        image:
-          repository: local-wms-api
-        port: 8001
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-        # Seeds the ConfigMap mounted at data/inventory.csv. Override per
-        # distribution center to give each one its own starting inventory.
-        inventoryCsv: |
-          sku,on_hand_qty,location_x,location_y
-          SKU-1001,120,3,5
-          SKU-1002,45,7,2
-          SKU-1003,300,1,1
-          SKU-1004,0,9,4
-          SKU-1005,78,5,8
-          SKU-1006,60,2,9
-          SKU-1007,15,0,3
-          SKU-1008,200,4,6
-          SKU-1009,33,8,1
-          SKU-1010,90,6,0
-          SKU-1011,25,1,7
-          SKU-1012,50,9,9
-          SKU-1013,110,3,2
-          SKU-1014,40,7,5
-          SKU-1015,65,2,4
-          SKU-1016,150,5,3
-          SKU-1017,20,0,8
-          SKU-1018,80,6,6
+  wmsApi:
+    image:
+      repository: local-wms-api
+    port: 8001
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    # Seeds the ConfigMap mounted at data/inventory.csv.
+    inventoryCsv: |
+      sku,on_hand_qty,location_x,location_y
+      SKU-1001,120,3,5
+      SKU-1002,45,7,2
+      SKU-1003,300,1,1
+      SKU-1004,0,9,4
+      SKU-1005,78,5,8
+      SKU-1006,60,2,9
+      SKU-1007,15,0,3
+      SKU-1008,200,4,6
+      SKU-1009,33,8,1
+      SKU-1010,90,6,0
+      SKU-1011,25,1,7
+      SKU-1012,50,9,9
+      SKU-1013,110,3,2
+      SKU-1014,40,7,5
+      SKU-1015,65,2,4
+      SKU-1016,150,5,3
+      SKU-1017,20,0,8
+      SKU-1018,80,6,6
 
-      robotApi:
-        image:
-          repository: local-inventory-robot-api
-        port: 8002
-        grid:
-          width: 10
-          height: 10
-        dock:
-          x: 0
-          "y": 0
-        carryCapacity: 100
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-        # Seeds the ConfigMap mounted at data/shelves.csv.
-        shelvesCsv: |
-          sku,qty,location_x,location_y
-          SKU-1001,50,3,5
-          SKU-1001,10,6,6
-          SKU-1002,20,7,2
-          SKU-1003,15,1,8
-          SKU-1004,40,9,4
-          SKU-1005,5,5,6
-          SKU-1006,60,2,9
-          SKU-1007,15,0,3
-          SKU-1008,45,4,6
-          SKU-1009,33,8,1
-          SKU-1010,90,6,0
-          SKU-1011,25,1,7
-          SKU-1012,50,9,9
-          SKU-1013,20,3,2
-          SKU-1014,40,7,5
-          SKU-1015,30,2,4
-          SKU-1016,75,5,3
-          SKU-1017,20,0,8
-          SKU-1018,80,6,6
+  robotApi:
+    image:
+      repository: local-inventory-robot-api
+    port: 8002
+    grid:
+      width: 10
+      height: 10
+    dock:
+      x: 0
+      "y": 0
+    carryCapacity: 100
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    # Seeds the ConfigMap mounted at data/shelves.csv.
+    shelvesCsv: |
+      sku,qty,location_x,location_y
+      SKU-1001,50,3,5
+      SKU-1001,10,6,6
+      SKU-1002,20,7,2
+      SKU-1003,15,1,8
+      SKU-1004,40,9,4
+      SKU-1005,5,5,6
+      SKU-1006,60,2,9
+      SKU-1007,15,0,3
+      SKU-1008,45,4,6
+      SKU-1009,33,8,1
+      SKU-1010,90,6,0
+      SKU-1011,25,1,7
+      SKU-1012,50,9,9
+      SKU-1013,20,3,2
+      SKU-1014,40,7,5
+      SKU-1015,30,2,4
+      SKU-1016,75,5,3
+      SKU-1017,20,0,8
+      SKU-1018,80,6,6
 
-      shippingApi:
-        image:
-          repository: local-shipping-api
-        port: 8004
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
+  shippingApi:
+    image:
+      repository: local-shipping-api
+    port: 8004
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi

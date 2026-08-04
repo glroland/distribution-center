@@ -1,55 +1,49 @@
-{{- range $dc := .Values.centers }}
-{{- $root := $ }}
-{{- $svcName := include "adc.dc.serviceName" (dict "root" $root "dc" $dc "component" "shipping-api") }}
----
+{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "shipping-api") }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $svcName }}
   labels:
-    {{- include "adc.commonLabels" $root | nindent 4 }}
+    {{- include "adc.commonLabels" . | nindent 4 }}
     app.kubernetes.io/name: shipping-api
-    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: shipping-api
-    distribution-center: {{ $dc.name }}
   annotations:
-    distribution-center/display-name: {{ $dc.displayName | quote }}
+    distribution-center/display-name: {{ .Values.displayName | quote }}
 spec:
   replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: shipping-api
-      app.kubernetes.io/instance: {{ $root.Release.Name }}
-      distribution-center: {{ $dc.name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: shipping-api
-        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: shipping-api
-        distribution-center: {{ $dc.name }}
     spec:
-      {{- with $root.Values.global.imagePullSecrets }}
+      {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- include "adc.podSecurityContext" $root | nindent 8 }}
+        {{- include "adc.podSecurityContext" . | nindent 8 }}
       containers:
         - name: shipping-api
-          image: {{ include "adc.image" (dict "root" $root "image" $dc.shippingApi.image) }}
-          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          image: {{ include "adc.image" (dict "root" $ "image" .Values.shippingApi.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext:
-            {{- include "adc.containerSecurityContext" $root | nindent 12 }}
+            {{- include "adc.containerSecurityContext" . | nindent 12 }}
           ports:
             - name: http
-              containerPort: {{ $dc.shippingApi.port }}
+              containerPort: {{ .Values.shippingApi.port }}
           env:
             - name: HOST
               value: "0.0.0.0"
             - name: PORT
-              value: {{ $dc.shippingApi.port | quote }}
-            {{- include "adc.mlflow.envVars" $root | nindent 12 }}
+              value: {{ .Values.shippingApi.port | quote }}
+            {{- include "adc.mlflow.envVars" . | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -63,5 +57,4 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
-            {{- toYaml $dc.shippingApi.resources | nindent 12 }}
-{{- end }}
+            {{- toYaml .Values.shippingApi.resources | nindent 12 }}

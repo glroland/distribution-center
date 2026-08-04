@@ -1,8 +1,7 @@
 "use strict";
 
 const state = {
-  dcs: [],
-  currentDc: null,
+  dc: null,
   pos: [],
   selectedFilename: null,
   map: null,
@@ -43,7 +42,6 @@ async function init() {
   $("#boost-toggle").addEventListener("change", onToggleBoost);
   $("#po-select").addEventListener("change", onSelectPo);
   $("#send-btn").addEventListener("click", onSendPo);
-  $("#dc-select").addEventListener("change", onSelectDc);
   $("#docling-modal-close").addEventListener("click", () => $("#docling-modal").close());
   $("#docling-modal").addEventListener("click", (e) => {
     if (e.target.id === "docling-modal") $("#docling-modal").close();
@@ -57,19 +55,8 @@ async function init() {
     if (e.target.id === "sticker-modal") $("#sticker-modal").close();
   });
 
-  state.dcs = await api("/api/dcs");
-  const select = $("#dc-select");
-  select.innerHTML = "";
-  for (const dc of state.dcs) {
-    const opt = document.createElement("option");
-    opt.value = dc.name;
-    opt.textContent = dc.display_name;
-    select.appendChild(opt);
-  }
-
-  if (state.dcs.length > 0) {
-    await loadDc(state.dcs[0].name);
-  }
+  state.dc = await api("/api/dc");
+  await loadDc();
 
   refreshHelpRequests();
   setInterval(refreshHelpRequests, 6000);
@@ -78,19 +65,14 @@ async function init() {
   }, 8000);
 }
 
-async function onSelectDc(e) {
-  await loadDc(e.target.value);
-}
-
-async function loadDc(name) {
-  state.currentDc = state.dcs.find((dc) => dc.name === name);
-  $("#dc-subtitle").textContent = `${state.currentDc.display_name} · ${state.currentDc.location_name}`;
+async function loadDc() {
+  $("#dc-subtitle").textContent = `${state.dc.display_name} · ${state.dc.location_name}`;
   $("#boost-toggle").checked = false;
 
   const [pos, mapData, inventory] = await Promise.all([
-    api(`/api/dcs/${name}/pos`),
-    api(`/api/dcs/${name}/map`),
-    api(`/api/dcs/${name}/inventory`),
+    api("/api/pos"),
+    api("/api/map"),
+    api("/api/inventory"),
   ]);
 
   state.pos = pos;
@@ -105,17 +87,17 @@ async function loadDc(name) {
 
   applyInventory(inventory);
 
-  const shipments = await api(`/api/dcs/${name}/shipments`);
+  const shipments = await api("/api/shipments");
   renderShipments(shipments);
 }
 
 async function refreshIdleSnapshots() {
-  if (!state.currentDc) return;
+  if (!state.dc) return;
   try {
     const [mapData, inventory, shipments] = await Promise.all([
-      api(`/api/dcs/${state.currentDc.name}/map`),
-      api(`/api/dcs/${state.currentDc.name}/inventory`),
-      api(`/api/dcs/${state.currentDc.name}/shipments`),
+      api("/api/map"),
+      api("/api/inventory"),
+      api("/api/shipments"),
     ]);
     state.map = mapData;
     for (const cell of mapData.cells) state.shelfStock[`${cell.x},${cell.y}`] = cell.stock;
@@ -164,7 +146,7 @@ function onSelectPo(e) {
 // ---------------------------------------------------------------------------
 
 async function onSendPo() {
-  if (!state.selectedFilename || !state.currentDc) return;
+  if (!state.selectedFilename) return;
   if (state.run) state.run.source.close();
 
   resetRunUi();
@@ -177,7 +159,7 @@ async function onSendPo() {
     const res = await api("/api/runs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dc: state.currentDc.name, filename: state.selectedFilename }),
+      body: JSON.stringify({ filename: state.selectedFilename }),
     });
     runId = res.run_id;
   } catch (err) {
@@ -793,15 +775,14 @@ function drawVisitedMark(x, y) {
 // ---------------------------------------------------------------------------
 
 async function onReset() {
-  if (!state.currentDc) return;
-  if (!confirm(`Reset inventory, robot position, and shipments for ${state.currentDc.display_name}?`)) return;
-  await api(`/api/dcs/${state.currentDc.name}/reset`, { method: "POST" });
+  if (!confirm(`Reset inventory, robot position, and shipments for ${state.dc.display_name}?`)) return;
+  await api("/api/reset", { method: "POST" });
 
   if (state.run) state.run.source.close();
   state.run = null;
 
   $("#boost-toggle").checked = false;
-  await loadDc(state.currentDc.name);
+  await loadDc();
 
   resetRunUi();
   setBadge("run-status-badge", "Idle", "badge-idle");
@@ -819,14 +800,10 @@ async function onReset() {
 
 async function onToggleBoost(e) {
   const checkbox = e.target;
-  if (!state.currentDc) {
-    checkbox.checked = false;
-    return;
-  }
   const enabled = checkbox.checked;
   checkbox.disabled = true;
   try {
-    await api(`/api/dcs/${state.currentDc.name}/inventory-boost`, {
+    await api("/api/inventory-boost", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled }),
