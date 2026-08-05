@@ -667,7 +667,15 @@ def finalize_pipeline_run(
 )
 def vision_ml_training_pipeline(
     # Dataset generation - 00_generate_dataset.ipynb
-    label_api_url: str = "http://localhost:8005",
+    # In-cluster label-api Service DNS name + port, hand-mirroring
+    # deploy/helm/values.yaml's `global.labelApi.port` and the
+    # `adc.labelApi.serviceName` template (see
+    # deploy/helm/charts/dashboardUi/templates/deployment.yaml's LABEL_API_URL
+    # for the same mirror) - "adc-label-api" assumes the chart's default
+    # release name / no fullnameOverride. Override at compile time for a
+    # different release name, e.g.:
+    #   VISION_ML_LABEL_API_URL=http://my-release-label-api:8005 python -m src.pipeline
+    label_api_url: str = os.environ.get("VISION_ML_LABEL_API_URL", "http://adc-label-api:8005"),
     catalog_skus: list[str] = DEFAULT_CATALOG_SKUS,
     catalog_qty_per_sku: int = 40,
     synthetic_num_skus: int = 800,

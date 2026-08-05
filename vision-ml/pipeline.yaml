@@ -4,7 +4,7 @@
 # Inputs:
 #    catalog_qty_per_sku: int [Default: 40.0]
 #    catalog_skus: list [Default: ['SKU-1001', 'SKU-1002', 'SKU-1003', 'SKU-1004', 'SKU-1005', 'SKU-1006', 'SKU-1007', 'SKU-1008', 'SKU-1009', 'SKU-1010', 'SKU-1011', 'SKU-1012', 'SKU-1013', 'SKU-1014', 'SKU-1015', 'SKU-1016', 'SKU-1017', 'SKU-1018', 'SKU-1019', 'SKU-1020']]
-#    label_api_url: str [Default: 'http://localhost:8005']
+#    label_api_url: str [Default: 'http://adc-label-api:8005']
 #    localizer_batch_size: int [Default: 32.0]
 #    localizer_epochs: int [Default: 15.0]
 #    localizer_lr: float [Default: 0.001]
@@ -979,7 +979,7 @@ root:
         isOptional: true
         parameterType: LIST
       label_api_url:
-        defaultValue: http://localhost:8005
+        defaultValue: http://adc-label-api:8005
         isOptional: true
         parameterType: STRING
       localizer_batch_size:
