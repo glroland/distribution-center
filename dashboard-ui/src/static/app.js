@@ -723,13 +723,13 @@ function updateShelfCellDisplay(x, y, stockOverride) {
   const total = Object.values(stock).reduce((a, b) => a + b, 0);
   if (total > 0) {
     const intensity = Math.min(1, total / 60);
-    rect.setAttribute("fill", `color-mix(in srgb, var(--accent) ${20 + intensity * 60}%, var(--bg-elevated))`);
-    rect.setAttribute("stroke", "var(--accent-dim)");
+    rect.style.fill = `color-mix(in srgb, var(--accent) ${20 + intensity * 60}%, var(--bg-elevated))`;
+    rect.style.stroke = "var(--accent-dim)";
   } else {
-    rect.setAttribute("fill", "var(--bg-elevated)");
-    rect.setAttribute("stroke", "var(--border)");
+    rect.style.fill = "var(--bg-elevated)";
+    rect.style.stroke = "var(--border)";
   }
-  rect.setAttribute("stroke-width", "0.4");
+  rect.style.strokeWidth = "0.4";
   const title = rect.querySelector("title");
   const entries = Object.entries(stock).map(([sku, qty]) => `${sku}: ${qty}`).join("\n");
   title.textContent = entries ? `(${x}, ${y})\n${entries}` : `(${x}, ${y}) empty`;
