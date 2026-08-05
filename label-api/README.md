@@ -63,6 +63,7 @@ set environment variables directly (env vars take precedence over `.env`).
 | `INFERENCE_MODELS_DIR` | `models` | Folder containing `localizer.pt`, `orientation.pt`, `ocr.pt` - see "SKU inference" below |
 | `INFERENCE_DEVICE` | `cpu` | PyTorch device `POST /infer` runs on |
 | `INFERENCE_PAD_FRAC` | `0.2` | Padding added around the localizer's bbox before cropping (fraction of the bbox's longer side) - must match what `vision-ml` trained with |
+| `IMAGE_TTL_SECONDS` | `300` | How long a photo captured via `POST /stickers/{sku}/capture` stays retrievable by `infer_sku` if never consumed |
 
 ## REST API
 
@@ -70,6 +71,7 @@ set environment variables directly (env vars take precedence over `.env`).
 |---|---|---|
 | `GET` | `/health` | Liveness check |
 | `GET` | `/stickers/{sku}?color_mode=&image_format=` | Generate and stream one sticker photo for `sku` |
+| `POST` | `/stickers/{sku}/capture?color_mode=&image_format=` | Generate one sticker photo for `sku`, store it server-side, and return `{image_id, sku, media_type}` instead of streaming the bytes - used by `local-inventory-robot-api`'s `get_item_photo` MCP tool so a photo can be handed off by id rather than by value |
 | `POST` | `/stickers/bulk` | Generate a batch of sticker photos and return them as a zip |
 | `POST` | `/infer` | Multipart image upload -> predicted SKU + confidence, see "SKU inference" below |
 
@@ -164,13 +166,17 @@ orchestration code.
 
 | Tool | Args | Description |
 |---|---|---|
-| `infer_sku` | `image_base64: str` | Same prediction as `POST /infer`, for a base64-encoded image instead of a multipart upload. Returns `{sku, confidence, bbox, angle_degrees, inference_ms}` |
+| `infer_sku` | `image_id: str` | Same prediction as `POST /infer`, for a previously captured photo referenced by id instead of a multipart upload or inline image bytes. Looks the photo up in this service's own in-memory image store (populated by `POST /stickers/{sku}/capture`), runs inference, and evicts the entry - each `image_id` can only be read once. Returns `{sku, confidence, bbox, angle_degrees, inference_ms}` |
 
 The expected caller is `local-inventory-robot-api`'s `get_item_photo` MCP
-tool, which returns a sticker photo the same way (base64) - see that
-service's README. `local-dc-agent`'s fulfillment policy chains the two:
-capture a photo of what was actually picked, then `infer_sku` it, to catch a
-mispick or a mislabeled shelf before shipping rather than after.
+tool, which captures a sticker photo via `POST /stickers/{sku}/capture` and
+returns its `image_id` - see that service's README. `local-dc-agent`'s
+fulfillment policy chains the two: capture a photo of what was actually
+picked, then `infer_sku` it by id, to catch a mispick or a mislabeled shelf
+before shipping rather than after. Neither MCP tool ever puts raw image
+bytes in a tool result or tool-call argument - only the small `image_id`
+crosses that boundary, keeping the LLM's context from ballooning with
+base64 image data.
 
 Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
 Python SDK's `mcp.client.streamable_http.streamable_http_client`.

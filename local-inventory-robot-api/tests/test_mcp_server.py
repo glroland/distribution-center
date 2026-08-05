@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import json
 
 import pytest
@@ -164,11 +163,15 @@ def test_plan_and_fetch_items_tool_reports_shortfall() -> None:
 
 
 class _FakeResponse:
-    def __init__(self, status_code: int, content: bytes, headers: dict | None = None):
+    def __init__(self, status_code: int, content: bytes, headers: dict | None = None, json_body: dict | None = None):
         self.status_code = status_code
         self.content = content
         self.headers = headers or {}
         self.text = content.decode(errors="replace")
+        self._json_body = json_body
+
+    def json(self) -> dict:
+        return self._json_body
 
 
 class _FakeAsyncClient:
@@ -184,20 +187,24 @@ class _FakeAsyncClient:
     async def __aexit__(self, *exc_info):
         return False
 
-    async def get(self, url: str):
+    async def post(self, url: str):
         _FakeAsyncClient.last_url = url
         return _FakeAsyncClient.response
 
 
 def test_get_item_photo_tool(monkeypatch) -> None:
     monkeypatch.setattr(mcp_server_module.httpx, "AsyncClient", _FakeAsyncClient)
-    _FakeAsyncClient.response = _FakeResponse(200, b"fake-jpeg-bytes", {"content-type": "image/jpeg"})
+    _FakeAsyncClient.response = _FakeResponse(
+        200,
+        b"",
+        json_body={"image_id": "abc123", "sku": "SKU-1001", "media_type": "image/jpeg"},
+    )
 
     body = _call("get_item_photo", {"sku": "SKU-1001"})
 
-    assert _FakeAsyncClient.last_url == f"{settings.LABEL_API_URL}/stickers/SKU-1001"
+    assert _FakeAsyncClient.last_url == f"{settings.LABEL_API_URL}/stickers/SKU-1001/capture"
     assert body["sku"] == "SKU-1001"
-    assert base64.b64decode(body["image_base64"]) == b"fake-jpeg-bytes"
+    assert body["image_id"] == "abc123"
     assert body["media_type"] == "image/jpeg"
 
 

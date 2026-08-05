@@ -53,7 +53,7 @@ set environment variables directly (env vars take precedence over `.env`).
 | `DOCK_Y` | `0` | Dock y coordinate |
 | `CARRY_CAPACITY` | `100` | Max total units the robot can carry across all SKUs at once |
 | `MOVE_STEP_DELAY_SECONDS` | `0.25` | Pause between each single-grid-cell step of a move |
-| `LABEL_API_URL` | `http://localhost:8005` | Base URL of `label-api` - `get_item_photo` fetches a picked SKU's sticker photo from here |
+| `LABEL_API_URL` | `http://localhost:8005` | Base URL of `label-api` - `get_item_photo` captures a picked SKU's sticker photo there (stored on that service, not fetched back as bytes) |
 | `MLFLOW_TRACKING_URI` | unset | MLflow tracking server URL. When set, every MCP tool call is traced as an MLflow span (see [`src/tracing.py`](src/tracing.py)); left unset, tracing is disabled outright. MLflow's own env vars (`MLFLOW_EXPERIMENT_NAME`, `MLFLOW_WORKSPACE`, `MLFLOW_TRACKING_TOKEN`, `MLFLOW_TRACKING_AUTH`, ...) are read natively by the `mlflow` package alongside this one |
 
 ## Shelf data
@@ -114,7 +114,7 @@ fetch inventory:
 | `get_shelf_inventory` | `x: int \| None`, `y: int \| None` | Everything stocked at `(x, y)`, or the robot's current location if omitted |
 | `move_robot` | `x: int`, `y: int` | Walk the robot directly to `(x, y)`; fails only if it's outside the grid. Manual/fallback control - prefer `plan_and_fetch_items` for a normal pick run |
 | `fetch_item` | `sku: str`, `qty: int` | Pick `qty` of `sku` off the shelf at the robot's current location |
-| `get_item_photo` | `sku: str` | Capture a photo of `sku`'s shelf sticker, as if by the robot's own camera - proxies `label-api`'s sticker generator and returns `{sku, image_base64, media_type}`. Feed `image_base64` to `label-api`'s `infer_sku` tool to visually verify a pick |
+| `get_item_photo` | `sku: str` | Capture a photo of `sku`'s shelf sticker, as if by the robot's own camera - has `label-api` generate and store the photo, and returns `{sku, image_id, media_type}`. Feed `image_id` to `label-api`'s `infer_sku` tool to visually verify a pick; the photo bytes themselves never cross this tool boundary |
 | `restock_shelf` | `sku: str`, `qty: int`, `x: int \| None`, `y: int \| None` | Place newly arrived stock (e.g. from a supervisor-approved inter-DC transfer) on a shelf so it can then be found and fetched like any other stock; `x`/`y` omitted auto-picks a cell already stocking `sku`, else the first empty non-dock cell |
 | `deliver_items` | - | Drop everything carried, at the dock only |
 | `reset_robot` | - | Reload shelf stock and return the robot to the dock, empty-handed |
@@ -135,11 +135,14 @@ Every pick (a `fetch_item` result, or a `"pick"` step in a
 `plan_and_fetch_items` trace) comes back with `sticker_available: true`,
 meaning `get_item_photo` can retrieve a photo of that SKU's shelf sticker (as
 the robot's camera would have captured it) - `LABEL_API_URL` (default
-`http://localhost:8005`) is where `get_item_photo` fetches it from. This is
+`http://localhost:8005`) is where `get_item_photo` has it captured. This is
 what `local-dc-agent`'s fulfillment policy uses, together with `label-api`'s
 `infer_sku` tool, to visually verify a pick matches the SKU it intended to
-fetch before shipping it. `dashboard-ui` fetches the same photos for its own
-UI preview, but over REST directly against `label-api`, not through this
+fetch before shipping it - `get_item_photo` and `infer_sku` hand off the
+photo by a short `image_id`, never by embedding the image bytes in an MCP
+tool call, to keep an LLM's tool-calling context from ballooning with base64
+image data. `dashboard-ui` fetches its own preview photos over REST directly
+against `label-api`'s unchanged `GET /stickers/{sku}`, not through this
 tool.
 
 ## Tests

@@ -31,3 +31,9 @@ class SkuInferenceResult(BaseModel):
     bbox: tuple[float, float, float, float]
     angle_degrees: float
     inference_ms: float
+
+
+class CapturedImage(BaseModel):
+    image_id: str
+    sku: str
+    media_type: str

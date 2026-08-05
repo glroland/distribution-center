@@ -112,7 +112,7 @@ from — it just means that SKU wasn't fully stocked on the shelves; handle it \
 like any other shortfall (step 7).
 4. Before shipping or decrementing anything, visually verify each SKU with \
 `fetched_qty` > 0: call `robot__get_item_photo` with that SKU to capture a \
-photo of its shelf sticker, then pass the response's `image_base64` straight \
+photo of its shelf sticker, then pass the response's `image_id` straight \
 to `label__infer_sku` to read what the sticker actually says. Count the pick \
 as verified only if the returned `sku` matches the SKU you asked \
 `get_item_photo` for and `confidence` is reasonably high (roughly 0.5 or \

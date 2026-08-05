@@ -8,15 +8,17 @@ from fastapi.responses import FileResponse, StreamingResponse
 from PIL import Image
 
 from .bulk import generate_bulk_zip
+from .image_store import ImageStore
 from .inference import get_pipeline
 from .mcp_server import build_mcp_server
-from .models import BulkGenerateRequest, SkuInferenceResult
+from .models import BulkGenerateRequest, CapturedImage, SkuInferenceResult
 from .settings import settings
 from .stickers import ColorMode, ImageFormat, InvalidSkuError, generate_sticker_image
 
 logger = logging.getLogger(__name__)
 
-mcp_server = build_mcp_server()
+image_store = ImageStore(ttl_seconds=settings.IMAGE_TTL_SECONDS)
+mcp_server = build_mcp_server(image_store)
 mcp_app = mcp_server.streamable_http_app()
 
 
@@ -57,6 +59,33 @@ def generate_sticker(
     except InvalidSkuError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     return StreamingResponse(io.BytesIO(image_bytes), media_type=_MEDIA_TYPES[image_format])
+
+
+@app.post("/stickers/{sku}/capture")
+def capture_sticker(
+    sku: str,
+    color_mode: ColorMode = Query("random"),
+    image_format: ImageFormat = Query("jpg"),
+) -> CapturedImage:
+    """Generate one sticker photo for `sku`, same as `GET /stickers/{sku}`,
+    but store it server-side and return a small JSON reference instead of
+    streaming the bytes back - lets a caller (e.g. an MCP tool) hand off an
+    image_id instead of raw image bytes."""
+    try:
+        image_bytes = generate_sticker_image(
+            sku,
+            min_width=settings.MIN_IMAGE_WIDTH,
+            max_width=settings.MAX_IMAGE_WIDTH,
+            min_height=settings.MIN_IMAGE_HEIGHT,
+            max_height=settings.MAX_IMAGE_HEIGHT,
+            color_mode=color_mode,
+            image_format=image_format,
+        )
+    except InvalidSkuError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    media_type = _MEDIA_TYPES[image_format]
+    image_id = image_store.put(image_bytes, media_type)
+    return CapturedImage(image_id=image_id, sku=sku, media_type=media_type)
 
 
 @app.post("/stickers/bulk")

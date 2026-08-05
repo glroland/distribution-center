@@ -72,7 +72,12 @@ A2A message (PDF)
      for every SKU actually fetched, *before* it's shipped or decremented —
      a returned SKU that doesn't match what was requested, or a low
      confidence read, is treated as a mispick/mislabeled-shelf shortfall
-     rather than shipped on trust.
+     rather than shipped on trust. The two tools hand the photo off by a
+     short `image_id` (label-api generates and stores the photo, then
+     redeems the id itself) rather than by embedding image bytes in either
+     tool's MCP result or tool-call arguments — the raw photo never becomes
+     part of the OpenAI conversation history, which otherwise ate into this
+     agent's token budget fast.
    - [`local-shipping-api`](../local-shipping-api) — ship whatever passed
      verification in one carrier handoff, returning a tracking number.
    - [`supervisor-api`](../supervisor-api) — for a SKU that's short (out of

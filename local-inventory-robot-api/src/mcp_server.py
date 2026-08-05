@@ -1,4 +1,3 @@
-import base64
 import logging
 
 import httpx
@@ -60,7 +59,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
             "fetch_item or a plan_and_fetch_items trace step) comes back with "
             "sticker_available: true, meaning a photo of that SKU's shelf sticker, "
             "as the robot's camera would have captured it, can be retrieved with "
-            "get_item_photo. Pass that photo's image_base64 to label-api's "
+            "get_item_photo. Pass that photo's image_id to label-api's "
             "infer_sku tool to visually verify a pick actually matches the SKU "
             "you intended to fetch before shipping it - don't just trust that "
             "the shelf you picked from was labeled correctly. Call reset_robot "
@@ -167,15 +166,17 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         """Capture a photo of `sku`'s shelf sticker, as if by the robot's own
         camera - call this right after picking a SKU (sticker_available: true
         on the pick result) to get an image to visually verify the pick with.
-        Returns {"sku", "image_base64", "media_type"}; pass image_base64
-        straight to label-api's infer_sku tool - if what it reads back doesn't
-        match the SKU you intended to fetch, or its confidence is low, that's
-        a real mispick or mislabeled-shelf signal, not something to ignore.
-        Fails if label-api is unreachable or returns an error."""
-        url = f"{settings.LABEL_API_URL}/stickers/{sku}"
+        Returns {"sku", "image_id", "media_type"}; pass image_id straight to
+        label-api's infer_sku tool - if what it reads back doesn't match the
+        SKU you intended to fetch, or its confidence is low, that's a real
+        mispick or mislabeled-shelf signal, not something to ignore. The
+        photo itself is stored on label-api, keyed by image_id - never pass
+        image bytes directly, only the id. Fails if label-api is unreachable
+        or returns an error."""
+        url = f"{settings.LABEL_API_URL}/stickers/{sku}/capture"
         logger.info("Capturing shelf sticker photo for %s via %s", sku, url)
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url)
+            response = await client.post(url)
         if response.status_code != 200:
             logger.warning(
                 "Photo capture failed for %s: label-api returned %d: %s",
@@ -184,10 +185,11 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
             raise RuntimeError(
                 f"label-api returned {response.status_code} generating a photo for {sku}: {response.text}"
             )
+        body = response.json()
         return {
-            "sku": sku,
-            "image_base64": base64.b64encode(response.content).decode("ascii"),
-            "media_type": response.headers.get("content-type", "image/jpeg"),
+            "sku": body["sku"],
+            "image_id": body["image_id"],
+            "media_type": body["media_type"],
         }
 
     @mcp_server.tool()

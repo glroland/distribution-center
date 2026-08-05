@@ -27,5 +27,9 @@ class Settings(BaseSettings):
     INFERENCE_DEVICE: str = "cpu"
     INFERENCE_PAD_FRAC: float = 0.2
 
+    # How long a photo captured via POST /stickers/{sku}/capture stays
+    # retrievable by infer_sku if never consumed (see src/image_store.py).
+    IMAGE_TTL_SECONDS: float = 300.0
+
 
 settings = Settings()
