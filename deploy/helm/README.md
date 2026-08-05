@@ -92,6 +92,19 @@ alongside MLflow, set `global.mlflow.otlpEndpoint` (and `otlpHeaders` if
 needed); leave both empty to skip OTLP entirely. Set
 `global.mlflow.enabled=false` to omit all of this and run without tracing.
 
+`kubernetes-namespaced` auth only works for a service account RHOAI has
+explicitly granted `mlflow.kubeflow.org` access to -- being in-namespace
+isn't enough. Every Deployment in this chart runs as the namespace's
+`default` SA, which RHOAI grants automatically, but `vision-ml`'s KFP
+pipeline (`../../vision-ml/src/pipeline.py`) runs as a separate
+`pipeline-runner-<dspa-name>` SA that RHOAI does *not* grant by default --
+without it, pipeline runs fail with `PERMISSION_DENIED` calling
+`mlflow.set_experiment`. `templates/mlflow-pipeline-runner-rolebinding.yaml`
+binds each name in `global.mlflow.pipelineRunnerServiceAccounts` (default:
+`pipeline-runner-dspa`) to `global.mlflow.integrationClusterRole` -- the same
+ClusterRole RHOAI auto-binds to its own workbench pods. Add your DSPA's
+pipeline-runner SA name to that list if it differs from the default.
+
 ## Notes for OpenShift
 
 - Containers run with a hardened `securityContext` (non-root, all

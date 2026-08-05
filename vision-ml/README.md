@@ -94,7 +94,11 @@ or `kfp.Client().upload_pipeline`. `mlflow_tracking_auth` defaults to
 `kubernetes-namespaced` (same convention as the rest of this repo - see the
 root `deploy/helm` chart) so no MLflow token needs to be passed as a run
 parameter when the pipeline runs in-cluster; set `mlflow_tracking_token`
-instead to override that.
+instead to override that. `kubernetes-namespaced` only works if the
+pipeline's `pipeline-runner-<dspa-name>` service account has been granted
+MLflow access -- RHOAI doesn't do this by default the way it does for
+workbenches. See "MLflow tracing" in `../deploy/helm/README.md` for the
+RoleBinding that grants it.
 
 ## Layout
 
