@@ -156,6 +156,10 @@ kill-all:
 		fi; \
 		rm -f "$$pidfile"; \
 	done
+	@echo "Kills complete.  Sleeping for a couple of seconds."
+	sleep 2
+	@echo "Manually confirm from the following list that all python instances should actually exist."
+	ps -ef | grep python
 	@echo "Done."
 
 restart-all: kill-all start-all
