@@ -11,6 +11,13 @@ COPY src ./src
 # depends on a volume mount or a separate model-serving step.
 COPY models ./models
 
+# Runs under OpenShift's restricted-v2 SCC (arbitrary non-root UID at
+# deploy time, see deploy/helm's adc.containerSecurityContext), so the
+# bulk-zip output dir must be pre-created and opened up at build time
+# or POST /generate-bulk fails with PermissionError -- same reasoning as
+# po-ingest-api's /.cache.
+RUN mkdir -p /app/output && chmod -R 777 /app/output
+
 ENV HOST=0.0.0.0
 ENV PORT=8005
 ENV BULK_OUTPUT_DIR=/app/output
