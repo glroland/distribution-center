@@ -4,3 +4,4 @@ pytest>=8.0
 # - not a runtime dependency of the pipeline's own components, which run in
 # their own container (see Containerfile) and never import kfp themselves.
 kfp>=2.9,<3
+kfp-kubernetes>=2.9,<3

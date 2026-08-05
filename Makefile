@@ -180,6 +180,11 @@ status-all:
 		fi; \
 	done
 
+pipeline:
+	@echo "Compiling pipeline."
+	cd vision-ml/src && python pipeline.py
+	@echo "Done."
+
 clean:
 	rm -rf $(TARGET_DIR)
 

@@ -47,7 +47,7 @@ import os
 from pathlib import Path
 from typing import NamedTuple
 
-from kfp import compiler, dsl
+from kfp import compiler, dsl, kubernetes
 from kfp.dsl import Dataset, Input, Metrics, Model, Output
 
 # Image built from this project's own Containerfile (installs requirements.txt
@@ -56,8 +56,14 @@ from kfp.dsl import Dataset, Input, Metrics, Model, Output
 # every other service's image - see deploy/helm/values.yaml's
 # global.imageRegistry), tagged `latest` (kept current on every Jenkins
 # build) so a pipeline.yaml compiled once against the default below doesn't
-# need recompiling/re-importing after each build. Override at compile time
-# for a pinned build, e.g.:
+# need recompiling/re-importing after each build. Every task below gets
+# `kubernetes.set_image_pull_policy(task, "Always")` so cluster nodes always
+# pull the current `latest` from the registry instead of reusing whatever
+# they last cached under that tag - that behavior would otherwise depend on
+# Kubernetes' own tag-based default (Always for `:latest`, IfNotPresent for
+# anything else), which silently flips to stale-caching the moment someone
+# overrides this with a pinned tag. Override at compile time for a pinned
+# build, e.g.:
 #   VISION_ML_TRAINER_IMAGE=registry.home.glroland.com/distribution-center/vision-ml-trainer:42 python -m src.pipeline
 TRAINER_IMAGE = os.environ.get(
     "VISION_ML_TRAINER_IMAGE",
@@ -717,6 +723,7 @@ def vision_ml_training_pipeline(
         test_frac=test_frac,
         split_seed=split_seed,
     ).set_caching_options(False)
+    kubernetes.set_image_pull_policy(dataset, "Always")
 
     parent_run = start_pipeline_run(
         mlflow_tracking_uri=mlflow_tracking_uri,
@@ -726,6 +733,7 @@ def vision_ml_training_pipeline(
         mlflow_experiment_name=mlflow_experiment_name,
         run_name="vision-ml-training",
     ).set_caching_options(False)
+    kubernetes.set_image_pull_policy(parent_run, "Always")
 
     localizer = train_localizer(
         raw_data=dataset.outputs["raw_data"],
@@ -740,6 +748,7 @@ def vision_ml_training_pipeline(
         batch_size=localizer_batch_size,
         random_seed=random_seed,
     ).set_caching_options(False)
+    kubernetes.set_image_pull_policy(localizer, "Always")
 
     orientation = train_orientation(
         raw_data=dataset.outputs["raw_data"],
@@ -755,6 +764,7 @@ def vision_ml_training_pipeline(
         pad_frac=orientation_pad_frac,
         random_seed=random_seed,
     ).set_caching_options(False)
+    kubernetes.set_image_pull_policy(orientation, "Always")
 
     ocr = train_ocr(
         raw_data=dataset.outputs["raw_data"],
@@ -772,6 +782,7 @@ def vision_ml_training_pipeline(
         rnn_hidden=ocr_rnn_hidden,
         random_seed=random_seed,
     ).set_caching_options(False)
+    kubernetes.set_image_pull_policy(ocr, "Always")
 
     final = finalize_pipeline_run(
         mlflow_tracking_uri=mlflow_tracking_uri,
@@ -787,6 +798,7 @@ def vision_ml_training_pipeline(
         ocr_run_id=ocr.outputs["run_id"],
         ocr_best_val_exact_match_accuracy=ocr.outputs["best_val_exact_match_accuracy"],
     ).set_caching_options(False)
+    kubernetes.set_image_pull_policy(final, "Always")
 
     return final.output
 
