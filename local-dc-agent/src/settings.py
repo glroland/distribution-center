@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str | None = None
     MAX_FULFILLMENT_TURNS: int = 20
     MCP_TOOL_CALL_TIMEOUT_SECONDS: float = 60.0
+    OPENAI_REQUEST_TIMEOUT_SECONDS: float = 60.0
     HOST: str = "0.0.0.0"
     PORT: int = 9100
     AGENT_URL: str | None = None

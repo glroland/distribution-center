@@ -106,7 +106,11 @@ def extract_order(markdown: str) -> ExtractedOrder:
     if not settings.OPENAI_API_KEY:
         raise ExtractionError("OPENAI_API_KEY is not configured")
 
-    client = OpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.OPENAI_BASE_URL or None)
+    client = OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        base_url=settings.OPENAI_BASE_URL or None,
+        timeout=settings.OPENAI_REQUEST_TIMEOUT_SECONDS,
+    )
     logger.info("Extracting order from %d chars of markdown via %s", len(markdown), settings.OPENAI_MODEL)
     try:
         response = client.chat.completions.create(
