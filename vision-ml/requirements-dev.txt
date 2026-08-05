@@ -3,5 +3,9 @@ pytest>=8.0
 # Only needed to compile src/pipeline.py into pipeline.yaml (python -m src.pipeline)
 # - not a runtime dependency of the pipeline's own components, which run in
 # their own container (see Containerfile) and never import kfp themselves.
-kfp>=2.9,<3
-kfp-kubernetes>=2.9,<3
+# Upper-bounded to 2.16.1: the compiler bakes this exact version into every
+# component's runtime `pip install kfp==...` bootstrap, and the cluster's
+# package index only has kfp mirrored up to 2.16.1 - a newer pin here fails
+# every component at run time even though it installs fine locally.
+kfp>=2.9,<=2.16.1
+kfp-kubernetes>=2.9,<=2.16.1
