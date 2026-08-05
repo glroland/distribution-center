@@ -129,16 +129,22 @@ class McpToolRouter:
     def server_instructions(self) -> dict[str, str]:
         return {label: server.instructions for label, server in self._servers.items() if server.instructions}
 
-    @mlflow.trace(span_type="TOOL", name="mcp_tool_call")
     async def call(self, name: str, arguments: dict) -> str:
         label, _, tool_name = name.partition(_TOOL_NAME_SEPARATOR)
         server = self._servers.get(label)
         if server is None:
             raise ToolCallError(f"Unknown tool server '{label}' for tool '{name}'")
 
-        result = await server.session.call_tool(tool_name, arguments)
-        text = "".join(part.text for part in result.content if hasattr(part, "text"))
-        if result.isError:
-            logger.warning("MCP tool %s reported an error: %s", name, text)
-            raise ToolCallError(text or f"Tool '{name}' failed")
-        return text
+        # Span name is set per-call (rather than via @mlflow.trace, whose name
+        # is fixed at decoration time) so each MCP server's calls show up as
+        # e.g. "wms__adjust_inventory" in the trace UI instead of every call
+        # from every server appearing as the same generic "mcp_tool_call".
+        with mlflow.start_span(name=f"mcp__{name}", span_type="TOOL") as span:
+            span.set_inputs(arguments)
+            result = await server.session.call_tool(tool_name, arguments)
+            text = "".join(part.text for part in result.content if hasattr(part, "text"))
+            if result.isError:
+                logger.warning("MCP tool %s reported an error: %s", name, text)
+                raise ToolCallError(text or f"Tool '{name}' failed")
+            span.set_outputs(text)
+            return text
