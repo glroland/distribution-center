@@ -149,13 +149,20 @@ labelApi:
   image:
     repository: label-api
   replicaCount: 1
+  # Matches charts/labelApi/values.yaml's own default -- this override was
+  # left at the generic 100m/128Mi req, 500m/512Mi limit boilerplate after
+  # the subchart's default was bumped for PyTorch inference, so the smaller
+  # numbers were the ones actually deployed. CPU-starving this pod makes its
+  # /health liveness probe miss its deadline mid-inference, so OpenShift
+  # kills the pod while an infer_sku call is in flight; local-dc-agent has no
+  # timeout on that MCP call, so its single-worker order queue wedges forever.
   resources:
     requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
+      cpu: 250m
       memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
   route:
     enabled: true
 

@@ -36,6 +36,16 @@ from torch import nn
 
 logger = logging.getLogger(__name__)
 
+# Containers report the host's full core count via nproc regardless of the
+# pod's actual CPU limit/cgroup quota, and torch defaults its thread pool to
+# that count -- under a fractional-core limit (e.g. OpenShift's 500m) this
+# causes severe CFS throttling that can make a single predict() call take
+# long enough to miss the /health liveness probe and get the pod killed
+# mid-inference. Pin to 1 thread since inference here only ever serves one
+# request at a time anyway.
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+
 # Must match the charset vision-ml's ocr.pt checkpoint was trained against
 # (src/models.py's OCR_CHARSET there) - label-api's own sticker generator
 # always upper-cases SKUs, which is why this doesn't need lowercase letters.

@@ -141,7 +141,23 @@ class McpToolRouter:
         # from every server appearing as the same generic "mcp_tool_call".
         with mlflow.start_span(name=f"mcp__{name}", span_type="TOOL") as span:
             span.set_inputs(arguments)
-            result = await server.session.call_tool(tool_name, arguments)
+            try:
+                result = await asyncio.wait_for(
+                    server.session.call_tool(tool_name, arguments),
+                    timeout=settings.MCP_TOOL_CALL_TIMEOUT_SECONDS,
+                )
+            except TimeoutError:
+                # Without this, a downstream server that dies mid-call (e.g.
+                # killed by its own liveness probe while inferencing) leaves
+                # this await hanging forever with no exception -- since
+                # OrderWorker processes POs serially off one queue, that
+                # wedges every subsequent order too, not just this one.
+                logger.warning(
+                    "MCP tool %s timed out after %.1fs", name, settings.MCP_TOOL_CALL_TIMEOUT_SECONDS
+                )
+                raise ToolCallError(
+                    f"Tool '{name}' timed out after {settings.MCP_TOOL_CALL_TIMEOUT_SECONDS:.0f}s"
+                ) from None
             text = "".join(part.text for part in result.content if hasattr(part, "text"))
             if result.isError:
                 logger.warning("MCP tool %s reported an error: %s", name, text)
