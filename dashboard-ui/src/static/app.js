@@ -330,6 +330,22 @@ const TOOL_LABELS = {
   shipping__list_shipments: ["📋", () => "Listed shipments"],
   shipping__reset_shipments: ["🔄", () => "Cleared shipments"],
   supervisor__request_help: ["🆘", (a) => `Escalated to a human supervisor: ${a.question}`],
+  supervisor__request_transfer: [
+    "🔁",
+    (a, r) => {
+      if (!r) return `Requesting transfer of ${a.quantity}× ${a.sku} from another DC`;
+      return r.status === "available"
+        ? `Transfer approved: ${a.quantity}× ${a.sku} from ${r.source_location}`
+        : `Transfer unavailable: no other DC has ${a.sku} in stock`;
+    },
+  ],
+  robot__restock_shelf: [
+    "📤",
+    (a, r) =>
+      r
+        ? `Restocked ${a.qty}× ${a.sku} onto shelf (${r.location_x}, ${r.location_y})`
+        : `Restocking ${a.qty}× ${a.sku}`,
+  ],
 };
 
 function onToolCall(data, ts) {
@@ -350,7 +366,7 @@ function onToolCall(data, ts) {
   } else if (data.ok && data.name === "label__infer_sku" && parsed) {
     const pct = Math.round((parsed.confidence ?? 0) * 100);
     if (!parsed.sku || parsed.confidence < 0.7) tone = "warn";
-    detail = `Inferred in ${Math.round(parsed.inference_ms ?? 0)}ms`;
+    detail = `${pct}% confidence (${Math.round(parsed.inference_ms ?? 0)} ms)`;
     const requestedSku = state.imageIdToSku[data.arguments?.image_id];
     const readAs = parsed.sku
       ? `read as ${parsed.sku} (${pct}% confidence)`
