@@ -115,7 +115,9 @@ start-all:
 			echo "  [skip] $$name already running (pid $$(cat "$$pidfile"))"; \
 			continue; \
 		fi; \
-		(cd $$dir && trap '' HUP && exec env PORT=$$port python3 -m src > "$$logfile" 2>&1) & \
+		extra_env=""; \
+		if [ "$$name" = "ingest-api" ]; then extra_env="TORCHDYNAMO_DISABLE=1"; fi; \
+		(cd $$dir && trap '' HUP && exec env PORT=$$port $$extra_env python3 -m src > "$$logfile" 2>&1) & \
 		pid=$$!; \
 		echo $$pid > "$$pidfile"; \
 		to_check="$$to_check $$name:$$port:$$pid:$$logfile"; \
@@ -163,6 +165,7 @@ kill-all:
 	@echo "Done."
 
 restart-all: kill-all start-all
+	tail -f target/logs/*.log
 
 status-all:
 	@if [ ! -d $(PID_DIR) ]; then echo "No services started."; exit 0; fi

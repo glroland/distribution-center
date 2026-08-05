@@ -41,6 +41,8 @@ spec:
               value: "0.0.0.0"
             - name: PORT
               value: {{ .Values.global.poIngestApi.port | quote }}
+            - name: TORCHDYNAMO_DISABLE
+              value: "1"
             {{- include "adc.mlflow.envVars" $ | nindent 12 }}
           readinessProbe:
             httpGet:
