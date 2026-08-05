@@ -312,6 +312,17 @@ const TOOL_LABELS = {
   robot__fetch_item: ["📥", (a) => `Picked ${a.qty}× ${a.sku} off the shelf`],
   robot__deliver_items: ["🏗️", () => "Delivered carried items to the dock"],
   robot__reset_robot: ["🔄", () => "Reset robot & shelf stock"],
+  robot__get_item_photo: ["📸", (a) => `Captured shelf sticker photo for ${a.sku}`],
+  label__infer_sku: [
+    "🔬",
+    (a, r) => {
+      if (!r) return "Reading shelf sticker with vision model";
+      const pct = Math.round((r.confidence ?? 0) * 100);
+      return r.sku
+        ? `Vision model read label as ${r.sku} (${pct}% confidence)`
+        : `Vision model couldn't read a SKU off the label (${pct}% confidence)`;
+    },
+  ],
   shipping__ship_order: ["🚀", (a) => `Handed PO ${a.po_number} to a carrier`],
   shipping__get_shipment: ["📬", () => "Looked up shipment"],
   shipping__track_shipment: ["📬", (a) => `Tracked ${a.tracking_number}`],
@@ -321,11 +332,15 @@ const TOOL_LABELS = {
 };
 
 function onToolCall(data, ts) {
-  const [icon, labelFn] = TOOL_LABELS[data.name] || ["🔧", () => data.name];
-  const title = labelFn(data.arguments || {});
-  const tone = data.ok ? "" : "error";
-  const detail = data.ok ? "" : `Error: ${data.result}`;
   const parsed = data.ok ? safeJson(data.result) : null;
+  const [icon, labelFn] = TOOL_LABELS[data.name] || ["🔧", () => data.name];
+  const title = labelFn(data.arguments || {}, parsed);
+  let tone = data.ok ? "" : "error";
+  let detail = data.ok ? "" : `Error: ${data.result}`;
+  if (data.ok && data.name === "label__infer_sku" && parsed) {
+    if (!parsed.sku || parsed.confidence < 0.7) tone = "warn";
+    detail = `Inferred in ${Math.round(parsed.inference_ms ?? 0)}ms`;
+  }
   const onClick =
     data.name === "robot__fetch_item" && parsed?.sticker_available
       ? () => openStickerPreview(data.arguments.sku, data.arguments.qty)
