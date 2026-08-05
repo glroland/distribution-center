@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
@@ -26,6 +27,9 @@ class _FakeSession:
     async def call_tool(self, tool_name: str, arguments: dict) -> _FakeCallToolResult:
         self.calls.append((tool_name, arguments))
         return self.response
+
+    async def list_tools(self) -> SimpleNamespace:
+        return SimpleNamespace(tools=[])
 
 
 def _router_with_servers(**servers: tuple[_FakeSession, str | None]) -> McpToolRouter:
@@ -155,3 +159,94 @@ async def test_connect_with_retry_backs_off_until_server_becomes_reachable(monke
     # router's lifetime
     assert calls.count("transport_exit") == 2
     assert calls.count("session_exit") == 2
+
+
+@pytest.mark.asyncio
+async def test_call_reconnects_when_the_connection_dies() -> None:
+    """Simulates a downstream pod restart severing the persistent MCP
+    session mid-lifetime (not at startup). Before the fix, every later call
+    to that server would fail the same way forever -- only bouncing the
+    dc-agent pod itself re-ran connect(). call() must instead reconnect the
+    affected server so the *next* call succeeds."""
+
+    async def broken_call_tool(tool_name: str, arguments: dict) -> _FakeCallToolResult:
+        raise RuntimeError("peer closed the connection")
+
+    dead_session = _FakeSession()
+    dead_session.call_tool = broken_call_tool
+
+    fresh_session = _FakeSession(response=_FakeCallToolResult(content=[_FakeTextContent(text="{}")]))
+
+    router = _router_with_servers(wms=(dead_session, "manage inventory"))
+    router._server_urls["wms"] = "http://wms"
+
+    reconnect_calls: list[tuple[str, str]] = []
+
+    async def fake_connect_with_retry(label: str, base_url: str):
+        reconnect_calls.append((label, base_url))
+        return fresh_session, "manage inventory"
+
+    router._connect_with_retry = fake_connect_with_retry
+
+    with pytest.raises(ToolCallError, match="Lost connection"):
+        await router.call("wms__get_inventory_status", {"sku": "SKU-1001"})
+
+    assert reconnect_calls == [("wms", "http://wms")]
+    assert router._servers["wms"].session is fresh_session
+    assert fresh_session.calls == []  # the failed call itself was not retried automatically
+
+    # a subsequent call -- the model's own retry -- goes through the reconnected session
+    result = await router.call("wms__get_inventory_status", {"sku": "SKU-1001"})
+
+    assert result == "{}"
+    assert fresh_session.calls == [("get_inventory_status", {"sku": "SKU-1001"})]
+
+
+@pytest.mark.asyncio
+async def test_call_does_not_reconnect_on_timeout() -> None:
+    """A timeout is ambiguous -- the server may just be slow, and the call
+    may already have taken effect on its side -- so unlike a hard connection
+    failure it must not trigger a reconnect."""
+
+    async def slow_call_tool(tool_name: str, arguments: dict) -> _FakeCallToolResult:
+        await asyncio.sleep(10)
+        return _FakeCallToolResult(content=[])
+
+    session = _FakeSession()
+    session.call_tool = slow_call_tool
+
+    router = _router_with_servers(wms=(session, None))
+    mcp_tools.settings.MCP_TOOL_CALL_TIMEOUT_SECONDS = 0.01
+    try:
+        with pytest.raises(ToolCallError, match="timed out"):
+            await router.call("wms__get_inventory_status", {"sku": "SKU-1001"})
+    finally:
+        mcp_tools.settings.MCP_TOOL_CALL_TIMEOUT_SECONDS = 60.0
+
+    assert router._servers["wms"].session is session  # untouched, no reconnect attempted
+
+
+@pytest.mark.asyncio
+async def test_reconnect_closes_the_old_stack_before_reconnecting() -> None:
+    closed: list[str] = []
+
+    class _FakeStack:
+        async def aclose(self) -> None:
+            closed.append("closed")
+
+    router = McpToolRouter()
+    router._server_urls["wms"] = "http://wms"
+    router._server_stacks["wms"] = _FakeStack()
+
+    new_session = _FakeSession()
+
+    async def fake_connect_with_retry(label: str, base_url: str):
+        assert closed == ["closed"]  # old connection torn down before the new one is opened
+        return new_session, None
+
+    router._connect_with_retry = fake_connect_with_retry
+
+    await router._reconnect("wms")
+
+    assert closed == ["closed"]
+    assert router._servers["wms"].session is new_session

@@ -38,42 +38,60 @@ class _Server:
 class McpToolRouter:
     """Connects to every fulfillment MCP server and exposes their tools as a
     single, name-prefixed OpenAI tool list, routing calls back to the right
-    server. Connections are opened once and reused for the router's lifetime."""
+    server. Connections are opened once and reused for the router's lifetime,
+    but a server whose connection dies underneath us (e.g. its pod restarted
+    and dropped the streamable-HTTP session) is transparently reconnected by
+    call() rather than left broken for the rest of this process's life -- see
+    call()'s comment for why that used to require a manual dc-agent restart."""
 
     def __init__(self) -> None:
+        self._server_urls: dict[str, str] = {}
         # Each server's transport/session context is kept in its own stack,
-        # opened only once that server's connection attempt actually succeeds
-        # (see _connect_with_retry) -- that way a failed attempt never leaks
-        # a half-open connection into the router's lifetime.
-        self._server_stacks: list[AsyncExitStack] = []
+        # keyed by label so a single server can be torn down and replaced
+        # independently on reconnect (see _reconnect) without touching the
+        # others. A stack is stored only once that server's connection
+        # attempt actually succeeds (see _connect_with_retry) -- that way a
+        # failed attempt never leaks a half-open connection into the
+        # router's lifetime.
+        self._server_stacks: dict[str, AsyncExitStack] = {}
         self._servers: dict[str, _Server] = {}
         self._tools: list[dict] = []
 
     async def connect(self) -> None:
-        server_urls = {
+        self._server_urls = {
             "wms": settings.WMS_API_URL,
             "robot": settings.ROBOT_API_URL,
             "shipping": settings.SHIPPING_API_URL,
             "supervisor": settings.SUPERVISOR_API_URL,
             "label": settings.LABEL_API_URL,
         }
-        for label, base_url in server_urls.items():
-            session, instructions = await self._connect_with_retry(label, base_url)
-            self._servers[label] = _Server(label=label, session=session, instructions=instructions)
+        for label, base_url in self._server_urls.items():
+            await self._register(label, base_url)
 
-            listed = await session.list_tools()
-            for tool in listed.tools:
-                self._tools.append(
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}",
-                            "description": tool.description or "",
-                            "parameters": tool.inputSchema,
-                        },
-                    }
-                )
-            logger.info("Connected to %s: %d tool(s) registered", label, len(listed.tools))
+    async def _register(self, label: str, base_url: str) -> None:
+        """Connects (or reconnects) one server and (re)registers its tools.
+        Safe to call again for a label that's already registered -- any
+        stale `label__*` entries in the tool list are replaced rather than
+        duplicated, since a reconnect may hit a server whose tool set
+        changed (e.g. it was redeployed with new code)."""
+        session, instructions = await self._connect_with_retry(label, base_url)
+        self._servers[label] = _Server(label=label, session=session, instructions=instructions)
+
+        listed = await session.list_tools()
+        prefix = f"{label}{_TOOL_NAME_SEPARATOR}"
+        self._tools = [tool for tool in self._tools if not tool["function"]["name"].startswith(prefix)]
+        for tool in listed.tools:
+            self._tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}",
+                        "description": tool.description or "",
+                        "parameters": tool.inputSchema,
+                    },
+                }
+            )
+        logger.info("Connected to %s: %d tool(s) registered", label, len(listed.tools))
 
     async def _connect_with_retry(self, label: str, base_url: str) -> tuple[ClientSession, str | None]:
         """Connects to one MCP server, retrying with capped exponential backoff
@@ -111,17 +129,40 @@ class McpToolRouter:
                     await attempt_stack.aclose()
 
             if succeeded:
-                self._server_stacks.append(attempt_stack)
+                self._server_stacks[label] = attempt_stack
                 return session, init_result.instructions
 
             await asyncio.sleep(delay)
             delay = min(delay * 2, _CONNECT_RETRY_MAX_DELAY_SECONDS)
             attempt += 1
 
+    async def _reconnect(self, label: str) -> None:
+        """Replaces one server's connection after call() finds it's no longer
+        usable. Closes the old (broken) stack before reconnecting so it isn't
+        leaked, then reuses _connect_with_retry's retry-with-backoff -- the
+        same logic that already handles a downstream server being briefly
+        unreachable at startup applies just as well to a mid-life outage.
+
+        Must run in the task that owns the router (OrderWorker's single
+        background task, same as connect()/close()) rather than a spawned
+        one: anyio's cancel scopes require being entered and exited from the
+        same asyncio task, so closing attempt_stack from a different task
+        would raise RuntimeError (see the same-task note in
+        OrderWorker.stop()). call() satisfies this because it's always
+        awaited directly from that task, never scheduled separately."""
+        old_stack = self._server_stacks.pop(label, None)
+        if old_stack is not None:
+            try:
+                await old_stack.aclose()
+            except Exception:
+                logger.exception("Error closing stale MCP connection to %s", label)
+        await self._register(label, self._server_urls[label])
+        logger.info("Reconnected to MCP server %s", label)
+
     async def close(self) -> None:
-        for stack in reversed(self._server_stacks):
+        for label in list(self._server_stacks):
+            stack = self._server_stacks.pop(label)
             await stack.aclose()
-        self._server_stacks.clear()
 
     def list_openai_tools(self) -> list[dict]:
         return list(self._tools)
@@ -152,12 +193,43 @@ class McpToolRouter:
                 # this await hanging forever with no exception -- since
                 # OrderWorker processes POs serially off one queue, that
                 # wedges every subsequent order too, not just this one.
+                # Deliberately not treated as a dead connection (no
+                # reconnect below): the server may just be slow, and the
+                # call may have already taken effect on its side, so
+                # tearing down the session here wouldn't be safe to do
+                # automatically.
                 logger.warning(
                     "MCP tool %s timed out after %.1fs", name, settings.MCP_TOOL_CALL_TIMEOUT_SECONDS
                 )
                 raise ToolCallError(
                     f"Tool '{name}' timed out after {settings.MCP_TOOL_CALL_TIMEOUT_SECONDS:.0f}s"
                 ) from None
+            except Exception as exc:
+                # The persistent session to this server (opened once in
+                # connect() and, until now, never revisited) has died
+                # underneath us -- almost always because the downstream
+                # pod restarted (redeploy/crash/OOM) and the streamable-HTTP
+                # session it held server-side (in-memory, like all state in
+                # this repo's services) is gone. Concretely this surfaces as
+                # mcp.shared.exceptions.McpError (the SDK's own receive loop
+                # noticing the stream closed) or anyio.ClosedResourceError
+                # (writing to a stream that receive loop already tore down).
+                # Left alone, every later call to this server fails the same
+                # way for the rest of this pod's life -- fulfillment just
+                # quietly escalates every order -- and only bouncing the
+                # dc-agent pod itself (which reruns connect()) ever
+                # recovers. Reconnect now instead, so the *next* call --
+                # the model's own retry, or a later order -- goes through a
+                # working session.
+                logger.warning(
+                    "MCP tool %s lost its connection to %s (%s); reconnecting",
+                    name, label, exc,
+                )
+                await self._reconnect(label)
+                raise ToolCallError(
+                    f"Lost connection to '{label}' while calling '{name}'; "
+                    "the connection has been re-established, retry the call."
+                ) from exc
             text = "".join(part.text for part in result.content if hasattr(part, "text"))
             if result.isError:
                 logger.warning("MCP tool %s reported an error: %s", name, text)
