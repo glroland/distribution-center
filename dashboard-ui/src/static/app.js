@@ -14,6 +14,7 @@ const state = {
   poNumber: null,
   lineItems: [],          // [{sku, description, requested_qty, fulfilled_qty, status}]
   helpRequests: {},       // id -> request
+  imageIdToSku: {},       // image_id -> sku, correlates get_item_photo captures to infer_sku reads
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -337,14 +338,26 @@ function onToolCall(data, ts) {
   const title = labelFn(data.arguments || {}, parsed);
   let tone = data.ok ? "" : "error";
   let detail = data.ok ? "" : `Error: ${data.result}`;
-  if (data.ok && data.name === "label__infer_sku" && parsed) {
+
+  let onClick;
+  if (data.name === "robot__fetch_item" && parsed?.sticker_available) {
+    onClick = () => openStickerPreview(data.arguments.sku, `${data.arguments.qty}× picked`);
+  } else if (data.ok && data.name === "robot__get_item_photo" && parsed?.image_id) {
+    // Correlate this capture's image_id -> sku so the later label__infer_sku
+    // call (which only carries the image_id, not the sku) can look it up.
+    state.imageIdToSku[parsed.image_id] = parsed.sku;
+    onClick = () => openStickerPreview(parsed.sku, "captured for verification");
+  } else if (data.ok && data.name === "label__infer_sku" && parsed) {
+    const pct = Math.round((parsed.confidence ?? 0) * 100);
     if (!parsed.sku || parsed.confidence < 0.7) tone = "warn";
     detail = `Inferred in ${Math.round(parsed.inference_ms ?? 0)}ms`;
+    const requestedSku = state.imageIdToSku[data.arguments?.image_id];
+    const readAs = parsed.sku
+      ? `read as ${parsed.sku} (${pct}% confidence)`
+      : `unreadable (${pct}% confidence)`;
+    if (requestedSku) onClick = () => openStickerPreview(requestedSku, readAs);
   }
-  const onClick =
-    data.name === "robot__fetch_item" && parsed?.sticker_available
-      ? () => openStickerPreview(data.arguments.sku, data.arguments.qty)
-      : undefined;
+
   addActivity(icon, title, detail, tone, ts, onClick);
 
   if (!data.ok) return;
@@ -415,22 +428,21 @@ function sleep(ms) {
 // still animates instead of the marker jumping straight to its final spot.
 // Runs detached from onToolCall/applyToolResult (not awaited there) so it
 // doesn't block handling of subsequent SSE events.
+//
+// Every "pick" step carries sticker_available: true unconditionally (one per
+// shelf visit, which can be more than one per SKU) - it does NOT mean a
+// photo was actually captured/verified for that step. The real capture +
+// verification are separate robot__get_item_photo / label__infer_sku tool
+// calls the LLM makes once per distinct SKU, which get their own activity
+// entries via onToolCall. So this loop only drives the marker animation and
+// intentionally does not add its own activity-feed entries, to avoid
+// spamming one fabricated "captured sticker photo" line per shelf visit.
 let robotTraceToken = 0;
 async function animateRobotTrace(trace) {
   const token = ++robotTraceToken;
   for (const step of trace) {
     if (token !== robotTraceToken) return; // a newer trace/tool call has taken over
     if (step.status) updateRobotState(step.status);
-    if (step.type === "pick" && step.sticker_available) {
-      addActivity(
-        "📷",
-        `Captured sticker photo: ${step.qty}× ${step.sku}`,
-        "Click to preview",
-        "",
-        Date.now() / 1000,
-        () => openStickerPreview(step.sku, step.qty)
-      );
-    }
     await sleep(650);
   }
 }
@@ -811,6 +823,8 @@ async function onReset() {
 
   state.helpRequests = {};
   renderHelpRequests();
+
+  state.imageIdToSku = {};
 }
 
 async function onToggleBoost(e) {
@@ -884,9 +898,16 @@ function openExtractedPreview(data) {
 // Sticker photo preview
 // ---------------------------------------------------------------------------
 
-function openStickerPreview(sku, qty) {
+// The actual photo bytes a given get_item_photo/infer_sku call used are
+// never retrievable after the fact - label-api's image store is single-read
+// (infer_sku pops it) precisely so raw image bytes never have to round-trip
+// through the LLM's tool-call context (see image_store.py). This preview is
+// therefore an illustrative regeneration in the same synthetic style, not
+// literally the bytes that were inferred against.
+function openStickerPreview(sku, subtitle) {
   $("#sticker-modal-title").textContent = `Sticker photo — ${sku}`;
-  $("#sticker-modal-meta").textContent = `${qty}× picked · simulated warehouse camera capture, generated on demand`;
+  $("#sticker-modal-meta").textContent =
+    `${subtitle ? `${subtitle} · ` : ""}illustrative reproduction (simulated camera capture, not the exact frame that was inferred against)`;
   $("#sticker-modal-img").src = `/api/stickers/${encodeURIComponent(sku)}?color_mode=random&t=${Date.now()}`;
   $("#sticker-modal").showModal();
 }
