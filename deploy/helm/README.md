@@ -94,16 +94,17 @@ needed); leave both empty to skip OTLP entirely. Set
 
 `kubernetes-namespaced` auth only works for a service account RHOAI has
 explicitly granted `mlflow.kubeflow.org` access to -- being in-namespace
-isn't enough. Every Deployment in this chart runs as the namespace's
-`default` SA, which RHOAI grants automatically, but `vision-ml`'s KFP
-pipeline (`../../vision-ml/src/pipeline.py`) runs as a separate
-`pipeline-runner-<dspa-name>` SA that RHOAI does *not* grant by default --
-without it, pipeline runs fail with `PERMISSION_DENIED` calling
-`mlflow.set_experiment`. `templates/mlflow-pipeline-runner-rolebinding.yaml`
-binds each name in `global.mlflow.pipelineRunnerServiceAccounts` (default:
+isn't enough, and RHOAI does *not* grant this to a namespace's `default` SA
+automatically (despite that being what every Deployment in this chart runs
+as -- none set `serviceAccountName`); without the grant, traced calls fail
+with `PERMISSION_DENIED`. The same is true of `vision-ml`'s KFP pipeline
+(`../../vision-ml/src/pipeline.py`), which runs as a separate
+`pipeline-runner-<dspa-name>` SA. `templates/mlflow-integration-rolebinding.yaml`
+binds each name in `global.mlflow.serviceAccounts` (default: `default` and
 `pipeline-runner-dspa`) to `global.mlflow.integrationClusterRole` -- the same
 ClusterRole RHOAI auto-binds to its own workbench pods. Add your DSPA's
-pipeline-runner SA name to that list if it differs from the default.
+pipeline-runner SA name to that list if it differs from the default, or any
+other SA a Deployment is customized to run as.
 
 ## Notes for OpenShift
 

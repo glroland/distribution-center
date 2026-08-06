@@ -66,15 +66,20 @@ global:
     # alongside MLflow. Leave both empty to skip OTLP entirely.
     otlpEndpoint: ""
     otlpHeaders: ""
-    # Service accounts that run vision-ml's KFP pipeline steps (see
-    # ../../vision-ml/src/pipeline.py) but aren't one of the Deployments
-    # below, so they don't get kubernetes-namespaced auth for free just by
-    # being in this namespace -- RHOAI's MLflow only grants that to service
-    # accounts explicitly bound to integrationClusterRole below (the same
-    # binding RHOAI auto-creates for its own workbench pods). RHOAI names a
-    # DSPA's pipeline-runner SA `pipeline-runner-<dspa-name>`; default DSPA
-    # name is "dspa". See templates/mlflow-pipeline-runner-rolebinding.yaml.
-    pipelineRunnerServiceAccounts:
+    # Service accounts that need kubernetes-namespaced auth against RHOAI's
+    # MLflow -- being in-namespace isn't enough, RHOAI only grants that to
+    # service accounts explicitly bound to integrationClusterRole below (the
+    # same binding RHOAI auto-creates for its own workbench pods). Two kinds
+    # of SA need it here:
+    #   - "default": every Deployment in this chart runs as the namespace's
+    #     default SA (no serviceAccountName is set), and that's what
+    #     configure_tracing() in each traced service authenticates as.
+    #   - vision-ml's KFP pipeline steps (../../vision-ml/src/pipeline.py),
+    #     which run as a separate `pipeline-runner-<dspa-name>` SA that RHOAI
+    #     does not grant by default; default DSPA name is "dspa".
+    # See templates/mlflow-integration-rolebinding.yaml.
+    serviceAccounts:
+      - default
       - pipeline-runner-dspa
     integrationClusterRole: mlflow-operator-mlflow-integration
 

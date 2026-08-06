@@ -1,6 +1,6 @@
-{{- if and .Values.global.mlflow.enabled .Values.global.mlflow.pipelineRunnerServiceAccounts }}
+{{- if and .Values.global.mlflow.enabled .Values.global.mlflow.serviceAccounts }}
 {{- $root := . }}
-{{- range .Values.global.mlflow.pipelineRunnerServiceAccounts }}
+{{- range .Values.global.mlflow.serviceAccounts }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
