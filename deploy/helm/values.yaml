@@ -54,7 +54,7 @@ global:
   # service below via the shared ConfigMap in templates/mlflow-configmap.yaml.
   mlflow:
     enabled: true
-    trackingUri: ""
+    trackingUri: "https://rh-ai.apps.ocp.home.glroland.com/mlflow"
     workspace: "distribution-center"
     experimentName: "distribution-center"
     # kubernetes-namespaced auto-reads the pod's own service-account token and
