@@ -22,11 +22,19 @@ class Settings(BaseSettings):
     AGENT_URL: str | None = None
     LOG_LEVEL: str = "INFO"
     MLFLOW_TRACKING_URI: str | None = None
+    PROMPT_SOURCE: str = "local"
+    PROMPT_CATALOG_PATH: str | None = None
 
     @model_validator(mode="after")
     def _default_agent_url(self) -> "Settings":
         if self.AGENT_URL is None:
             self.AGENT_URL = f"http://localhost:{self.PORT}/"
+        return self
+
+    @model_validator(mode="after")
+    def _validate_prompt_source(self) -> "Settings":
+        if self.PROMPT_SOURCE not in ("mlflow", "local"):
+            raise ValueError(f"PROMPT_SOURCE must be 'mlflow' or 'local', got {self.PROMPT_SOURCE!r}")
         return self
 
 

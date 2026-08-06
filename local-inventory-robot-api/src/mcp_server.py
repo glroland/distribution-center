@@ -3,6 +3,7 @@ import logging
 import httpx
 from mcp.server.fastmcp import FastMCP as MCPServer
 
+from .prompts import get_prompt
 from .robot import InventoryRobot, RobotStatus
 from .settings import settings
 from .tracing import configure_tracing, tool_trace
@@ -28,43 +29,16 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
     grid_width, grid_height = robot.get_grid_size()
     dock_x, dock_y = robot.get_dock()
 
+    instructions = get_prompt("local-inventory-robot-api.mcp_server.instructions").format(
+        grid_width=grid_width,
+        grid_height=grid_height,
+        dock_x=dock_x,
+        dock_y=dock_y,
+        capacity=robot.get_status().capacity,
+    )
     mcp_server = MCPServer(
         name="local-inventory-robot-api",
-        instructions=(
-            "Tools for driving a single warehouse robot around a "
-            f"{grid_width}x{grid_height} grid of shelves to fetch inventory. The "
-            f"robot's dock is at ({dock_x}, {dock_y}); it can only carry "
-            f"{robot.get_status().capacity} total units at once and can only "
-            "deliver what it's carrying once it's back at the dock. Typical "
-            "workflow: for a multi-item pick run, call plan_and_fetch_items once "
-            "with every SKU/qty you want fetched - it works out an efficient "
-            "visiting order, moves the robot, picks each item, makes extra dock "
-            "round-trips automatically if capacity would otherwise be exceeded, "
-            "and delivers everything at the end. Its response reports "
-            "fetched_qty per SKU, which may be less than requested_qty if a SKU "
-            "isn't stocked anywhere or doesn't have enough on hand - that's not "
-            "an error, just a shortfall for you to handle (e.g. via a supervisor "
-            "transfer). Use get_robot_status any time to check current location "
-            "and what's currently loaded, find_item or get_warehouse_map to look "
-            "up stock before deciding what to request, and get_shelf_inventory "
-            "to see everything stocked at a single location. Use restock_shelf "
-            "when new stock physically arrives (e.g. from an inter-DC transfer) "
-            "and needs to be placed on a shelf before it can be found and "
-            "fetched - after restocking, call plan_and_fetch_items again for "
-            "that SKU to pick it up like any other stock; omit x/y on "
-            "restock_shelf to let it pick a sensible cell automatically. The "
-            "lower-level move_robot/fetch_item/deliver_items tools are also "
-            "available for manual control if you need it, but plan_and_fetch_items "
-            "is the normal way to fulfil a pick run. Every pick (whether via "
-            "fetch_item or a plan_and_fetch_items trace step) comes back with "
-            "sticker_available: true, meaning a photo of that SKU's shelf sticker, "
-            "as the robot's camera would have captured it, can be retrieved with "
-            "get_item_photo. Pass that photo's image_id to label-api's "
-            "infer_sku tool to visually verify a pick actually matches the SKU "
-            "you intended to fetch before shipping it - don't just trust that "
-            "the shelf you picked from was labeled correctly. Call reset_robot "
-            "to restore the demo to its starting state."
-        ),
+        instructions=instructions,
         host=settings.HOST,
         streamable_http_path="/",
     )

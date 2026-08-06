@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     INVENTORY_CSV_PATH: str = "data/inventory.csv"
     LOG_LEVEL: str = "INFO"
     MLFLOW_TRACKING_URI: str | None = None
+    PROMPT_SOURCE: str = "local"
+    PROMPT_CATALOG_PATH: str | None = None
 
     def inventory_csv_path(self) -> Path:
         path = Path(self.INVENTORY_CSV_PATH)

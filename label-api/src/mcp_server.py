@@ -7,6 +7,7 @@ from PIL import Image
 
 from .image_store import ImageNotFoundError, ImageStore
 from .inference import get_pipeline
+from .prompts import get_prompt
 from .settings import settings
 
 logger = logging.getLogger(__name__)
@@ -17,23 +18,10 @@ def build_mcp_server(image_store: ImageStore) -> MCPServer:
     LLM tool-calling loop, so verifying a picked item's sticker is an
     explicit tool call rather than orchestration hidden in application code."""
 
+    instructions = get_prompt("label-api.mcp_server.instructions").format()
     mcp_server = MCPServer(
         name="label-api",
-        instructions=(
-            "SKU inference. infer_sku takes the image_id of a previously captured "
-            "sticker photo - e.g. the image_id a picking robot's get_item_photo "
-            "tool returns - and reads the SKU printed on it, alongside a 0-1 "
-            "confidence score. Use this to visually verify that what was actually "
-            "picked matches the SKU you intended to fetch: if the returned sku "
-            "doesn't match what you expected, or confidence is low, treat that as "
-            "a real signal that the shelf sticker doesn't read as the SKU you "
-            "asked for (a mispick or a mislabeled shelf) rather than shipping it "
-            "regardless. Inference runs entirely against checkpoints bundled into "
-            "this service's own process - it never calls out to another service "
-            "to do the actual reading. The photo itself is fetched locally from "
-            "this service's own image store, keyed by image_id - never pass "
-            "image bytes directly, only the id."
-        ),
+        instructions=instructions,
         host=settings.HOST,
         streamable_http_path="/",
     )

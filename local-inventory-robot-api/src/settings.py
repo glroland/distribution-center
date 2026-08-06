@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     MOVE_STEP_DELAY_SECONDS: float = 0.25
     LOG_LEVEL: str = "INFO"
     MLFLOW_TRACKING_URI: str | None = None
+    PROMPT_SOURCE: str = "local"
+    PROMPT_CATALOG_PATH: str | None = None
 
     # Where get_item_photo (src/mcp_server.py) fetches a picked SKU's shelf
     # sticker photo from, to hand to label-api's own infer_sku tool for

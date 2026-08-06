@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     PORT: int = 8004
     LOG_LEVEL: str = "INFO"
     MLFLOW_TRACKING_URI: str | None = None
+    PROMPT_SOURCE: str = "local"
+    PROMPT_CATALOG_PATH: str | None = None
 
 
 settings = Settings()

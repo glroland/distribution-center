@@ -2,6 +2,8 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 mcp>=1.26.0,<2
 pydantic-settings>=2.5
+mlflow[kubernetes]>=3.8.1,<4
+opentelemetry-exporter-otlp-proto-grpc>=1.27
 pillow>=10.4
 numpy>=1.26
 # Multipart parsing for POST /infer's file upload (fastapi.UploadFile).

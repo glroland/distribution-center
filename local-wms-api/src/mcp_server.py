@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP as MCPServer
 
 from .inventory import InventoryItem, InventoryStore
+from .prompts import get_prompt
 from .settings import settings
 from .tracing import configure_tracing, tool_trace
 
@@ -19,15 +20,10 @@ def _item_dict(item: InventoryItem) -> dict:
 def build_mcp_server(store: InventoryStore) -> MCPServer:
     """Build a coarse-grained MCP server for LLM-driven inventory management."""
 
+    instructions = get_prompt("local-wms-api.mcp_server.instructions").format()
     mcp_server = MCPServer(
         name="local-wms-api",
-        instructions=(
-            "Tools for managing inventory at a single virtual warehouse location. "
-            "Use get_location to learn the location's name, get_inventory_status to "
-            "look up on-hand quantity and bin coordinates for one SKU or every SKU, "
-            "adjust_inventory to receive or ship stock for a SKU, and reset_inventory "
-            "to restore the demo data to its starting state."
-        ),
+        instructions=instructions,
         host=settings.HOST,
         streamable_http_path="/",
     )

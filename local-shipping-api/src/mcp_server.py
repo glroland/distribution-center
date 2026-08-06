@@ -1,5 +1,6 @@
 from mcp.server.fastmcp import FastMCP as MCPServer
 
+from .prompts import get_prompt
 from .settings import settings
 from .shipping import Shipment, ShippingStore
 from .tracing import configure_tracing, tool_trace
@@ -25,19 +26,10 @@ def _shipment_dict(shipment: Shipment) -> dict:
 def build_mcp_server(store: ShippingStore) -> MCPServer:
     """Build an MCP server for an LLM to ship items gathered for a purchase order."""
 
+    instructions = get_prompt("local-shipping-api.mcp_server.instructions").format()
     mcp_server = MCPServer(
         name="local-shipping-api",
-        instructions=(
-            "Tools for shipping product a warehouse robot has gathered to fulfil a "
-            "purchase order. Once every item for a PO has been picked and "
-            "delivered to the dock, call ship_order with the PO number, the "
-            "customer's name and address, and the list of SKUs/quantities being "
-            "shipped. This mocks handing the package to a carrier: it randomly "
-            "assigns a carrier, generates a carrier-formatted tracking number, "
-            "and estimates a delivery date - no real carrier is contacted. Use "
-            "track_shipment or get_shipment afterward to look up a shipment's "
-            "tracking details."
-        ),
+        instructions=instructions,
         host=settings.HOST,
         streamable_http_path="/",
     )

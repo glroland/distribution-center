@@ -5,11 +5,17 @@ demo -- one entry per prompt, with a stable id, its source location, and its
 template text. `src/cli.py` is a CLI that registers each one as a version in
 the MLflow Prompt Registry (`mlflow.genai.register_prompt`).
 
-This is a one-way export tool only: it reads `prompts.json` and writes to
-MLflow. No application service reads prompts back from MLflow at runtime yet
--- every service still uses its own hardcoded prompt constant. The registry
-exists so prompts can be reviewed/versioned/diffed in MLflow ahead of a
-future change to load them dynamically.
+This is the one place prompt content is written by hand; every service's
+`src/prompts.py` (`get_prompt(prompt_id)`, cached per process) reads it back
+at runtime -- from MLflow when `PROMPT_SOURCE=mlflow` (the deployed default;
+see `deploy/helm/templates/_helpers.tpl`'s `adc.mlflow.envVars`), or from
+this same `prompts.json` file directly when `PROMPT_SOURCE=local` (the
+default for local dev/tests, so nothing needs a live MLflow server). Both
+modes render the `{{variable}}` templates the same way (via mlflow's own
+`PromptVersion.format()`), so switching `PROMPT_SOURCE` never changes
+rendered content -- only where it was fetched from. Each service also tags
+its own MLflow traces with `prompt.<id>: <version>` (or `local`) for every
+prompt it loads, so a trace shows exactly which prompt version produced it.
 
 ## What's cataloged
 
@@ -23,13 +29,17 @@ future change to load them dynamically.
 | `local-inventory-robot-api.mcp_server.instructions` | `local-inventory-robot-api/src/mcp_server.py` |
 | `supervisor-api.mcp_server.instructions` | `supervisor-api/src/mcp_server.py` |
 | `local-shipping-api.mcp_server.instructions` | `local-shipping-api/src/mcp_server.py` |
+| `label-api.mcp_server.instructions` | `label-api/src/mcp_server.py` |
 
-The four `*.mcp_server.instructions` entries aren't sent to an LLM by their
+The five `*.mcp_server.instructions` entries aren't sent to an LLM by their
 own service -- they're each MCP server's `instructions=` string, which
 `local-dc-agent` reads over MCP at connect time and appends to the
 fulfillment agent's system prompt (see `fulfillment._build_system_prompt`).
 They're cataloged here because they're effectively prompt fragments, even
-though they live in other services' codebases.
+though they live in other services' codebases. Because that render happens
+at server startup rather than per-request, there's no active MLflow trace to
+tag at that point -- each of those 5 services just logs which prompt id and
+version it loaded at startup instead.
 
 Templates use MLflow's `{{variable}}` syntax for the handful of prompts that
 are built from runtime values (e.g. the robot instructions embed the grid

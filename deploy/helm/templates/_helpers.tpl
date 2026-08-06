@@ -118,6 +118,8 @@ Renders nothing when global.mlflow.enabled is false.
 */}}
 {{- define "adc.mlflow.envVars" -}}
 {{- if .Values.global.mlflow.enabled }}
+- name: PROMPT_SOURCE
+  value: "mlflow"
 - name: MLFLOW_TRACKING_URI
   valueFrom:
     configMapKeyRef:

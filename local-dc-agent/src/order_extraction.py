@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from .settings import settings
 from .models import ExtractedOrder
+from .prompts import get_prompt
 from .tracing import configure_tracing
 
 configure_tracing()
@@ -82,21 +83,6 @@ _TOOL_SCHEMA = {
     },
 }
 
-_SYSTEM_PROMPT = (
-    "You extract structured purchase order data from the Markdown export of a "
-    "scanned/converted PO PDF. Use the record_purchase_order tool to report the "
-    "fields you find. Omit fields that are not present in the document rather "
-    "than guessing. Layouts vary widely between vendors. Some fields are written "
-    "as a markdown heading (e.g. '## VENDOR', '## SHIP TO') immediately followed "
-    "by a plain paragraph of text with no 'label: value' formatting -- the "
-    "paragraph right after such a heading is that field's value. The PDF-to-"
-    "markdown conversion can reorder sections, so a heading and its paragraph "
-    "may appear later in the document than you'd expect (e.g. after the line "
-    "items or totals) -- read the whole document before deciding a field is "
-    "missing."
-)
-
-
 class ExtractionError(Exception):
     """Raised when the LLM fails to return a valid, schema-conforming order."""
 
@@ -111,6 +97,7 @@ def extract_order(markdown: str) -> ExtractedOrder:
         base_url=settings.OPENAI_BASE_URL or None,
         timeout=settings.OPENAI_REQUEST_TIMEOUT_SECONDS,
     )
+    system_prompt = get_prompt("dc-agent.order_extraction.system_prompt").format()
     logger.info("Extracting order from %d chars of markdown via %s", len(markdown), settings.OPENAI_MODEL)
     try:
         response = client.chat.completions.create(
@@ -120,7 +107,7 @@ def extract_order(markdown: str) -> ExtractedOrder:
             tools=[_TOOL_SCHEMA],
             tool_choice={"type": "function", "function": {"name": _TOOL_NAME}},
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": markdown},
             ],
         )

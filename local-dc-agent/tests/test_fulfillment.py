@@ -8,6 +8,7 @@ from src.fulfillment import FulfillmentError, fulfill_order
 from src.mcp_tools import ToolCallError
 from src.models import ExtractedOrder, LineItem
 from src.order_processing import process_order
+from src.prompts import get_prompt
 from src.settings import settings
 
 
@@ -388,7 +389,7 @@ def test_policy_prompt_requires_visual_pick_verification_before_shipping() -> No
     """Locks in intent: the fulfillment policy must route through the robot's
     photo-capture tool and label-api's inference tool before a pick is
     trusted enough to decrement the ledger or ship - not just fetched_qty."""
-    prompt = fulfillment_module._POLICY_PROMPT
+    prompt = get_prompt("dc-agent.fulfillment.policy_prompt").format()
 
     assert "robot__get_item_photo" in prompt
     assert "label__infer_sku" in prompt

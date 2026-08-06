@@ -1,5 +1,6 @@
 from mcp.server.fastmcp import FastMCP as MCPServer
 
+from .prompts import get_prompt
 from .settings import settings
 from .store import HelpRequest, SupervisorStore, TransferRequest
 from .tracing import configure_tracing, tool_trace
@@ -36,20 +37,10 @@ def _transfer_dict(request: TransferRequest) -> dict:
 def build_mcp_server(store: SupervisorStore) -> MCPServer:
     """Build an MCP server letting an AI agent escalate to a human supervisor."""
 
+    instructions = get_prompt("supervisor-api.mcp_server.instructions").format()
     mcp_server = MCPServer(
         name="supervisor-api",
-        instructions=(
-            "Tools for an AI agent to ask a human supervisor for help when it gets "
-            "stuck. Call request_help with a clear question and any relevant "
-            "context; the request is queued as 'open' for a supervisor to review "
-            "and resolve through the REST API. Call request_transfer before "
-            "escalating a stock shortfall to a human - it checks whether another "
-            "distribution center can cover the shortfall and, if so, returns "
-            "immediately with status 'available' and a source_location; there is "
-            "a chance (configurable, default 1 in 3) that the SKU is unavailable "
-            "everywhere else too, in which case status is 'unavailable' and the "
-            "agent should fall back to request_help."
-        ),
+        instructions=instructions,
         host=settings.HOST,
         streamable_http_path="/",
     )

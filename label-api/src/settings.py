@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8005
     LOG_LEVEL: str = "INFO"
+    MLFLOW_TRACKING_URI: str | None = None
+    PROMPT_SOURCE: str = "local"
+    PROMPT_CATALOG_PATH: str | None = None
 
     # Every generated image picks its own random size in these ranges - there is no fixed output size.
     MIN_IMAGE_WIDTH: int = 480

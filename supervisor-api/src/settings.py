@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     # distribution center when an agent asks for an inventory transfer.
     TRANSFER_UNAVAILABLE_CHANCE: float = 1 / 3
     MLFLOW_TRACKING_URI: str | None = None
+    PROMPT_SOURCE: str = "local"
+    PROMPT_CATALOG_PATH: str | None = None
 
 
 settings = Settings()
