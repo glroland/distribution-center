@@ -9,7 +9,7 @@ global:
   # Prefix applied to every image repository below, e.g. an OpenShift
   # internal registry: image-registry.openshift-image-registry.svc:5000/my-project
   imageRegistry: "registry.home.glroland.com/distribution-center"
-  imageTag: 23
+  imageTag: 24
   imagePullPolicy: IfNotPresent
   imagePullSecrets: []
   # Left empty so OpenShift's restricted-v2 SCC assigns a UID/fsGroup from
