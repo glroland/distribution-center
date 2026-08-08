@@ -5,11 +5,27 @@
 # gated collection. Modeled on eval-hub-sdk's own reference BYOF example
 # (github.com/williamcaban/edd-demo/evalhub.yaml).
 #
-# Typical usage against a deployed EvalHub:
+# This file does NOT stand up EvalHub itself -- the server
+# (`trustyai.opendatahub.io/v1alpha1 EvalHub`, owned by the TrustyAI
+# operator) is cluster infrastructure someone else deploys once per OpenShift
+# AI namespace. There is also no per-job Kubernetes resource to hand-author:
+# registering a provider/collection and submitting a run are REST/CLI calls
+# against that already-running server, not `oc apply`.
+#
+# Before registering, `provider.runtime.k8s.image` below must point at a
+# real, already-pushed build -- see deploy/Jenkinsfile's "Create Docker Image
+# for eval-suite" stage, which pushes
+# registry.home.glroland.com/distribution-center/eval-suite:$BUILD_NUMBER
+# (replace this file's REPLACE_WITH_BUILD_NUMBER placeholder with that
+# number; no ":latest" is pushed for this image).
+#
+# Typical usage against a deployed EvalHub, once the image tag above is set:
 #   evalhub providers create  --file config/evalhub.yaml   # registers `provider`
 #   evalhub collections create --file config/evalhub.yaml  # registers `collection`
 #   evalhub eval run --collection distribution-center-eval-v1 \
 #     --model-url $AGENT_URL --wait
+# or, from the repo root, `make register-eval-suite` for the first two
+# commands (see the root Makefile).
 #
 # Without EvalHub installed, run the same three benchmarks directly:
 #   cd eval-suite && python -m src --adapter all

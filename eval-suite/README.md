@@ -64,14 +64,45 @@ Exits non-zero if any run benchmark scores below its threshold
 
 ### Against a real EvalHub
 
-```bash
-evalhub providers create   --file config/evalhub.yaml
-evalhub collections create --file config/evalhub.yaml
-evalhub eval run --collection distribution-center-eval-v1 --model-url $AGENT_URL --wait
-```
+The EvalHub *server* (`trustyai.opendatahub.io/v1alpha1 EvalHub`, owned by
+the TrustyAI operator) is cluster infrastructure someone else stands up once
+per OpenShift AI namespace — `eval-suite` doesn't declare or apply that CRD,
+and there is no per-job Kubernetes resource you write by hand either.
+Registering a provider/collection and submitting a run are REST/CLI calls
+against that already-running server.
 
-Build/push `Containerfile` to a registry EvalHub's cluster can pull from
-first, and update `config/evalhub.yaml`'s `provider.runtime.k8s.image`.
+1. **Build and push the image.** `deploy/Jenkinsfile`'s "Create Docker Image
+   for eval-suite" stage does this on every build, pushing
+   `registry.home.glroland.com/distribution-center/eval-suite:$BUILD_NUMBER`
+   (no `:latest` tag is pushed for this image, unlike `vision-ml-trainer`).
+
+2. **Point `config/evalhub.yaml` at that build.** Edit
+   `provider.runtime.k8s.image`, replacing the `REPLACE_WITH_BUILD_NUMBER`
+   placeholder with the Jenkins build number you want registered.
+
+3. **Register the provider and collection.** Requires the `evalhub` CLI
+   (`pip install eval-hub-sdk`) already authenticated against your target
+   EvalHub server:
+
+   ```bash
+   evalhub providers create   --file config/evalhub.yaml
+   evalhub collections create --file config/evalhub.yaml
+   ```
+
+   Or from the repo root: `make register-eval-suite` (runs the same two
+   commands against `eval-suite/config/evalhub.yaml`).
+
+4. **Run it.** Either from the OpenShift AI dashboard's Evaluation Stack UI
+   (Tech Preview — the registered collection should appear there once step 3
+   completes) or from the CLI/CI:
+
+   ```bash
+   evalhub eval run --collection distribution-center-eval-v1 --model-url $AGENT_URL --wait
+   ```
+
+Re-registering after a new image build means repeating steps 2-3 — there's
+no `:latest`-follows-main auto-update; the collection always points at
+whatever build number was last registered.
 
 ## Layout
 
