@@ -1,7 +1,7 @@
 """Loads dc-agent's prompt templates from the same source dc-agent itself
-would use (the MLflow Prompt Registry, or the local prompt-registry/prompts.json
-catalog), so the extraction benchmark evaluates the actual prompt production
-runs -- not a copy that can silently drift from it.
+would use (the MLflow Prompt Registry, or local-dc-agent's own local
+prompts.json catalog), so the extraction benchmark evaluates the actual
+prompt production runs -- not a copy that can silently drift from it.
 
 This is a deliberately minimal mirror of local-dc-agent/src/prompts.py (no
 per-process caching, no trace tagging -- eval-suite runs are one-shot CLI
@@ -27,7 +27,7 @@ def _repo_root() -> Path:
     return Path(settings.REPO_ROOT_OVERRIDE) if settings.REPO_ROOT_OVERRIDE else _DEFAULT_REPO_ROOT
 
 
-_DEFAULT_CATALOG_PATH = _repo_root() / "prompt-registry" / "prompts.json"
+_DEFAULT_CATALOG_PATH = _repo_root() / "local-dc-agent" / "prompts.json"
 
 
 class PromptLoadError(Exception):

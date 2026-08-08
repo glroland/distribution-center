@@ -7,8 +7,8 @@
 # the *repo root* as build context (not eval-suite/), because seed_data.py
 # and prompts.py deliberately read ground-truth files that live outside
 # eval-suite/ (the shared products.csv, local-wms-api's and
-# local-inventory-robot-api's own seed CSVs, prompt-registry/prompts.json --
-# see CLAUDE.md's "Shared demo data" section). Build with:
+# local-inventory-robot-api's own seed CSVs, local-dc-agent's own
+# prompts.json -- see CLAUDE.md's "Shared demo data" section). Build with:
 #   podman build -f eval-suite/Containerfile -t dc-eval-suite .
 FROM registry.redhat.io/rhai/base-image-cpu-rhel9:3.4.0-1777399554
 WORKDIR /app
@@ -19,6 +19,6 @@ COPY eval-suite/config ./config
 COPY products.csv ./products.csv
 COPY local-wms-api/data/inventory.csv ./local-wms-api/data/inventory.csv
 COPY local-inventory-robot-api/data/shelves.csv ./local-inventory-robot-api/data/shelves.csv
-COPY prompt-registry/prompts.json ./prompt-registry/prompts.json
+COPY local-dc-agent/prompts.json ./local-dc-agent/prompts.json
 ENV REPO_ROOT_OVERRIDE=/app
 ENTRYPOINT ["python", "-m", "src.evalhub_entrypoint"]

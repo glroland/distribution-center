@@ -1,6 +1,7 @@
 """Loads LLM/MCP-instruction prompt templates from either the MLflow Prompt
-Registry or the local prompt-registry/prompts.json catalog, selected by
-PROMPT_SOURCE (see settings.py). Both paths return an mlflow PromptVersion,
+Registry or this service's own local prompts.json catalog (sibling of
+src/), selected by PROMPT_SOURCE (see settings.py). Both paths return an
+mlflow PromptVersion,
 so callers always render variables the same way via .format(**kwargs) --
 local mode isn't a separate hand-rolled templating implementation, it just
 constructs a PromptVersion from the catalog entry and lets MLflow's own
@@ -32,9 +33,9 @@ from .settings import settings
 
 logger = logging.getLogger(__name__)
 
-# <service>/src/prompts.py -> <service>/src -> <service> -> repo root
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_DEFAULT_CATALOG_PATH = _REPO_ROOT / "prompt-registry" / "prompts.json"
+# <service>/src/prompts.py -> <service>/src -> <service>
+_SERVICE_ROOT = Path(__file__).resolve().parent.parent
+_DEFAULT_CATALOG_PATH = _SERVICE_ROOT / "prompts.json"
 
 # PromptVersion.version is typed as int; there's no registry version for
 # locally-loaded prompts, so this is a placeholder -- _tag_current_trace()
@@ -58,7 +59,7 @@ def _catalog_path() -> Path:
     if not configured:
         return _DEFAULT_CATALOG_PATH
     path = Path(configured)
-    return path if path.is_absolute() else _REPO_ROOT / path
+    return path if path.is_absolute() else _SERVICE_ROOT / path
 
 
 def _load_catalog() -> dict[str, dict]:

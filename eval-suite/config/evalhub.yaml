@@ -115,7 +115,7 @@ collection:
     Prompt accuracy + MCP trajectory correctness + end-to-end outcome
     accuracy for the distribution-center demo agent. Intended to run
     nightly and on any PR touching order_extraction.py, fulfillment.py,
-    any service's mcp_server.py, or prompt-registry/.
+    any service's mcp_server.py, or any service's own prompts.json.
   tags: [distribution-center, a2a, mcp, byof, demo, v1]
   benchmarks:
     - provider_id: dc-eval-suite

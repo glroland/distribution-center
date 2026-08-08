@@ -1,0 +1,15 @@
+{
+  "_comment": "Catalog of every LLM/MCP-instruction prompt owned by local-wms-api, for loading into the MLflow Prompt Registry via `make load-prompts` (prompt-registry/src/cli.py, which discovers every */prompts.json in the repo). Templates use MLflow's {{variable}} syntax. This is also the source of truth this service's own src/prompts.py reads from when PROMPT_SOURCE=local -- keep it in sync with whatever gets registered into MLflow so local and mlflow modes never diverge. Baked into this service's own container image (see Containerfile), so PROMPT_SOURCE=local works standalone in a deployed pod too, without MLflow.",
+  "prompts": [
+    {
+      "id": "local-wms-api.mcp_server.instructions",
+      "service": "local-wms-api",
+      "source_file": "local-wms-api/src/mcp_server.py",
+      "source_symbol": "MCPServer(instructions=...)",
+      "role": "system (appended)",
+      "description": "Authoritative tool-usage documentation for the WMS MCP server. Read once by local-dc-agent's McpToolRouter at connect time (via the MCP initialize handshake) and folded into the fulfillment agent's system prompt by fulfillment._build_system_prompt() under a 'local-wms-api:' heading. Static text, no server-side variables.",
+      "variables": [],
+      "template": "Tools for managing inventory at a single virtual warehouse location. Use get_location to learn the location's name, get_inventory_status to look up on-hand quantity and bin coordinates for one SKU or every SKU, adjust_inventory to receive or ship stock for a SKU, and reset_inventory to restore the demo data to its starting state."
+    }
+  ]
+}

@@ -6,6 +6,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
+COPY prompts.json ./
 # The 3 vision-ml-trained SKU inference checkpoints (localizer.pt,
 # orientation.pt, ocr.pt) - baked into the image so POST /infer never
 # depends on a volume mount or a separate model-serving step.

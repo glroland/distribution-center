@@ -1,0 +1,15 @@
+{
+  "_comment": "Catalog of every LLM/MCP-instruction prompt owned by supervisor-api, for loading into the MLflow Prompt Registry via `make load-prompts` (prompt-registry/src/cli.py, which discovers every */prompts.json in the repo). Templates use MLflow's {{variable}} syntax. This is also the source of truth this service's own src/prompts.py reads from when PROMPT_SOURCE=local -- keep it in sync with whatever gets registered into MLflow so local and mlflow modes never diverge. Baked into this service's own container image (see Containerfile), so PROMPT_SOURCE=local works standalone in a deployed pod too, without MLflow.",
+  "prompts": [
+    {
+      "id": "supervisor-api.mcp_server.instructions",
+      "service": "supervisor-api",
+      "source_file": "supervisor-api/src/mcp_server.py",
+      "source_symbol": "MCPServer(instructions=...)",
+      "role": "system (appended)",
+      "description": "Authoritative tool-usage documentation for the human-escalation MCP server, folded into the fulfillment agent's system prompt the same way as local-wms-api's. Static text, no server-side variables.",
+      "variables": [],
+      "template": "Tools for an AI agent to ask a human supervisor for help when it gets stuck. Call request_help with a clear question and any relevant context; the request is queued as 'open' for a supervisor to review and resolve through the REST API. Call request_transfer before escalating a stock shortfall to a human - it checks whether another distribution center can cover the shortfall and, if so, returns immediately with status 'available' and a source_location; there is a chance (configurable, default 1 in 3) that the SKU is unavailable everywhere else too, in which case status is 'unavailable' and the agent should fall back to request_help."
+    }
+  ]
+}

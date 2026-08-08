@@ -50,7 +50,7 @@ help:
 	@echo "  generate-pos                 Generate sample PO PDFs into $(TARGET_DIR)/pos (ARGS=\"--count 25\" to pass flags)"
 	@echo "  eval-suite                   Run the EvalHub benchmarks locally against running services (ARGS=\"--adapter extraction\" to pass flags)"
 	@echo "  register-eval-suite          Register eval-suite's provider + collection with a running OpenShift AI EvalHub instance"
-	@echo "  load-prompts                 Register prompt-registry/prompts.json into the MLflow Prompt Registry (ARGS=\"--dry-run\" to pass flags)"
+	@echo "  load-prompts                 Register every <service>/prompts.json into the MLflow Prompt Registry (ARGS=\"--dry-run\" to pass flags)"
 	@echo "  run-ingest-api               Run the PO ingest API (http://localhost:8000)"
 	@echo "  run-local-dc-agent           Run the distribution center A2A agent (http://localhost:9100)"
 	@echo "  run-local-wms-api            Run the local WMS inventory API (http://localhost:8001)"

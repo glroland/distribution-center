@@ -1,4 +1,14 @@
-"""CLI entrypoint for loading prompts.json into the MLflow Prompt Registry."""
+"""CLI entrypoint for loading every service's prompts.json into the MLflow
+Prompt Registry.
+
+Each service that owns a prompt keeps its own prompts.json (sibling of its
+src/, e.g. local-dc-agent/prompts.json, local-wms-api/prompts.json) -- baked
+into that service's own container image, so PROMPT_SOURCE=local works in a
+deployed pod without MLflow, and so each Containerfile only ever COPYs files
+from its own build context. This tool discovers every such file across the
+repo and registers them all in one pass, rather than reading one central
+catalog.
+"""
 
 from __future__ import annotations
 
@@ -10,34 +20,48 @@ import sys
 from pathlib import Path
 from typing import Any
 
-DEFAULT_CATALOG = Path(__file__).resolve().parent.parent / "prompts.json"
+# prompt-registry/src/cli.py -> prompt-registry/src -> prompt-registry -> repo root
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 logger = logging.getLogger(__name__)
+
+
+def discover_catalog_files(repo_root: Path) -> list[Path]:
+    """Every <service>/prompts.json in the repo, one level deep, sorted for
+    stable output. Doesn't recurse into .git, target/, or any .venv -- glob's
+    single-level `*/prompts.json` pattern already excludes those (they don't
+    have a prompts.json directly inside them)."""
+    return sorted(repo_root.glob("*/prompts.json"))
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="src",
-        description="Register every prompt in prompts.json as a version in the MLflow Prompt Registry.",
+        description=(
+            "Register every prompt from every <service>/prompts.json in the repo "
+            "as a version in the MLflow Prompt Registry."
+        ),
     )
     parser.add_argument(
         "--file",
         "-f",
-        default=str(DEFAULT_CATALOG),
-        help=f"Path to the prompt catalog JSON. Default: {DEFAULT_CATALOG}",
+        action="append",
+        default=None,
+        help="Register from this catalog file instead of auto-discovering every "
+        "<service>/prompts.json (repeatable). Default: discover automatically.",
     )
     parser.add_argument(
         "--only",
         action="append",
         default=None,
-        help="Prompt id to load (repeatable). Default: load every prompt in the catalog.",
+        help="Prompt id to load (repeatable). Default: load every prompt found.",
     )
     parser.add_argument(
         "--commit-message",
         "-m",
         default=None,
         help="Commit message applied to every version registered in this run. "
-        "Default: a message noting the source catalog file.",
+        "Default: a per-prompt message noting its source catalog file.",
     )
     parser.add_argument(
         "--tracking-uri",
@@ -62,8 +86,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def load_catalog(path: Path) -> list[dict[str, Any]]:
     data = json.loads(path.read_text())
     prompts = data["prompts"]
+    for prompt in prompts:
+        prompt["_source_catalog"] = path
+    return prompts
+
+
+def load_catalogs(paths: list[Path]) -> list[dict[str, Any]]:
+    prompts: list[dict[str, Any]] = []
+    seen: dict[str, Path] = {}
+    for path in paths:
+        for prompt in load_catalog(path):
+            prior = seen.get(prompt["id"])
+            if prior is not None:
+                raise ValueError(
+                    f"duplicate prompt id {prompt['id']!r} found in both {prior} and {path}"
+                )
+            seen[prompt["id"]] = path
+            prompts.append(prompt)
     if not prompts:
-        raise ValueError(f"No prompts found in {path}")
+        raise ValueError(f"No prompts found across {len(paths)} catalog file(s): {paths}")
     return prompts
 
 
@@ -79,12 +120,31 @@ def _tags_for(prompt: dict[str, Any]) -> dict[str, str]:
     return tags
 
 
+def _commit_message_for(prompt: dict[str, Any], override: str | None) -> str:
+    if override:
+        return override
+    source = prompt["_source_catalog"]
+    try:
+        source = source.relative_to(REPO_ROOT)
+    except ValueError:
+        pass
+    return f"Loaded from {source}"
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "WARNING"))
     args = parse_args(argv)
 
-    catalog_path = Path(args.file)
-    prompts = load_catalog(catalog_path)
+    catalog_files = [Path(f) for f in args.file] if args.file else discover_catalog_files(REPO_ROOT)
+    if not catalog_files:
+        print(f"error: no prompts.json files found under {REPO_ROOT}", file=sys.stderr)
+        return 1
+
+    try:
+        prompts = load_catalogs(catalog_files)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     if args.only:
         wanted = set(args.only)
         prompts = [p for p in prompts if p["id"] in wanted]
@@ -92,8 +152,6 @@ def main(argv: list[str] | None = None) -> int:
         if missing:
             print(f"error: unknown prompt id(s): {', '.join(sorted(missing))}", file=sys.stderr)
             return 1
-
-    commit_message = args.commit_message or f"Loaded from {catalog_path.name}"
 
     tracking_uri = args.tracking_uri or os.environ.get("MLFLOW_TRACKING_URI")
     if not tracking_uri:
@@ -134,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         version = mlflow.genai.register_prompt(
             name=prompt["id"],
             template=prompt["template"],
-            commit_message=commit_message,
+            commit_message=_commit_message_for(prompt, args.commit_message),
             tags=_tags_for(prompt),
         )
         action = "updated" if existing is not None else "created"
