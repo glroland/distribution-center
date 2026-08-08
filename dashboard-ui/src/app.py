@@ -41,6 +41,18 @@ async def _proxy_post(url: str, json_body: dict | None = None) -> JSONResponse:
     return JSONResponse(content=response.json(), status_code=response.status_code)
 
 
+async def _reset_supervisor_tasks() -> None:
+    """Clears stale help/transfer requests before each PO import so the
+    supervisor queue only ever reflects the run currently in flight, rather
+    than accumulating escalations across demo runs. Best-effort: a
+    supervisor-api hiccup shouldn't block starting the run."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(f"{settings.SUPERVISOR_API_URL}/help-requests/reset")
+    except httpx.HTTPError as exc:
+        logger.warning("Could not reset supervisor tasks before run: %s", exc)
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(_STATIC_DIR / "index.html")
@@ -195,6 +207,8 @@ async def create_run(request: Request) -> dict:
         resolve_purchase_order_path(filename)
     except PurchaseOrderNotFoundError:
         raise HTTPException(status_code=404, detail=f"Unknown PO file: {filename}") from None
+
+    await _reset_supervisor_tasks()
 
     run = run_manager.start_run(filename)
     logger.info("Run %s created for po=%s", run.id, filename)
