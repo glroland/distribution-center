@@ -122,6 +122,22 @@ pipeline
          }
       }
 
+      stage('Create Docker Image for eval-suite')
+      {
+         steps
+         {
+            // Unlike every other stage above, eval-suite/Containerfile must be
+            // built with the repo root as context (no `cd eval-suite` first),
+            // because it copies ground-truth seed files that live outside
+            // eval-suite/ (products.csv, local-wms-api/data/inventory.csv,
+            // etc.) -- see the Containerfile's own comment.
+            sh 'docker build --no-cache -f eval-suite/Containerfile . --tag eval-suite:$BUILD_NUMBER'
+            sh 'docker save eval-suite:$BUILD_NUMBER > eval-suite/eval-suite-dockerimage.tar'
+            step(followSymlinks: false, artifacts: 'eval-suite/eval-suite-dockerimage.tar', $class: 'ArtifactArchiver')
+            sh 'docker rmi eval-suite:$BUILD_NUMBER'
+         }
+      }
+
       stage('Reload then push images to quay')
       {
          steps
@@ -177,6 +193,12 @@ pipeline
                   sh 'docker rmi label-api:$BUILD_NUMBER'
                   sh 'docker push registry.home.glroland.com/distribution-center/label-api:$BUILD_NUMBER'
                   sh 'docker rmi registry.home.glroland.com/distribution-center/label-api:$BUILD_NUMBER'
+
+                  sh 'docker load -i eval-suite/eval-suite-dockerimage.tar'
+                  sh 'docker tag eval-suite:$BUILD_NUMBER registry.home.glroland.com/distribution-center/eval-suite:$BUILD_NUMBER'
+                  sh 'docker rmi eval-suite:$BUILD_NUMBER'
+                  sh 'docker push registry.home.glroland.com/distribution-center/eval-suite:$BUILD_NUMBER'
+                  sh 'docker rmi registry.home.glroland.com/distribution-center/eval-suite:$BUILD_NUMBER'
 
                   sh 'docker load -i vision-ml/vision-ml-trainer-dockerimage.tar'
                   sh 'docker tag vision-ml-trainer:$BUILD_NUMBER registry.home.glroland.com/distribution-center/vision-ml-trainer:$BUILD_NUMBER'

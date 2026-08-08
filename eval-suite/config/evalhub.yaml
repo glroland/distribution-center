@@ -28,9 +28,13 @@ provider:
     local:
       command: "cd eval-suite && EVALHUB_JOB_SPEC_PATH=$EVALHUB_JOB_SPEC_PATH python -m src.evalhub_entrypoint"
     k8s:
-      # Build/push eval-suite's Containerfile to your registry before using
-      # this collection against a real (in-cluster) EvalHub deployment.
-      image: quay.io/<your-org>/dc-eval-suite:latest
+      # Pushed by deploy/Jenkinsfile's "Create Docker Image for eval-suite" /
+      # "Reload then push images to quay" stages, tagged with the Jenkins
+      # build number (e.g. registry.home.glroland.com/distribution-center/
+      # eval-suite:42) -- no ":latest" is pushed for this image, so replace
+      # the placeholder tag below with the build you want this collection
+      # to evaluate before registering it.
+      image: registry.home.glroland.com/distribution-center/eval-suite:REPLACE_WITH_BUILD_NUMBER
       entrypoint: ["python", "-m", "src.evalhub_entrypoint"]
       cpu_request: 250m
       memory_request: 512Mi

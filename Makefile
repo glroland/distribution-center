@@ -42,13 +42,14 @@ REQUIREMENTS := $(shell find . \
 	-not -path '*/.venv/*' \
 	-name 'requirements*.txt')
 
-.PHONY: help install generate-pos load-prompts eval-suite run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-label-api run-dashboard start-all kill-all restart-all status-all clean test
+.PHONY: help install generate-pos load-prompts eval-suite register-eval-suite run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-label-api run-dashboard start-all kill-all restart-all status-all clean test
 
 help:
 	@echo "Targets:"
 	@echo "  install                      Install dependencies from every requirements.txt (via: $(PIP))"
 	@echo "  generate-pos                 Generate sample PO PDFs into $(TARGET_DIR)/pos (ARGS=\"--count 25\" to pass flags)"
 	@echo "  eval-suite                   Run the EvalHub benchmarks locally against running services (ARGS=\"--adapter extraction\" to pass flags)"
+	@echo "  register-eval-suite          Register eval-suite's provider + collection with a running OpenShift AI EvalHub instance"
 	@echo "  load-prompts                 Register prompt-registry/prompts.json into the MLflow Prompt Registry (ARGS=\"--dry-run\" to pass flags)"
 	@echo "  run-ingest-api               Run the PO ingest API (http://localhost:8000)"
 	@echo "  run-local-dc-agent           Run the distribution center A2A agent (http://localhost:9100)"
@@ -81,6 +82,17 @@ load-prompts:
 
 eval-suite:
 	cd eval-suite && python3 -m src $(ARGS)
+
+# Registers eval-suite's provider + collection (config/evalhub.yaml) with a
+# running OpenShift AI 3.4 EvalHub instance -- not a Kubernetes resource you
+# apply, EvalHub exposes this as CLI/REST registration. Requires the
+# `evalhub` CLI (pip install eval-hub-sdk) already installed and
+# authenticated against your target EvalHub server, and the image referenced
+# by config/evalhub.yaml's provider.runtime.k8s.image already pushed (see
+# deploy/Jenkinsfile's "Create Docker Image for eval-suite" stage).
+register-eval-suite:
+	evalhub providers create   --file eval-suite/config/evalhub.yaml
+	evalhub collections create --file eval-suite/config/evalhub.yaml
 
 run-ingest-api:
 	cd po-ingest-api && PORT=$(PO_INGEST_API_PORT) python3 -m src
