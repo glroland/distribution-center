@@ -72,6 +72,11 @@ async function init() {
   $("#sticker-modal").addEventListener("click", (e) => {
     if (e.target.id === "sticker-modal") $("#sticker-modal").close();
   });
+  $("#po-preview-expand").addEventListener("click", onExpandPoPreview);
+  $("#pdf-modal-close").addEventListener("click", () => $("#pdf-modal").close());
+  $("#pdf-modal").addEventListener("click", (e) => {
+    if (e.target.id === "pdf-modal") $("#pdf-modal").close();
+  });
 
   state.dc = await api("/api/dc");
   await loadDc();
@@ -148,16 +153,26 @@ function onSelectPo(e) {
   state.selectedFilename = e.target.value;
   const frame = $("#po-preview-frame");
   const empty = $("#po-preview-empty");
+  const expandBtn = $("#po-preview-expand");
   if (state.selectedFilename) {
     frame.src = `/api/pos/${encodeURIComponent(state.selectedFilename)}/file`;
     frame.style.display = "block";
     empty.style.display = "none";
+    expandBtn.hidden = false;
     $("#send-btn").disabled = false;
   } else {
     frame.style.display = "none";
     empty.style.display = "flex";
+    expandBtn.hidden = true;
     $("#send-btn").disabled = true;
   }
+}
+
+function onExpandPoPreview() {
+  if (!state.selectedFilename) return;
+  $("#pdf-modal-title").textContent = `Purchase order preview — ${state.selectedFilename}`;
+  $("#pdf-modal-frame").src = `/api/pos/${encodeURIComponent(state.selectedFilename)}/file`;
+  $("#pdf-modal").showModal();
 }
 
 // ---------------------------------------------------------------------------
@@ -853,6 +868,7 @@ async function onReset() {
   $("#po-preview-frame").style.display = "none";
   $("#po-preview-frame").src = "";
   $("#po-preview-empty").style.display = "flex";
+  $("#po-preview-expand").hidden = true;
   $("#send-btn").disabled = true;
 
   state.helpRequests = {};

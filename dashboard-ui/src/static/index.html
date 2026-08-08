@@ -41,6 +41,7 @@
         <div class="po-preview">
           <iframe id="po-preview-frame" title="PO preview"></iframe>
           <div id="po-preview-empty" class="po-preview-empty">Select a PO to preview the document</div>
+          <button id="po-preview-expand" class="po-preview-expand" type="button" title="View full screen" aria-label="View PDF full screen" hidden>⛶</button>
         </div>
       </div>
       <div class="po-toggles">
@@ -143,6 +144,16 @@
     <span class="activity-time"></span>
   </div>
 </template>
+
+<dialog id="pdf-modal" class="pdf-modal">
+  <div class="docling-modal-head">
+    <div>
+      <h3 id="pdf-modal-title">Purchase order preview</h3>
+    </div>
+    <button id="pdf-modal-close" class="btn btn-ghost btn-small" type="button" aria-label="Close preview">✕</button>
+  </div>
+  <iframe id="pdf-modal-frame" class="pdf-modal-frame" title="PO full screen preview"></iframe>
+</dialog>
 
 <dialog id="docling-modal" class="docling-modal">
   <div class="docling-modal-head">

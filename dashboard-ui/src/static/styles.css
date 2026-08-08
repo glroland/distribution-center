@@ -219,6 +219,26 @@ h1, h2, h3 { margin: 0; }
   display: flex; align-items: center; justify-content: center;
   color: #888; font-size: 12px; background: #f4f4f4;
 }
+.po-preview-expand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #222;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.po-preview-expand:hover { background: #fff; border-color: var(--accent); }
+.po-preview-expand[hidden] { display: none; }
 
 /* --- stepper --- */
 .stepper { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; }
@@ -376,6 +396,24 @@ h1, h2, h3 { margin: 0; }
   line-height: 1.5;
   color: var(--text-dim);
 }
+/* --- full screen PDF modal --- */
+.pdf-modal {
+  width: 96vw;
+  height: 94vh;
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  color: var(--text);
+  flex-direction: column;
+}
+.pdf-modal[open] { display: flex; }
+.pdf-modal::backdrop { background: rgba(4, 8, 20, 0.7); }
+.pdf-modal .docling-modal-head { flex-shrink: 0; }
+.pdf-modal-frame { flex: 1; width: 100%; border: none; background: #fff; }
+
 .sticker-modal-body {
   padding: 16px;
   max-height: calc(82vh - 62px);
