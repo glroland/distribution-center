@@ -28,6 +28,18 @@ class Settings(BaseSettings):
     # so the dashboard has something to pick from even with no PO_DIRS override.
     PACKAGED_PO_DIR: Path = _PROJECT_ROOT / "data" / "pos"
 
+    # Adversarial PO PDFs (see data/guardrail-test-pos/README.md) that each
+    # exercise one MCP guardrail in local-dc-agent -- prompt injection via
+    # ship_to/line-item text, an out-of-bounds inventory decrement, a
+    # disallowed destructive tool call, hidden white-on-white text, prompt
+    # exfiltration, and a combined attack. Packaged the same way as
+    # PACKAGED_PO_DIR (same `COPY data ./data` in the Containerfile covers
+    # both, since this is a subdirectory of data/) so these are always
+    # available to run through the pipeline and confirm each guardrail
+    # blocks/redacts what it's meant to, in every deployed environment, not
+    # just local dev.
+    PACKAGED_GUARDRAIL_TEST_PO_DIR: Path = _PROJECT_ROOT / "data" / "guardrail-test-pos"
+
     # Comma-separated additional directories (relative paths resolve against this
     # project's parent directory) to search for demo PO PDFs, e.g. those produced by
     # `make generate-pos` or already checked into test-po-generator/output. These are
@@ -37,7 +49,7 @@ class Settings(BaseSettings):
 
     def po_dirs(self) -> list[Path]:
         repo_root = _PROJECT_ROOT.parent
-        dirs = [self.PACKAGED_PO_DIR]
+        dirs = [self.PACKAGED_PO_DIR, self.PACKAGED_GUARDRAIL_TEST_PO_DIR]
         for raw in self.PO_DIRS.split(","):
             raw = raw.strip()
             if not raw:

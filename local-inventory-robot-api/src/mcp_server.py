@@ -1,7 +1,9 @@
 import logging
+from typing import Annotated
 
 import httpx
 from mcp.server.fastmcp import FastMCP as MCPServer
+from pydantic import BaseModel, Field
 
 from .prompts import get_prompt
 from .robot import InventoryRobot, RobotStatus
@@ -11,6 +13,16 @@ from .tracing import configure_tracing, tool_trace
 configure_tracing()
 
 logger = logging.getLogger(__name__)
+
+# Backstop bound on a single pick/restock quantity, independent of any
+# caller-supplied business context -- see local-wms-api/src/mcp_server.py's
+# _MAX_ADJUSTMENT_MAGNITUDE for the same reasoning applied here.
+_MAX_QTY = 100_000
+
+
+class PickItem(BaseModel):
+    sku: str
+    qty: Annotated[int, Field(gt=0, le=_MAX_QTY)]
 
 
 def _status_dict(status: RobotStatus) -> dict:
@@ -94,7 +106,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
 
     @mcp_server.tool()
     @tool_trace
-    def fetch_item(sku: str, qty: int) -> dict:
+    def fetch_item(sku: str, qty: Annotated[int, Field(gt=0, le=_MAX_QTY)]) -> dict:
         """Pick `qty` units of `sku` off the shelf at the robot's current location and
         load them onto the robot. Fails if the SKU isn't stocked there, there isn't
         enough on hand, or it would exceed the robot's carry capacity. The response
@@ -105,7 +117,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
 
     @mcp_server.tool()
     @tool_trace
-    async def plan_and_fetch_items(items: list[dict]) -> dict:
+    async def plan_and_fetch_items(items: list[PickItem]) -> dict:
         """Fetch a whole set of items in one call - the normal way to fulfil a
         pick run. Pass a list of {"sku": str, "qty": int} entries; the robot
         works out an efficient visiting order, moves and picks each one,
@@ -120,7 +132,7 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
         sticker, as the robot's camera would have captured it, can be retrieved
         with get_item_photo and checked against label-api's infer_sku tool to
         verify the pick."""
-        result = await robot.run_pick_plan([(item["sku"], item["qty"]) for item in items])
+        result = await robot.run_pick_plan([(item.sku, item.qty) for item in items])
         return {
             "items": result["items"],
             "trace": [
@@ -168,7 +180,12 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
 
     @mcp_server.tool()
     @tool_trace
-    def restock_shelf(sku: str, qty: int, x: int | None = None, y: int | None = None) -> dict:
+    def restock_shelf(
+        sku: str,
+        qty: Annotated[int, Field(gt=0, le=_MAX_QTY)],
+        x: int | None = None,
+        y: int | None = None,
+    ) -> dict:
         """Place `qty` newly arrived units of `sku` onto a shelf, e.g. after a
         supervisor-approved inter-DC transfer. If x and y are omitted, prefers a
         cell already stocking that SKU, otherwise picks the first empty cell.

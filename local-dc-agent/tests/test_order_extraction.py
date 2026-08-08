@@ -68,7 +68,7 @@ def _tool_call(**overrides) -> _FakeToolCall:
 
 def _install_fake_client(monkeypatch, completions: _FakeCompletions) -> None:
     fake_client = _FakeOpenAIClient(completions)
-    monkeypatch.setattr(order_extraction_module, "OpenAI", lambda api_key, base_url=None: fake_client)
+    monkeypatch.setattr(order_extraction_module, "OpenAI", lambda api_key, base_url=None, timeout=None: fake_client)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
 
 

@@ -7,6 +7,7 @@ import mlflow
 from openai import OpenAI
 from pydantic import ValidationError
 
+from . import guardrails
 from .mcp_tools import McpToolRouter, ToolCallError
 from .models import Escalation, FulfillmentItemResult, FulfillmentResult, ProcessOrderResult
 from .prompts import get_prompt
@@ -121,6 +122,36 @@ async def fulfill_order(
     if not settings.OPENAI_API_KEY:
         raise FulfillmentError("OPENAI_API_KEY is not configured")
 
+    # Circuit breaker: every field here was extracted by an LLM from an
+    # untrusted PDF, and _order_message() below is about to hand all of it,
+    # verbatim, to a *second* LLM that -- unlike extraction's forced single
+    # tool call -- has genuine tool-calling power across five MCP servers.
+    # A PDF that successfully smuggled injected instructions through
+    # extraction is far more dangerous reaching this loop than reaching
+    # extraction, so this must run before the fulfillment loop ever starts,
+    # not somewhere inside it.
+    guardrail_findings = guardrails.scan_order_fields(order)
+    if guardrail_findings:
+        logger.warning(
+            "PO %s blocked by guardrail before fulfillment: %s",
+            order.po_number, [f.excerpt for f in guardrail_findings],
+        )
+        if on_event:
+            await on_event(
+                "guardrail_blocked",
+                {
+                    "stage": "fulfillment_input",
+                    "findings": [{"pattern": f.pattern, "excerpt": f.excerpt} for f in guardrail_findings],
+                },
+            )
+        question = get_prompt("dc-agent.fulfillment.guardrail_block_question").format(
+            po_number=order.po_number, excerpt=guardrail_findings[0].excerpt,
+        )
+        return await _escalate(
+            order, tools, on_event, question=question,
+            note="Blocked by guardrail: order text matched a suspected prompt-injection pattern.",
+        )
+
     client = OpenAI(
         api_key=settings.OPENAI_API_KEY,
         base_url=settings.OPENAI_BASE_URL or None,
@@ -210,12 +241,16 @@ async def _run_tool_call(
         arguments["customer_name"] = order.buyer_name or "Recipient"
         arguments["customer_address"] = order.ship_to
 
+    if name == "wms__adjust_inventory":
+        error = _check_adjust_inventory_bound(order, arguments)
+        if error:
+            logger.warning("Tool call %s blocked for PO %s: %s", name, order.po_number, error)
+            if on_event:
+                await on_event("tool_call", {"name": name, "arguments": arguments, "ok": False, "result": error})
+            return json.dumps({"error": error})
+
     try:
         result = await tools.call(name, arguments)
-        logger.info("Tool call %s(%s) succeeded", name, arguments)
-        if on_event:
-            await on_event("tool_call", {"name": name, "arguments": arguments, "ok": True, "result": result})
-        return result
     except ToolCallError as exc:
         logger.warning("Tool call %s(%s) failed: %s", name, arguments, exc)
         if on_event:
@@ -223,6 +258,63 @@ async def _run_tool_call(
                 "tool_call", {"name": name, "arguments": arguments, "ok": False, "result": str(exc)}
             )
         return json.dumps({"error": str(exc)})
+
+    # Tool results are about to be replayed straight back into the model's
+    # own conversation history (the caller appends this as a "tool" message)
+    # -- a compromised or adversarial downstream MCP response could otherwise
+    # steer later turns the same way injected PDF text can. Redact before
+    # that happens, not after.
+    redacted_result, findings = guardrails.redact(result)
+    if findings:
+        logger.warning(
+            "Tool result for %s(%s) redacted: %s", name, arguments, [f.excerpt for f in findings]
+        )
+        if on_event:
+            await on_event(
+                "guardrail_blocked",
+                {
+                    "stage": "tool_result",
+                    "tool": name,
+                    "findings": [{"pattern": f.pattern, "excerpt": f.excerpt} for f in findings],
+                },
+            )
+
+    logger.info("Tool call %s(%s) succeeded", name, arguments)
+    if on_event:
+        await on_event("tool_call", {"name": name, "arguments": arguments, "ok": True, "result": redacted_result})
+    return redacted_result
+
+
+def _check_adjust_inventory_bound(order: ProcessOrderResult, arguments: dict) -> str | None:
+    """Cross-checks a wms__adjust_inventory call against the order's own
+    requested quantities, computed here in Python -- not trusted from
+    whatever the model put in the tool call -- rather than accepting any
+    delta the model asks for. Per the fulfillment policy prompt, the only
+    legitimate use of this tool during fulfillment is decrementing (negative
+    delta) by however much was actually picked and verified for a SKU in
+    *this* order, so a decrement for an unrelated SKU, or one larger than
+    this order could ever legitimately need, is rejected outright rather
+    than silently corrupting the WMS ledger. Returns an error string to
+    surface to the model, or None if the call looks legitimate."""
+    sku = arguments.get("sku")
+    delta = arguments.get("delta")
+    if not isinstance(delta, (int, float)) or delta >= 0:
+        return None  # positive/zero deltas (restocks) aren't this order's concern
+
+    requested_qty = sum(item.quantity for item in order.line_items if item.sku == sku)
+    if requested_qty <= 0:
+        return (
+            f"Rejected: PO {order.po_number} has no line item for SKU '{sku}', "
+            "so adjust_inventory has nothing to justify this decrement against."
+        )
+    if -delta > requested_qty:
+        return (
+            f"Rejected: delta {delta} for SKU '{sku}' would decrement more than the "
+            f"{requested_qty} units this PO actually requested. If this is a real "
+            "shortfall or ledger mismatch, escalate via supervisor__request_help "
+            "instead of adjusting inventory past what was requested."
+        )
+    return None
 
 
 def _parse_finish_call(arguments_json: str) -> FulfillmentResult:
@@ -249,6 +341,22 @@ async def _escalate_timeout(
     question = get_prompt("dc-agent.fulfillment.escalation_timeout_question").format(
         max_turns=settings.MAX_FULFILLMENT_TURNS, po_number=order.po_number,
     )
+    return await _escalate(
+        order, tools, on_event, question=question, note="Fulfillment agent did not finish in time.",
+    )
+
+
+async def _escalate(
+    order: ProcessOrderResult,
+    tools: McpToolRouter,
+    on_event: OnEvent | None,
+    question: str,
+    note: str,
+) -> FulfillmentResult:
+    """Shared escalate-and-degrade path: raises a supervisor help request for
+    the whole order and returns an all-escalated FulfillmentResult, used both
+    when the model times out and when the guardrail circuit breaker in
+    fulfill_order() trips before the tool-calling loop ever starts."""
     arguments = {"question": question, "context": order.po_number}
     help_request_id = None
     try:
@@ -279,7 +387,7 @@ async def _escalate_timeout(
                 requested_qty=item.quantity,
                 fulfilled_qty=0,
                 status="escalated",
-                note="Fulfillment agent did not finish in time.",
+                note=note,
             )
             for item in order.line_items
         ],

@@ -1,4 +1,7 @@
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP as MCPServer
+from pydantic import Field
 
 from .prompts import get_prompt
 from .settings import settings
@@ -6,6 +9,11 @@ from .store import HelpRequest, SupervisorStore, TransferRequest
 from .tracing import configure_tracing, tool_trace
 
 configure_tracing()
+
+# Backstop bound, independent of any caller-supplied business context -- see
+# local-wms-api/src/mcp_server.py's _MAX_ADJUSTMENT_MAGNITUDE for the same
+# reasoning applied here.
+_MAX_QTY = 100_000
 
 
 def _request_dict(request: HelpRequest) -> dict:
@@ -58,7 +66,10 @@ def build_mcp_server(store: SupervisorStore) -> MCPServer:
     @mcp_server.tool()
     @tool_trace
     def request_transfer(
-        sku: str, quantity: int, agent_id: str | None = None, context: str | None = None
+        sku: str,
+        quantity: Annotated[int, Field(gt=0, le=_MAX_QTY)],
+        agent_id: str | None = None,
+        context: str | None = None,
     ) -> dict:
         """Request an inventory transfer of `quantity` units of `sku` from
         another distribution center to cover a local shortfall. Resolves

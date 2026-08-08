@@ -47,6 +47,17 @@ you can still add more by dropping pre-generated ones into
 generate-pos` (written to `target/pos/`); both are searched in addition to
 the packaged set.
 
+`data/guardrail-test-pos/` is packaged the same way (same `COPY data
+./data`, since it's a subdirectory of `data/`) and always shows up in the
+same PO picker alongside the legitimate samples. These are adversarial POs,
+each crafted to trip one of `local-dc-agent`'s MCP guardrails (prompt
+injection via SHIP TO/line-item text, an out-of-bounds inventory decrement,
+a disallowed destructive tool call, hidden white-on-white text, prompt
+exfiltration, a combined attack) - run one through the pipeline to confirm
+the corresponding guardrail actually fires instead of just trusting that it
+does. See `data/guardrail-test-pos/README.md` for what each file tests and
+the expected outcome.
+
 ```bash
 cd dashboard-ui
 python3 -m venv .venv
@@ -65,7 +76,7 @@ Starts on `http://localhost:8090` - open that in a browser.
 | `SUPERVISOR_API_URL` | `http://localhost:8003` | Base URL of `supervisor-api` |
 | `PO_INGEST_API_URL` | `http://localhost:8000` | Base URL of `po-ingest-api` (currently unused directly, reserved) |
 | `LABEL_API_URL` | `http://localhost:8005` | Base URL of `label-api`, proxied by `GET /api/stickers/{sku}` for the sticker-photo preview |
-| `PO_DIRS` | `target/pos,test-po-generator/output` | Comma-separated *additional* directories (relative to the repo root) to look for demo PO PDFs, on top of the packaged `data/pos/` (always searched, not configurable) |
+| `PO_DIRS` | `target/pos,test-po-generator/output` | Comma-separated *additional* directories (relative to the repo root) to look for demo PO PDFs, on top of the packaged `data/pos/` and `data/guardrail-test-pos/` (always searched, not configurable) |
 
 ## Distribution center
 

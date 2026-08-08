@@ -1,4 +1,7 @@
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP as MCPServer
+from pydantic import Field
 
 from .inventory import InventoryItem, InventoryStore
 from .prompts import get_prompt
@@ -6,6 +9,14 @@ from .settings import settings
 from .tracing import configure_tracing, tool_trace
 
 configure_tracing()
+
+# Sanity bound on a single adjustment, independent of any caller-supplied
+# business context (local-dc-agent's fulfillment.py separately cross-checks
+# a decrement against the requesting order's own quantities -- this is a
+# backstop for this server regardless of who's calling it, so a wildly
+# out-of-range delta -- e.g. from a prompt-injected tool call -- can't reach
+# the ledger at all rather than relying solely on the caller to behave).
+_MAX_ADJUSTMENT_MAGNITUDE = 100_000
 
 
 def _item_dict(item: InventoryItem) -> dict:
@@ -44,7 +55,10 @@ def build_mcp_server(store: InventoryStore) -> MCPServer:
 
     @mcp_server.tool()
     @tool_trace
-    def adjust_inventory(sku: str, delta: int) -> dict:
+    def adjust_inventory(
+        sku: str,
+        delta: Annotated[int, Field(ge=-_MAX_ADJUSTMENT_MAGNITUDE, le=_MAX_ADJUSTMENT_MAGNITUDE)],
+    ) -> dict:
         """Adjust on-hand quantity for a SKU. A positive delta receives stock, a
         negative delta ships stock. Fails if shipping would take quantity below zero."""
         if delta > 0:

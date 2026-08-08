@@ -34,6 +34,19 @@
       "template": "Continue fulfilling this order. Call the next tool you need, or call {{finish_tool_name}} if you are done."
     },
     {
+      "id": "dc-agent.fulfillment.guardrail_block_question",
+      "service": "local-dc-agent",
+      "source_file": "local-dc-agent/src/fulfillment.py",
+      "source_symbol": "fulfill_order() guardrail circuit-breaker question text",
+      "role": "user",
+      "description": "Question text sent to supervisor__request_help when the pre-fulfillment guardrail scan (guardrails.scan_order_fields()) finds a suspected prompt-injection pattern in one of the order's extracted text fields. Sent to a human supervisor, never to the fulfillment LLM -- the whole point is that the fulfillment loop never starts for this order.",
+      "variables": [
+        "po_number",
+        "excerpt"
+      ],
+      "template": "PO {{po_number}} was blocked before fulfillment: its extracted text matched a suspected prompt-injection pattern (\"{{excerpt}}\"). This PDF may be attempting to manipulate the fulfillment agent rather than place a legitimate order. Manual review needed before proceeding."
+    },
+    {
       "id": "dc-agent.fulfillment.escalation_timeout_question",
       "service": "local-dc-agent",
       "source_file": "local-dc-agent/src/fulfillment.py",

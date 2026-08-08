@@ -15,6 +15,15 @@ configure_tracing()
 logger = logging.getLogger(__name__)
 
 _TOOL_NAME_SEPARATOR = "__"
+# Demo/test-reset tools exist on their servers for `make reset`-style demo
+# resets, not as something the fulfillment LLM should ever be able to
+# invoke on its own initiative -- there's no legitimate reason a purchase
+# order would need to wipe the WMS ledger, return the robot to the dock
+# empty-handed, or clear shipment history mid-fulfillment, so these are
+# never registered as callable tools for the loop in the first place rather
+# than relying on the policy prompt alone to talk the model out of calling
+# them.
+_DISALLOWED_TOOLS = {"wms__reset_inventory", "robot__reset_robot", "shipping__reset_shipments"}
 # A dependent MCP server (wms/robot/shipping/supervisor/label) is commonly
 # still starting up when dc-agent's pod comes up during a fresh deploy or a
 # cluster restart, since nothing enforces Kubernetes start-up ordering across
@@ -80,18 +89,26 @@ class McpToolRouter:
         listed = await session.list_tools()
         prefix = f"{label}{_TOOL_NAME_SEPARATOR}"
         self._tools = [tool for tool in self._tools if not tool["function"]["name"].startswith(prefix)]
+        registered = 0
         for tool in listed.tools:
+            full_name = f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}"
+            if full_name in _DISALLOWED_TOOLS:
+                continue
             self._tools.append(
                 {
                     "type": "function",
                     "function": {
-                        "name": f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}",
+                        "name": full_name,
                         "description": tool.description or "",
                         "parameters": tool.inputSchema,
                     },
                 }
             )
-        logger.info("Connected to %s: %d tool(s) registered", label, len(listed.tools))
+            registered += 1
+        logger.info(
+            "Connected to %s: %d tool(s) registered (%d excluded)",
+            label, registered, len(listed.tools) - registered,
+        )
 
     async def _connect_with_retry(self, label: str, base_url: str) -> tuple[ClientSession, str | None]:
         """Connects to one MCP server, retrying with capped exponential backoff
@@ -171,6 +188,9 @@ class McpToolRouter:
         return {label: server.instructions for label, server in self._servers.items() if server.instructions}
 
     async def call(self, name: str, arguments: dict) -> str:
+        if name in _DISALLOWED_TOOLS:
+            raise ToolCallError(f"Tool '{name}' is not available to the fulfillment agent")
+
         label, _, tool_name = name.partition(_TOOL_NAME_SEPARATOR)
         server = self._servers.get(label)
         if server is None:

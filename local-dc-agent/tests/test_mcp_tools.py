@@ -53,6 +53,22 @@ async def test_call_routes_to_the_right_server() -> None:
 
 
 @pytest.mark.asyncio
+async def test_call_raises_on_disallowed_tool() -> None:
+    """reset_inventory/reset_robot/reset_shipments exist for demo resets, not
+    for the fulfillment LLM to invoke on its own initiative -- call() must
+    refuse them even if somehow named directly, as a backstop behind not
+    registering them as callable tools in the first place (see the next
+    test)."""
+    session = _FakeSession(response=_FakeCallToolResult(content=[_FakeTextContent(text="{}")]))
+    router = _router_with_servers(wms=(session, None))
+
+    with pytest.raises(ToolCallError, match="not available"):
+        await router.call("wms__reset_inventory", {})
+
+    assert session.calls == []  # never reached the downstream server
+
+
+@pytest.mark.asyncio
 async def test_call_raises_on_unknown_server() -> None:
     router = _router_with_servers()
 
@@ -69,6 +85,35 @@ async def test_call_raises_tool_call_error_on_error_result() -> None:
 
     with pytest.raises(ToolCallError, match="SKU not found"):
         await router.call("wms__get_inventory_status", {"sku": "does-not-exist"})
+
+
+@pytest.mark.asyncio
+async def test_register_excludes_disallowed_tools_from_registration() -> None:
+    """reset_inventory must never even appear in list_openai_tools() -- the
+    fulfillment LLM shouldn't be offered it as an option in the first place,
+    rather than relying only on call()'s runtime refusal."""
+    listed_tools = SimpleNamespace(
+        tools=[
+            SimpleNamespace(name="get_inventory_status", description="", inputSchema={}),
+            SimpleNamespace(name="reset_inventory", description="", inputSchema={}),
+        ]
+    )
+    session = SimpleNamespace(list_tools=lambda: _async_result(listed_tools))
+    router = McpToolRouter()
+
+    async def fake_connect_with_retry(label: str, base_url: str):
+        return session, None
+
+    router._connect_with_retry = fake_connect_with_retry
+    await router._register("wms", "http://wms")
+
+    names = [t["function"]["name"] for t in router.list_openai_tools()]
+    assert names == ["wms__get_inventory_status"]
+    assert "wms__reset_inventory" not in names
+
+
+async def _async_result(value):
+    return value
 
 
 def test_list_openai_tools_are_prefixed_by_server() -> None:
