@@ -17,21 +17,15 @@
         <p id="dc-subtitle" class="subtitle">Loading distribution center…</p>
       </div>
     </div>
+    <div class="stepper-mini-wrap">
+      <ol class="stepper stepper-mini" id="stepper">
+        <li data-step="sent" title="PO Sent — Handed to the DC agent"><span class="step-dot"></span><span class="step-mini-label">PO Sent</span></li>
+        <li data-step="reading" title="Reading &amp; Understanding — PDF ingest + LLM field extraction"><span class="step-dot"></span><span class="step-mini-label">Reading</span></li>
+        <li data-step="fulfilling" title="Fulfilling — Checking stock, picking, shipping"><span class="step-dot"></span><span class="step-mini-label">Fulfilling</span></li>
+        <li data-step="done" title="Complete — Tracking numbers &amp; summary"><span class="step-dot"></span><span class="step-mini-label">Complete</span></li>
+      </ol>
+    </div>
     <div class="topbar-actions">
-      <label class="field field-toggle" title="MCP guardrails on the fulfillment agent: blocks orders whose extracted text looks like a prompt-injection attempt, rejects out-of-bounds inventory adjustments, redacts suspicious tool results, and hides destructive reset tools from the model. Off = same PO runs unprotected, for demo comparison.">
-        <span>Agentic Safety</span>
-        <span class="switch">
-          <input type="checkbox" id="agentic-safety-toggle" checked />
-          <span class="switch-track"><span class="switch-thumb"></span></span>
-        </span>
-      </label>
-      <label class="field field-toggle" title="Raise on-hand and shelf quantities for every SKU into the millions so runs never hit an out-of-stock escalation">
-        <span>Unlimited Stock</span>
-        <span class="switch">
-          <input type="checkbox" id="boost-toggle" />
-          <span class="switch-track"><span class="switch-thumb"></span></span>
-        </span>
-      </label>
       <button id="reset-btn" class="btn btn-ghost" title="Reset inventory, robot, shipments, and pipeline state to a fresh launch">Reset</button>
     </div>
   </header>
@@ -43,11 +37,27 @@
         <h2>1 · Choose a Purchase Order</h2>
       </div>
       <div class="po-picker">
-        <select id="po-select" size="8"></select>
+        <select id="po-select" size="5"></select>
         <div class="po-preview">
           <iframe id="po-preview-frame" title="PO preview"></iframe>
           <div id="po-preview-empty" class="po-preview-empty">Select a PO to preview the document</div>
         </div>
+      </div>
+      <div class="po-toggles">
+        <label class="field field-toggle" title="MCP guardrails on the fulfillment agent: blocks orders whose extracted text looks like a prompt-injection attempt, rejects out-of-bounds inventory adjustments, redacts suspicious tool results, and hides destructive reset tools from the model. Off = same PO runs unprotected, for demo comparison.">
+          <span>Agentic Safety</span>
+          <span class="switch">
+            <input type="checkbox" id="agentic-safety-toggle" checked />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </span>
+        </label>
+        <label class="field field-toggle" title="Raise on-hand and shelf quantities for every SKU into the millions so runs never hit an out-of-stock escalation">
+          <span>Unlimited Stock</span>
+          <span class="switch">
+            <input type="checkbox" id="boost-toggle" />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </span>
+        </label>
       </div>
       <button id="send-btn" class="btn btn-primary" disabled>Send to Distribution Center →</button>
     </section>
@@ -57,12 +67,6 @@
         <h2>2 · Pipeline</h2>
         <span id="run-status-badge" class="badge badge-idle">Idle</span>
       </div>
-      <ol class="stepper" id="stepper">
-        <li data-step="sent"><span class="step-dot"></span><div><strong>PO Sent</strong><small>Handed to the DC agent</small></div></li>
-        <li data-step="reading"><span class="step-dot"></span><div><strong>Reading &amp; Understanding</strong><small>PDF ingest + LLM field extraction</small></div></li>
-        <li data-step="fulfilling"><span class="step-dot"></span><div><strong>Fulfilling</strong><small>Checking stock, picking, shipping</small></div></li>
-        <li data-step="done"><span class="step-dot"></span><div><strong>Complete</strong><small>Tracking numbers &amp; summary</small></div></li>
-      </ol>
       <div class="activity-feed" id="activity-feed">
         <div class="activity-empty">Activity from the AI agent will appear here once a PO is sent.</div>
       </div>

@@ -38,7 +38,23 @@ async function api(path, opts) {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
+function syncTopRowHeights() {
+  const po = $("#po-panel");
+  const pipeline = $("#pipeline-panel");
+  const map = $("#map-panel");
+  if (window.matchMedia("(max-width: 1100px)").matches) {
+    pipeline.style.height = "";
+    map.style.height = "";
+    return;
+  }
+  const height = `${po.getBoundingClientRect().height}px`;
+  pipeline.style.height = height;
+  map.style.height = height;
+}
+
 async function init() {
+  new ResizeObserver(syncTopRowHeights).observe($("#po-panel"));
+
   $("#reset-btn").addEventListener("click", onReset);
   $("#agentic-safety-toggle").addEventListener("change", onToggleAgenticSafety);
   $("#boost-toggle").addEventListener("change", onToggleBoost);
