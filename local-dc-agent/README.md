@@ -147,6 +147,26 @@ cd local-dc-agent && python3 -m src
 Starts the agent on `http://localhost:9100`. The agent card is served at
 `http://localhost:9100/.well-known/agent-card.json`.
 
+### Agentic Safety
+
+`src/guardrails.py`'s heuristic MCP guardrails (the pre-fulfillment
+prompt-injection scan, the `wms__adjust_inventory` bound check, tool-result
+redaction, and hiding the destructive `reset_*` tools from the model's tool
+list — see the dashboard-ui README's "guardrail test POs" section for what
+each of these catches) are gated behind a single runtime toggle, on by
+default. It's process-local, in-memory state (like everything else in this
+service) rather than anything persisted, so it resets to `GUARDRAILS_ENABLED`
+on restart:
+
+```bash
+curl http://localhost:9100/guardrails                                          # {"enabled": true}
+curl -X POST http://localhost:9100/guardrails -d '{"enabled": false}'          # disable for a demo
+```
+
+The dashboard UI's "Agentic Safety" switch (top bar) is a thin proxy over
+this same endpoint (`GET`/`POST /api/agentic-safety` in `dashboard-ui`), so
+flipping it there disables it here too, live, without a restart.
+
 | Env var | Default | Description |
 |---|---|---|
 | `PO_INGEST_API_URL` | `http://localhost:8000` | Base URL of `po-ingest-api` |
@@ -158,6 +178,7 @@ Starts the agent on `http://localhost:9100`. The agent card is served at
 | `OPENAI_API_KEY` | *(none)* | Required to run extraction and fulfillment |
 | `OPENAI_MODEL` | `gpt-5` | Model used for both extraction and fulfillment |
 | `MAX_FULFILLMENT_TURNS` | `20` | Tool-call turns before the fulfillment loop auto-escalates and gives up |
+| `GUARDRAILS_ENABLED` | `true` | Startup default for the "Agentic Safety" toggle (see below) |
 | `HOST` | `0.0.0.0` | Bind host |
 | `PORT` | `9100` | Bind port |
 | `AGENT_URL` | `http://localhost:{PORT}/` | URL advertised in the agent card |

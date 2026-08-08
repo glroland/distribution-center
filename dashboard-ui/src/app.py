@@ -110,6 +110,22 @@ async def reset_dc() -> dict:
     return results
 
 
+@app.get("/api/agentic-safety")
+async def get_agentic_safety() -> JSONResponse:
+    """Proxies local-dc-agent's "Agentic Safety" toggle state so the dashboard
+    can reflect the real backend value on load rather than assuming a default
+    -- unlike Unlimited Stock, this is a safety-relevant control and getting
+    it wrong (showing "on" while the backend is actually "off") would be
+    misleading."""
+    return await _proxy_get(f"{DISTRIBUTION_CENTER.agent_url.rstrip('/')}/guardrails")
+
+
+@app.post("/api/agentic-safety")
+async def set_agentic_safety(request: Request) -> JSONResponse:
+    body = await request.json()
+    return await _proxy_post(f"{DISTRIBUTION_CENTER.agent_url.rstrip('/')}/guardrails", json_body=body)
+
+
 @app.post("/api/inventory-boost")
 async def set_inventory_boost(request: Request) -> dict:
     dc = DISTRIBUTION_CENTER

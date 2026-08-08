@@ -102,7 +102,7 @@ def extract_order(markdown: str) -> ExtractedOrder:
     try:
         response = client.chat.completions.create(
             model=settings.OPENAI_MODEL,
-            max_tokens=2048,
+            max_completion_tokens=2048,
             temperature=0,
             tools=[_TOOL_SCHEMA],
             tool_choice={"type": "function", "function": {"name": _TOOL_NAME}},

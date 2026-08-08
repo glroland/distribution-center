@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src import mcp_tools
+from src import guardrails, mcp_tools
 from src.mcp_tools import McpToolRouter, ToolCallError, _Server
 
 
@@ -69,6 +69,18 @@ async def test_call_raises_on_disallowed_tool() -> None:
 
 
 @pytest.mark.asyncio
+async def test_call_allows_disallowed_tool_when_agentic_safety_is_off() -> None:
+    guardrails.set_enabled(False)
+    session = _FakeSession(response=_FakeCallToolResult(content=[_FakeTextContent(text='{"status": "ok"}')]))
+    router = _router_with_servers(wms=(session, None))
+
+    result = await router.call("wms__reset_inventory", {})
+
+    assert result == '{"status": "ok"}'
+    assert session.calls == [("reset_inventory", {})]
+
+
+@pytest.mark.asyncio
 async def test_call_raises_on_unknown_server() -> None:
     router = _router_with_servers()
 
@@ -110,6 +122,32 @@ async def test_register_excludes_disallowed_tools_from_registration() -> None:
     names = [t["function"]["name"] for t in router.list_openai_tools()]
     assert names == ["wms__get_inventory_status"]
     assert "wms__reset_inventory" not in names
+
+
+@pytest.mark.asyncio
+async def test_register_still_discovers_disallowed_tools_for_later_toggle() -> None:
+    """reset_inventory is hidden from list_openai_tools() while enabled (see
+    above), but must still be discovered and kept in the router's own state
+    at registration time -- otherwise flipping Agentic Safety off wouldn't
+    re-expose it without a reconnect."""
+    listed_tools = SimpleNamespace(
+        tools=[
+            SimpleNamespace(name="get_inventory_status", description="", inputSchema={}),
+            SimpleNamespace(name="reset_inventory", description="", inputSchema={}),
+        ]
+    )
+    session = SimpleNamespace(list_tools=lambda: _async_result(listed_tools))
+    router = McpToolRouter()
+
+    async def fake_connect_with_retry(label: str, base_url: str):
+        return session, None
+
+    router._connect_with_retry = fake_connect_with_retry
+    await router._register("wms", "http://wms")
+
+    guardrails.set_enabled(False)
+    names = [t["function"]["name"] for t in router.list_openai_tools()]
+    assert names == ["wms__get_inventory_status", "wms__reset_inventory"]
 
 
 async def _async_result(value):

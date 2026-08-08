@@ -58,6 +58,13 @@ the corresponding guardrail actually fires instead of just trusting that it
 does. See `data/guardrail-test-pos/README.md` for what each file tests and
 the expected outcome.
 
+The **Agentic Safety** switch in the top bar toggles those same guardrails
+live, on `local-dc-agent`, via `GET`/`POST /api/agentic-safety` here (a thin
+proxy to that service's own `GET`/`POST /guardrails` - see its README). On
+by default; flip it off to run one of the `guardrail-test-pos/` PDFs
+unprotected for comparison, e.g. to show the ship-to hijack actually
+reaching the shipping tool instead of being escalated.
+
 ```bash
 cd dashboard-ui
 python3 -m venv .venv

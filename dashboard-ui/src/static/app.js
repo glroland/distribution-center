@@ -40,6 +40,7 @@ async function api(path, opts) {
 
 async function init() {
   $("#reset-btn").addEventListener("click", onReset);
+  $("#agentic-safety-toggle").addEventListener("change", onToggleAgenticSafety);
   $("#boost-toggle").addEventListener("change", onToggleBoost);
   $("#po-select").addEventListener("change", onSelectPo);
   $("#send-btn").addEventListener("click", onSendPo);
@@ -58,6 +59,7 @@ async function init() {
 
   state.dc = await api("/api/dc");
   await loadDc();
+  await loadAgenticSafety();
 
   refreshHelpRequests();
   setInterval(refreshHelpRequests, 6000);
@@ -841,6 +843,33 @@ async function onReset() {
   renderHelpRequests();
 
   state.imageIdToSku = {};
+}
+
+async function loadAgenticSafety() {
+  try {
+    const { enabled } = await api("/api/agentic-safety");
+    $("#agentic-safety-toggle").checked = enabled;
+  } catch (err) {
+    console.warn("could not load agentic safety state", err);
+  }
+}
+
+async function onToggleAgenticSafety(e) {
+  const checkbox = e.target;
+  const enabled = checkbox.checked;
+  checkbox.disabled = true;
+  try {
+    await api("/api/agentic-safety", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+  } catch (err) {
+    console.warn("agentic safety toggle failed", err);
+    checkbox.checked = !enabled;
+  } finally {
+    checkbox.disabled = false;
+  }
 }
 
 async function onToggleBoost(e) {

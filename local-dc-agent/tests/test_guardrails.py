@@ -75,3 +75,15 @@ def test_redact_leaves_benign_text_untouched() -> None:
     redacted, findings = guardrails.redact(text)
     assert redacted == text
     assert findings == []
+
+
+def test_agentic_safety_toggle_defaults_to_enabled() -> None:
+    assert guardrails.is_enabled() is True
+
+
+def test_agentic_safety_toggle_can_be_flipped() -> None:
+    guardrails.set_enabled(False)
+    assert guardrails.is_enabled() is False
+
+    guardrails.set_enabled(True)
+    assert guardrails.is_enabled() is True

@@ -24,6 +24,26 @@ import re
 from dataclasses import dataclass
 
 from .models import ProcessOrderResult
+from .settings import settings
+
+# Runtime toggle ("Agentic Safety" in the dashboard UI, GET/POST /guardrails
+# on this service) for every guardrail this module and fulfillment.py/
+# mcp_tools.py gate on it: the pre-fulfillment injection scan, the
+# adjust_inventory order-aware bound check, tool-result redaction, and
+# hiding the destructive reset_* tools from the model's tool list. Deliberately
+# in-memory and process-local, like every other piece of state in this repo
+# (see CLAUDE.md) -- flipped live for demo purposes, reset to the
+# GUARDRAILS_ENABLED env default on restart, not meant to persist.
+_enabled = settings.GUARDRAILS_ENABLED
+
+
+def is_enabled() -> bool:
+    return _enabled
+
+
+def set_enabled(value: bool) -> None:
+    global _enabled
+    _enabled = value
 
 
 @dataclass

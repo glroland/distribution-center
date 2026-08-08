@@ -129,8 +129,10 @@ async def fulfill_order(
     # A PDF that successfully smuggled injected instructions through
     # extraction is far more dangerous reaching this loop than reaching
     # extraction, so this must run before the fulfillment loop ever starts,
-    # not somewhere inside it.
-    guardrail_findings = guardrails.scan_order_fields(order)
+    # not somewhere inside it. Gated on the "Agentic Safety" toggle
+    # (guardrails.is_enabled()) so a demo can show the same PO running
+    # unprotected.
+    guardrail_findings = guardrails.scan_order_fields(order) if guardrails.is_enabled() else []
     if guardrail_findings:
         logger.warning(
             "PO %s blocked by guardrail before fulfillment: %s",
@@ -241,7 +243,7 @@ async def _run_tool_call(
         arguments["customer_name"] = order.buyer_name or "Recipient"
         arguments["customer_address"] = order.ship_to
 
-    if name == "wms__adjust_inventory":
+    if name == "wms__adjust_inventory" and guardrails.is_enabled():
         error = _check_adjust_inventory_bound(order, arguments)
         if error:
             logger.warning("Tool call %s blocked for PO %s: %s", name, order.po_number, error)
@@ -263,8 +265,9 @@ async def _run_tool_call(
     # own conversation history (the caller appends this as a "tool" message)
     # -- a compromised or adversarial downstream MCP response could otherwise
     # steer later turns the same way injected PDF text can. Redact before
-    # that happens, not after.
-    redacted_result, findings = guardrails.redact(result)
+    # that happens, not after. Gated on the "Agentic Safety" toggle, same as
+    # the other two checks in this file.
+    redacted_result, findings = guardrails.redact(result) if guardrails.is_enabled() else (result, [])
     if findings:
         logger.warning(
             "Tool result for %s(%s) redacted: %s", name, arguments, [f.excerpt for f in findings]

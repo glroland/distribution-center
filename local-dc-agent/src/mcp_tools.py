@@ -7,6 +7,7 @@ import mlflow
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from . import guardrails
 from .settings import settings
 from .tracing import configure_tracing
 
@@ -19,10 +20,11 @@ _TOOL_NAME_SEPARATOR = "__"
 # resets, not as something the fulfillment LLM should ever be able to
 # invoke on its own initiative -- there's no legitimate reason a purchase
 # order would need to wipe the WMS ledger, return the robot to the dock
-# empty-handed, or clear shipment history mid-fulfillment, so these are
-# never registered as callable tools for the loop in the first place rather
-# than relying on the policy prompt alone to talk the model out of calling
-# them.
+# empty-handed, or clear shipment history mid-fulfillment. Hidden from
+# list_openai_tools() and refused by call() while guardrails.is_enabled()
+# (the "Agentic Safety" toggle) is on; still discovered and kept in
+# self._tools either way so flipping the toggle off doesn't require a
+# reconnect to re-expose them.
 _DISALLOWED_TOOLS = {"wms__reset_inventory", "robot__reset_robot", "shipping__reset_shipments"}
 # A dependent MCP server (wms/robot/shipping/supervisor/label) is commonly
 # still starting up when dc-agent's pod comes up during a fresh deploy or a
@@ -89,25 +91,21 @@ class McpToolRouter:
         listed = await session.list_tools()
         prefix = f"{label}{_TOOL_NAME_SEPARATOR}"
         self._tools = [tool for tool in self._tools if not tool["function"]["name"].startswith(prefix)]
-        registered = 0
         for tool in listed.tools:
-            full_name = f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}"
-            if full_name in _DISALLOWED_TOOLS:
-                continue
             self._tools.append(
                 {
                     "type": "function",
                     "function": {
-                        "name": full_name,
+                        "name": f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}",
                         "description": tool.description or "",
                         "parameters": tool.inputSchema,
                     },
                 }
             )
-            registered += 1
+        disallowed_count = sum(1 for tool in listed.tools if f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}" in _DISALLOWED_TOOLS)
         logger.info(
-            "Connected to %s: %d tool(s) registered (%d excluded)",
-            label, registered, len(listed.tools) - registered,
+            "Connected to %s: %d tool(s) registered (%d hidden while Agentic Safety is on)",
+            label, len(listed.tools), disallowed_count,
         )
 
     async def _connect_with_retry(self, label: str, base_url: str) -> tuple[ClientSession, str | None]:
@@ -182,13 +180,15 @@ class McpToolRouter:
             await stack.aclose()
 
     def list_openai_tools(self) -> list[dict]:
+        if guardrails.is_enabled():
+            return [tool for tool in self._tools if tool["function"]["name"] not in _DISALLOWED_TOOLS]
         return list(self._tools)
 
     def server_instructions(self) -> dict[str, str]:
         return {label: server.instructions for label, server in self._servers.items() if server.instructions}
 
     async def call(self, name: str, arguments: dict) -> str:
-        if name in _DISALLOWED_TOOLS:
+        if name in _DISALLOWED_TOOLS and guardrails.is_enabled():
             raise ToolCallError(f"Tool '{name}' is not available to the fulfillment agent")
 
         label, _, tool_name = name.partition(_TOOL_NAME_SEPARATOR)

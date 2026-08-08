@@ -7,6 +7,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from . import guardrails
 from .agent_card import AGENT_CARD
 from .agent_executor import ProcessOrderAgentExecutor
 from .tracing import configure_tracing
@@ -51,5 +52,21 @@ async def ready(request: Request) -> JSONResponse:
     return JSONResponse({"status": "starting"}, status_code=503)
 
 
+async def get_guardrails(request: Request) -> JSONResponse:
+    """"Agentic Safety" toggle state -- see guardrails.py for what it gates
+    (the pre-fulfillment injection scan, the adjust_inventory bound check,
+    tool-result redaction, and hiding the destructive reset_* tools)."""
+    return JSONResponse({"enabled": guardrails.is_enabled()})
+
+
+async def set_guardrails(request: Request) -> JSONResponse:
+    body = await request.json()
+    enabled = bool(body.get("enabled"))
+    guardrails.set_enabled(enabled)
+    return JSONResponse({"enabled": enabled})
+
+
 app.add_route("/health", health, methods=["GET"])
 app.add_route("/ready", ready, methods=["GET"])
+app.add_route("/guardrails", get_guardrails, methods=["GET"])
+app.add_route("/guardrails", set_guardrails, methods=["POST"])

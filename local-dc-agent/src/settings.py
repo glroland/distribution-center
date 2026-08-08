@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-5"
     OPENAI_BASE_URL: str | None = None
     MAX_FULFILLMENT_TURNS: int = 20
+    # Default for the "Agentic Safety" toggle (GET/POST /guardrails; see
+    # guardrails.py) -- on by default, flippable live for demos without a
+    # restart. This only sets the value at process startup.
+    GUARDRAILS_ENABLED: bool = True
     MCP_TOOL_CALL_TIMEOUT_SECONDS: float = 60.0
     OPENAI_REQUEST_TIMEOUT_SECONDS: float = 60.0
     HOST: str = "0.0.0.0"
