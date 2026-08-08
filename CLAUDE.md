@@ -9,8 +9,8 @@ order PDF, extracts it with an LLM, checks/fulfills inventory via a virtual
 picking robot, ships whatever was retrieved, and escalates to a human
 supervisor when something's short or unknown. Eight independent Python
 services (each its own venv/requirements/Containerfile) plus a PDF generator
-for demo data, wired together over HTTP/MCP and run either individually or
-all at once via the root `Makefile`.
+for demo data and an EvalHub benchmark suite, wired together over HTTP/MCP
+and run either individually or all at once via the root `Makefile`.
 
 ## Services
 
@@ -25,6 +25,7 @@ all at once via the root `Makefile`.
 | `label-api` | 8005 | Synthesizes low-quality camera-style photos of SKU stickers; also serves local SKU inference against vision-ml-trained models |
 | `dashboard-ui` | 8090 | Backend-for-frontend + static UI that drives/watches a demo run |
 | `test-po-generator` | - | CLI, not a server; generates sample PO PDFs |
+| `eval-suite` | - | CLI, not a server; EvalHub BYOF benchmarks (extraction accuracy, MCP trajectory, end-to-end outcome) |
 
 Read a service's own `README.md` before working in it — each documents its
 REST endpoints, MCP tools, and env vars in detail; this file only covers
@@ -196,6 +197,46 @@ on-hand/shelf stock for most of the same SKUs from their own
 partial — `local-wms-api`'s seed data only stocks a handful of SKUs (one at
 zero on hand), so a generated PO will often exercise both the
 pick-and-ship path and the supervisor-escalation path in the same run.
+
+### Evaluation (`eval-suite`)
+
+CLI-shaped like `test-po-generator`, not a server. Three EvalHub BYOF
+("bring your own framework") benchmarks, each with a plain `run_local()`
+function usable with no EvalHub installation (`cd eval-suite && python -m
+src --adapter all`, or `make eval-suite`) plus a `FrameworkAdapter` subclass
+(`src/adapters/base.py`, importing `evalhub.adapter` only when present) for
+registering the same logic with a real EvalHub instance via
+`config/evalhub.yaml`'s weighted collection
+(`distribution-center-eval-v1`):
+
+- **`dc-extraction-accuracy`** (`src/adapters/extraction_adapter.py`) —
+  calls the *same* prompt (MLflow Prompt Registry or local catalog, per
+  `PROMPT_SOURCE`) and tool schema `local-dc-agent/src/order_extraction.py`
+  uses, hand-mirrored rather than cross-imported since services here don't
+  share a Python package (see "Per-service shape" above), against golden PO
+  PDFs generated with exactly-known fields. Meant to gate promoting a new
+  `dc-agent.order_extraction.system_prompt` version before
+  `PROMPT_SOURCE=mlflow` lets it into production.
+- **`dc-mcp-trajectory`** (`src/adapters/mcp_trajectory_adapter.py`) — runs
+  real POs through `local-dc-agent` over A2A with a `progress_webhook`
+  pointed at a local receiver (`src/webhook_receiver.py`), then validates
+  the captured tool-call stream against the five downstream MCP servers'
+  *live* `inputSchema`s (fetched at run time, not hardcoded) and checks that
+  every stock decrement was preceded by a `robot__get_item_photo` ->
+  `label__infer_sku` pair, per the fulfillment policy prompt's
+  visual-verification requirement.
+- **`dc-end-to-end`** (`src/adapters/end_to_end_adapter.py`) — submits POs
+  whose stock-availability outcome is precomputed from
+  `local-wms-api/data/inventory.csv` and
+  `local-inventory-robot-api/data/shelves.csv` (`src/seed_data.py`), and
+  scores the agent's actual `fulfilled_qty`/`order_status` against that
+  ground truth. Deliberately rules-based, not an LLM judge — the correct
+  answer here is a computable fact, not a matter of taste.
+
+PO PDFs for all three benchmarks are rendered by `src/pdf_builder.py`, a
+minimal ReportLab renderer kept independent of `test-po-generator`'s (whose
+`src`-named package can't be cross-imported without collision, and whose
+random sampling can't be steered to specific known-outcome SKUs anyway).
 
 ### Deployment (`deploy/`)
 
