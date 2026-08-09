@@ -414,6 +414,35 @@ h1, h2, h3 { margin: 0; }
 .pdf-modal .docling-modal-head { flex-shrink: 0; }
 .pdf-modal-frame { flex: 1; width: 100%; border: none; background: #fff; }
 
+/* --- architecture overview modal --- */
+.architecture-modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 28px 24px;
+  background: var(--bg-panel);
+}
+.arch-figure { margin: 0 0 20px 0; }
+.arch-figure svg { width: 100%; height: auto; display: block; }
+.arch-figure figcaption {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  text-align: center;
+}
+.arch-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.arch-highlight {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.arch-highlight h4 { margin: 0 0 6px 0; font-size: 13px; color: var(--accent-strong); }
+.arch-highlight p { margin: 0; font-size: 12px; color: var(--text-dim); line-height: 1.45; }
+
 .sticker-modal-body {
   padding: 16px;
   max-height: calc(82vh - 62px);
@@ -544,4 +573,5 @@ h1, h2, h3 { margin: 0; }
     grid-template-areas:
       "po" "pipeline" "map" "lines" "inventory" "shipping" "hitl";
   }
+  .arch-highlights { grid-template-columns: 1fr; }
 }

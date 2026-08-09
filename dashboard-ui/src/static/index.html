@@ -26,6 +26,7 @@
       </ol>
     </div>
     <div class="topbar-actions">
+      <button id="architecture-btn" class="btn btn-ghost" title="Open a customer-facing overview of the OpenShift AI platform capabilities behind this demo">Architecture Overview</button>
       <button id="reset-btn" class="btn btn-ghost" title="Reset inventory, robot, shipments, and pipeline state to a fresh launch">Reset</button>
     </div>
   </header>
@@ -153,6 +154,207 @@
     <button id="pdf-modal-close" class="btn btn-ghost btn-small" type="button" aria-label="Close preview">✕</button>
   </div>
   <iframe id="pdf-modal-frame" class="pdf-modal-frame" title="PO full screen preview"></iframe>
+</dialog>
+
+<dialog id="architecture-modal" class="pdf-modal architecture-modal">
+  <div class="docling-modal-head">
+    <div>
+      <h3 id="architecture-modal-title">Architecture Overview — Powered by Red Hat OpenShift AI</h3>
+      <div class="docling-modal-meta">A platform-capability view for customer conversations, not a code map.</div>
+    </div>
+    <button id="architecture-modal-close" class="btn btn-ghost btn-small" type="button" aria-label="Close architecture overview">✕</button>
+  </div>
+  <div class="architecture-modal-body">
+    <figure class="arch-figure">
+      <svg viewBox="0 0 1200 766" role="img" aria-label="Red Hat OpenShift AI provides nine agentic platform capabilities — generative AI model serving, an AI gateway for models-as-a-service, agentic tool orchestration, computer vision inference, MLOps for computer vision models, prompt and model registry, distributed tracing, continuous evaluation, and safety guardrails — all running on Red Hat OpenShift. Below that foundation, a purchase order PDF arrives and flows through the pipeline: the inventory ledger is updated after a verified pick, the shipment is booked and tracked, or the order is escalated to a human supervisor when something's off.">
+        <defs>
+          <marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 Z" fill="var(--accent)"></path>
+          </marker>
+        </defs>
+
+        <rect x="0" y="0" width="1200" height="766" fill="var(--bg-panel)"></rect>
+
+        <!-- Platform container -->
+        <rect x="60" y="16" width="1080" height="510" rx="16" fill="var(--bg-elevated)" stroke="var(--accent)" stroke-width="1.5"></rect>
+        <text x="600" y="48" text-anchor="middle" font-size="19" font-weight="700" letter-spacing="0.4" fill="var(--accent-strong)">RED HAT OPENSHIFT AI — AGENTIC PLATFORM CAPABILITIES</text>
+
+        <!-- Card 1: Model Serving -->
+        <rect x="100" y="66" width="320" height="130" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <circle cx="134" cy="100" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
+        <g stroke="var(--accent-strong)" stroke-width="1.3" fill="none">
+          <path d="M129,96 L139,96 L134,105 Z"></path>
+        </g>
+        <g fill="var(--accent-strong)">
+          <circle cx="129" cy="96" r="1.6"></circle>
+          <circle cx="139" cy="96" r="1.6"></circle>
+          <circle cx="134" cy="105" r="1.6"></circle>
+        </g>
+        <text x="156" y="105" font-size="13.5" font-weight="700" fill="var(--text)">Generative AI Model Serving</text>
+        <text x="118" y="132" font-size="11.2" fill="var(--text-dim)">A served LLM reads every PO and</text>
+        <text x="118" y="148" font-size="11.2" fill="var(--text-dim)">extracts line items with a forced</text>
+        <text x="118" y="164" font-size="11.2" fill="var(--text-dim)">schema over OpenAI-compatible endpoints.</text>
+
+        <!-- Card 2: AI Gateway -->
+        <rect x="440" y="66" width="320" height="130" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <circle cx="474" cy="100" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
+        <g stroke="var(--accent-strong)" stroke-width="1.3">
+          <line x1="468" y1="93" x2="468" y2="107"></line>
+          <line x1="480" y1="93" x2="480" y2="107"></line>
+          <line x1="468" y1="100" x2="480" y2="100"></line>
+        </g>
+        <circle cx="474" cy="92" r="1.8" fill="var(--accent-strong)"></circle>
+        <text x="496" y="105" font-size="13.5" font-weight="700" fill="var(--text)">AI Gateway (Models-as-a-Service)</text>
+        <text x="458" y="132" font-size="11.2" fill="var(--text-dim)">Token auth, rate limits, and per-user</text>
+        <text x="458" y="148" font-size="11.2" fill="var(--text-dim)">usage reporting in front of every model —</text>
+        <text x="458" y="164" font-size="11.2" fill="var(--text-dim)">including OpenAI and Anthropic models.</text>
+
+        <!-- Card 3: Tool Orchestration -->
+        <rect x="780" y="66" width="320" height="130" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <circle cx="814" cy="100" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
+        <g stroke="var(--accent-strong)" stroke-width="1.3">
+          <line x1="814" y1="100" x2="814" y2="93"></line>
+          <line x1="814" y1="100" x2="821" y2="100"></line>
+          <line x1="814" y1="100" x2="814" y2="107"></line>
+          <line x1="814" y1="100" x2="807" y2="100"></line>
+        </g>
+        <g fill="var(--accent-strong)">
+          <circle cx="814" cy="100" r="2"></circle>
+          <circle cx="814" cy="93" r="1.6"></circle>
+          <circle cx="821" cy="100" r="1.6"></circle>
+          <circle cx="814" cy="107" r="1.6"></circle>
+          <circle cx="807" cy="100" r="1.6"></circle>
+        </g>
+        <text x="836" y="105" font-size="13.5" font-weight="700" fill="var(--text)">Agentic Tool Orchestration</text>
+        <text x="798" y="132" font-size="11.2" fill="var(--text-dim)">One agent plans and calls every</text>
+        <text x="798" y="148" font-size="11.2" fill="var(--text-dim)">downstream system through MCP tools.</text>
+
+        <!-- Card 4: Computer Vision Inference -->
+        <rect x="100" y="216" width="320" height="130" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <circle cx="134" cy="250" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
+        <ellipse cx="134" cy="250" rx="7" ry="4" stroke="var(--accent-strong)" stroke-width="1.3" fill="none"></ellipse>
+        <circle cx="134" cy="250" r="2" fill="var(--accent-strong)"></circle>
+        <text x="156" y="255" font-size="13.5" font-weight="700" fill="var(--text)">Computer Vision Inference</text>
+        <text x="118" y="282" font-size="11.2" fill="var(--text-dim)">Custom-trained models verify each</text>
+        <text x="118" y="298" font-size="11.2" fill="var(--text-dim)">picked item's label before it ships.</text>
+
+        <!-- Card 5: MLOps for Computer Vision -->
+        <rect x="440" y="216" width="320" height="130" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <circle cx="474" cy="250" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
+        <circle cx="474" cy="250" r="4.5" stroke="var(--accent-strong)" stroke-width="1.3" fill="none"></circle>
+        <circle cx="474" cy="250" r="1.3" fill="var(--accent-strong)"></circle>
+        <g stroke="var(--accent-strong)" stroke-width="1.3" stroke-linecap="round">
+          <line x1="478.5" y1="250" x2="481" y2="250"></line>
+          <line x1="476.3" y1="253.9" x2="477.5" y2="256.1"></line>
+          <line x1="471.8" y1="253.9" x2="470.5" y2="256.1"></line>
+          <line x1="469.5" y1="250" x2="467" y2="250"></line>
+          <line x1="471.8" y1="246.1" x2="470.5" y2="243.9"></line>
+          <line x1="476.3" y1="246.1" x2="477.5" y2="243.9"></line>
+        </g>
+        <text x="496" y="255" font-size="13.5" font-weight="700" fill="var(--text)">MLOps for Computer Vision</text>
+        <text x="458" y="282" font-size="11.2" fill="var(--text-dim)">Pipelines train, version, and promote</text>
+        <text x="458" y="298" font-size="11.2" fill="var(--text-dim)">the localize → orient → OCR models.</text>
+
+        <!-- Card 6: Prompt & Model Registry -->
+        <rect x="780" y="216" width="320" height="130" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <circle cx="814" cy="250" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
+        <rect x="808" y="243" width="12" height="14" rx="1.5" stroke="var(--accent-strong)" stroke-width="1.2" fill="none"></rect>
+        <g stroke="var(--accent-strong)" stroke-width="1.1">
+          <line x1="811" y1="247" x2="817" y2="247"></line>
+          <line x1="811" y1="250" x2="817" y2="250"></line>
+          <line x1="811" y1="253" x2="815" y2="253"></line>
+        </g>
+        <text x="836" y="255" font-size="13.5" font-weight="700" fill="var(--text)">Prompt &amp; Model Registry</text>
+        <text x="798" y="282" font-size="11.2" fill="var(--text-dim)">Every prompt and model version is</text>
+        <text x="798" y="298" font-size="11.2" fill="var(--text-dim)">tracked, versioned, and promotable.</text>
+
+        <!-- Card 7: Distributed Tracing -->
+        <rect x="100" y="366" width="320" height="130" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <circle cx="134" cy="400" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
+        <g stroke="var(--accent-strong)" stroke-width="1.6" stroke-linecap="round">
+          <line x1="127" y1="395" x2="136" y2="395"></line>
+          <line x1="130" y1="400" x2="141" y2="400"></line>
+          <line x1="128" y1="405" x2="135" y2="405"></line>
+        </g>
+        <text x="156" y="405" font-size="13.5" font-weight="700" fill="var(--text)">Distributed Tracing</text>
+        <text x="118" y="432" font-size="11.2" fill="var(--text-dim)">Every agent decision and tool call</text>
+        <text x="118" y="448" font-size="11.2" fill="var(--text-dim)">is captured end to end.</text>
+
+        <!-- Card 8: Continuous Evaluation -->
+        <rect x="440" y="366" width="320" height="130" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <circle cx="474" cy="400" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
+        <circle cx="474" cy="400" r="7" stroke="var(--accent-strong)" stroke-width="1.2" fill="none"></circle>
+        <circle cx="474" cy="400" r="4" stroke="var(--accent-strong)" stroke-width="1.2" fill="none"></circle>
+        <circle cx="474" cy="400" r="1.5" fill="var(--accent-strong)"></circle>
+        <text x="496" y="405" font-size="13.5" font-weight="700" fill="var(--text)">Continuous Evaluation</text>
+        <text x="458" y="432" font-size="11.2" fill="var(--text-dim)">Extraction, trajectories, and outcomes</text>
+        <text x="458" y="448" font-size="11.2" fill="var(--text-dim)">are graded against benchmark POs.</text>
+
+        <!-- Card 9: Safety Guardrails -->
+        <rect x="780" y="366" width="320" height="130" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <circle cx="814" cy="400" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
+        <path d="M814,392 L820,395 L820,402 C820,406 814,409 814,409 C814,409 808,406 808,402 L808,395 Z" stroke="var(--accent-strong)" stroke-width="1.3" fill="var(--bg-panel)"></path>
+        <path d="M811,400 L813,402.5 L817,397" stroke="var(--accent-strong)" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+        <text x="836" y="405" font-size="12.5" font-weight="700" fill="var(--text)">Safety Guardrails &amp; Agent Sandboxing</text>
+        <text x="798" y="432" font-size="11.2" fill="var(--text-dim)">Policy checks block unsafe input, and</text>
+        <text x="798" y="448" font-size="11.2" fill="var(--text-dim)">tool calls run isolated in a sandbox.</text>
+
+        <!-- Foundation: directly underneath the 9 boxes -->
+        <rect x="60" y="556" width="1080" height="46" rx="8" fill="var(--bg-elevated)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <text x="600" y="584" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-dim)">Runs on Red Hat OpenShift — autoscaling · GPU scheduling · zero-downtime rollouts · built-in security</text>
+
+        <!-- Foundation -> Process flow -->
+        <line x1="600" y1="604" x2="600" y2="664" stroke="var(--text-faint)" stroke-width="1.5" stroke-dasharray="4 3"></line>
+        <circle cx="600" cy="664" r="3" fill="var(--text-faint)"></circle>
+        <rect x="470" y="627" width="260" height="15" fill="var(--bg-panel)"></rect>
+        <text x="600" y="638" text-anchor="middle" font-size="10.5" fill="var(--text-dim)">continuously powers every order below</text>
+
+        <!-- Process flow: PO -> Inventory -> Shipment -> Escalation, chained box to box -->
+        <rect x="60" y="666" width="225" height="80" rx="10" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.5"></rect>
+        <text x="76" y="700" font-size="13.5" font-weight="700" fill="var(--text)">Purchase Order (PDF)</text>
+        <text x="76" y="720" font-size="10.5" fill="var(--text-dim)">Arrives and kicks off the run</text>
+
+        <line x1="287" y1="706" x2="343" y2="706" stroke="var(--accent)" stroke-width="2" marker-end="url(#arch-arrow)"></line>
+        <text x="315" y="694" text-anchor="middle" font-size="9.5" fill="var(--text-dim)">verified</text>
+
+        <rect x="345" y="666" width="225" height="80" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <rect x="345" y="666" width="6" height="80" fill="var(--ok)"></rect>
+        <text x="367" y="700" font-size="13.5" font-weight="700" fill="var(--text)">Inventory Ledger Updated</text>
+        <text x="367" y="720" font-size="10.5" fill="var(--text-dim)">Decremented after visual check</text>
+
+        <line x1="572" y1="706" x2="628" y2="706" stroke="var(--accent)" stroke-width="2" marker-end="url(#arch-arrow)"></line>
+        <text x="600" y="694" text-anchor="middle" font-size="9.5" fill="var(--text-dim)">ready</text>
+
+        <rect x="630" y="666" width="225" height="80" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <rect x="630" y="666" width="6" height="80" fill="var(--accent)"></rect>
+        <text x="652" y="700" font-size="13.5" font-weight="700" fill="var(--text)">Shipment Booked &amp; Tracked</text>
+        <text x="652" y="720" font-size="10.5" fill="var(--text-dim)">Carrier handoff with tracking #</text>
+
+        <line x1="857" y1="706" x2="913" y2="706" stroke="var(--accent)" stroke-width="2" marker-end="url(#arch-arrow)"></line>
+        <text x="885" y="694" text-anchor="middle" font-size="9.5" fill="var(--text-dim)">escalate</text>
+
+        <rect x="915" y="666" width="225" height="80" rx="10" fill="var(--bg-panel)" stroke="var(--border)" stroke-width="1.2"></rect>
+        <rect x="915" y="666" width="6" height="80" fill="var(--warn)"></rect>
+        <text x="937" y="700" font-size="13.5" font-weight="700" fill="var(--text)">Escalated to a Human</text>
+        <text x="937" y="720" font-size="10.5" fill="var(--text-dim)">Routed to a human supervisor</text>
+      </svg>
+      <figcaption>Nine Red Hat OpenShift AI capabilities, running on Red Hat OpenShift, power every purchase order that flows through the pipeline below — from arrival to a verified, autonomous outcome.</figcaption>
+    </figure>
+    <div class="arch-highlights">
+      <div class="arch-highlight">
+        <h4>One platform</h4>
+        <p>Model serving, an AI gateway, agent orchestration, MLOps, registries, tracing, evaluation, and guardrails all run on the same OpenShift AI control plane.</p>
+      </div>
+      <div class="arch-highlight">
+        <h4>Governed AI</h4>
+        <p>Every prompt and model version is tracked and promotable — not a black box.</p>
+      </div>
+      <div class="arch-highlight">
+        <h4>Human-safe autonomy</h4>
+        <p>Guardrails and visual verification mean the agent only acts when confident, and asks a person when it isn't.</p>
+      </div>
+    </div>
+  </div>
 </dialog>
 
 <dialog id="docling-modal" class="docling-modal">

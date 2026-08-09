@@ -56,6 +56,11 @@ async function init() {
   new ResizeObserver(syncTopRowHeights).observe($("#po-panel"));
 
   $("#reset-btn").addEventListener("click", onReset);
+  $("#architecture-btn").addEventListener("click", () => $("#architecture-modal").showModal());
+  $("#architecture-modal-close").addEventListener("click", () => $("#architecture-modal").close());
+  $("#architecture-modal").addEventListener("click", (e) => {
+    if (e.target.id === "architecture-modal") $("#architecture-modal").close();
+  });
   $("#agentic-safety-toggle").addEventListener("change", onToggleAgenticSafety);
   $("#boost-toggle").addEventListener("change", onToggleBoost);
   $("#po-select").addEventListener("change", onSelectPo);
