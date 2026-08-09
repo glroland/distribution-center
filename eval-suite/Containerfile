@@ -13,7 +13,7 @@
 FROM registry.redhat.io/rhai/base-image-cpu-rhel9:3.4.0-1777399554
 WORKDIR /app
 COPY eval-suite/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt eval-hub-sdk
+RUN pip install --no-cache-dir -r requirements.txt
 COPY eval-suite/src ./src
 COPY eval-suite/config ./config
 COPY products.csv ./products.csv

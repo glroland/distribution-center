@@ -1,22 +1,31 @@
-# Optional job spec for `evalhub eval run --config config/evalhub-job.yaml`.
+# Job spec for `make evalhub-run` (`evalhub eval run --config
+# config/evalhub-job.yaml`).
 #
 # Flat mapping matching evalhub.models.api.JobSubmissionRequest exactly (see
 # evalhub-provider.yaml's header comment re: no nested wrapper keys and no
 # shell-style ${VAR} expansion -- this file is loaded with plain
-# yaml.safe_load, so unlike the README's `--model-url $AGENT_URL` CLI-flag
-# form, values here are NOT expanded from the shell environment; edit
-# model.url/model.name by hand for whatever agent deployment you're
-# evaluating before using this file.
+# yaml.safe_load, so values here are NOT expanded from the shell
+# environment; edit model.url/model.name by hand for whatever agent
+# deployment you're evaluating.
 #
-# The README's documented path is the CLI-flag form instead:
-#   evalhub eval run --collection distribution-center-eval-v1 \
-#     --model-url $AGENT_URL --wait
-# This file exists for the MLflow-experiment-tracked alternative.
+# `evalhub eval run`'s inline-flags form (--provider/-b/--model-url) has no
+# --collection flag -- only --config (this file, via `collection: id: ...`)
+# runs a whole registered collection/weighted suite in one job; inline
+# flags can only cherry-pick individual --provider + -b benchmark(s).
+#
+# model.url must be reachable from wherever this job actually executes, not
+# from your laptop: registering dc-eval-suite (evalhub-provider.yaml)
+# pointed EvalHub at a k8s Job using that provider's runtime.k8s.image, so
+# this runs as a Job inside the cluster -- `http://localhost:9100/` (the
+# locally `make start-all`-run agent) is not reachable from there. Point it
+# at the in-cluster Helm deployment's Service DNS instead
+# (`<service>.<namespace>.svc.cluster.local`, port from
+# deploy/helm/values.yaml's distributionCenter.agent block).
 
 name: "distribution-center-eval"
 tags: [demo, distribution-center]
 model:
-  url: "http://localhost:9100/"
+  url: "http://adc-dc-agent.distribution-center.svc.cluster.local:9100/"
   name: "dc-agent"
 collection:
   id: distribution-center-eval-v1

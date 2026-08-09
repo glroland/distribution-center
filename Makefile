@@ -11,11 +11,19 @@ MLFLOW_WORKSPACE := distribution-center
 MLFLOW_TRACKING_TOKEN := $(shell oc whoami --show-token)
 
 # The OpenShift AI EvalHub instance (trustyai.opendatahub.io/v1alpha1 EvalHub,
-# namespace redhat-ods-applications) validates the same OpenShift bearer
-# token as MLflow above, via k8s TokenReview -- tenant is just the namespace
-# it's deployed in, the same role MLFLOW_WORKSPACE plays for MLflow.
+# deployed in namespace redhat-ods-applications, hence EVALHUB_BASE_URL's
+# host) validates the same OpenShift bearer token as MLflow above, via k8s
+# TokenReview. EVALHUB_TENANT is NOT that deployment namespace, though --
+# it's sent as X-Tenant on every call and is EvalHub's notion of "which
+# project is this on behalf of": for `evalhub eval run`, it's what selects
+# the MLflow *workspace* an evaluation's experiment gets tracked under
+# (confirmed by testing redhat-ods-applications first, which failed with
+# "Workspace 'redhat-ods-applications' not found ... Each MLflow workspace
+# maps 1:1 to a namespace") and determines which OpenShift AI dashboard
+# project ("Distribution Center") the run shows up under -- so it must be
+# MLFLOW_WORKSPACE, the same namespace dc-agent's own deployment logs to.
 EVALHUB_BASE_URL := https://evalhub-redhat-ods-applications.apps.ocp.home.glroland.com
-EVALHUB_TENANT := redhat-ods-applications
+EVALHUB_TENANT := $(MLFLOW_WORKSPACE)
 
 # name:subdir:port-env-var for every service start-all/kill-all manage.
 SERVICES := \
@@ -49,7 +57,7 @@ REQUIREMENTS := $(shell find . \
 	-not -path '*/.venv/*' \
 	-name 'requirements*.txt')
 
-.PHONY: help install generate-pos load-prompts eval-suite register-eval-suite run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-label-api run-dashboard start-all kill-all restart-all status-all clean test
+.PHONY: help install generate-pos load-prompts eval-suite register-eval-suite evalhub-run run-ingest-api run-local-dc-agent run-local-wms-api run-local-inventory-robot-api run-supervisor-api run-local-shipping-api run-label-api run-dashboard start-all kill-all restart-all status-all clean test
 
 help:
 	@echo "Targets:"
@@ -57,6 +65,7 @@ help:
 	@echo "  generate-pos                 Generate sample PO PDFs into $(TARGET_DIR)/pos (ARGS=\"--count 25\" to pass flags)"
 	@echo "  eval-suite                   Run the EvalHub benchmarks locally against running services (ARGS=\"--adapter extraction\" to pass flags)"
 	@echo "  register-eval-suite          Register eval-suite's provider + collection with a running OpenShift AI EvalHub instance"
+	@echo "  evalhub-run                  Submit a real distribution-center-eval-v1 run against the in-cluster agent (ARGS=\"--wait\" to block, ARGS=\"--watch\" to stream logs)"
 	@echo "  load-prompts                 Register every <service>/prompts.json into the MLflow Prompt Registry (ARGS=\"--dry-run\" to pass flags)"
 	@echo "  run-ingest-api               Run the PO ingest API (http://localhost:8000)"
 	@echo "  run-local-dc-agent           Run the distribution center A2A agent (http://localhost:9100)"
@@ -137,6 +146,23 @@ register-eval-suite:
 		evalhub collections create --file "$$tmp"; \
 		rm -rf "$$tmpdir"; \
 	fi
+
+# Submits a real run of the registered distribution-center-eval-v1
+# collection against the in-cluster agent deployment (see
+# eval-suite/config/evalhub-job.yaml's header comment for why it must be
+# the in-cluster Service DNS, not localhost -- this executes as a k8s Job
+# inside the cluster, not on your machine). Does not itself register
+# anything; run `make register-eval-suite` first if dc-eval-suite /
+# distribution-center-eval-v1 aren't already registered (check the
+# OpenShift AI dashboard's Evaluations page, or `evalhub collections list`).
+# ARGS defaults to nothing (submit and return immediately -- check progress
+# with `evalhub eval status`); pass ARGS="--wait" to block until it
+# finishes, or ARGS="--watch" to stream logs.
+evalhub-run:
+	evalhub config set base_url $(EVALHUB_BASE_URL)
+	evalhub config set token $(MLFLOW_TRACKING_TOKEN)
+	evalhub config set tenant $(EVALHUB_TENANT)
+	evalhub eval run --config eval-suite/config/evalhub-job.yaml $(ARGS)
 
 run-ingest-api:
 	cd po-ingest-api && PORT=$(PO_INGEST_API_PORT) python3 -m src
