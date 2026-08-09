@@ -80,6 +80,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Register a new version even if it's identical to the current latest version.",
     )
+    parser.add_argument(
+        "--prune-old-versions",
+        action="store_true",
+        help="After registering, delete every version of each processed prompt except the "
+        "current latest, keeping only the newest version's history. Scoped to whichever "
+        "prompts this run processed (respects --only/--file). Requires a live MLflow "
+        "connection even with --dry-run, since it needs to see what's currently registered.",
+    )
+    parser.add_argument(
+        "--prune-unused",
+        action="store_true",
+        help="Delete prompts (all versions, then the prompt itself) that exist in the "
+        "registry's namespace/workspace but no longer appear in any <service>/prompts.json "
+        "in the repo. Always compares against every catalog file regardless of --only/--file, "
+        "since 'unused' is a whole-namespace property. Requires a live MLflow connection "
+        "even with --dry-run.",
+    )
     return parser.parse_args(argv)
 
 
@@ -131,6 +148,63 @@ def _commit_message_for(prompt: dict[str, Any], override: str | None) -> str:
     return f"Loaded from {source}"
 
 
+def prune_old_versions(client: Any, prompts: list[dict[str, Any]], dry_run: bool) -> None:
+    """Delete every version of each given prompt except the current latest.
+
+    Verifies the kept version is still readable after each deletion: this MLflow
+    deployment has been observed to drop an entire prompt (every version, including
+    the one meant to survive) as a side effect of deleting just its oldest version,
+    so silently trusting the delete call isn't safe here.
+    """
+    for prompt in prompts:
+        name = prompt["id"]
+        versions = sorted(client.search_prompt_versions(name), key=lambda v: int(v.version))
+        if len(versions) <= 1:
+            continue
+        latest = versions[-1]
+        for version in versions[:-1]:
+            if dry_run:
+                print(f"[dry-run] would prune {name} v{version.version} (superseded by v{latest.version})")
+                continue
+            client.delete_prompt_version(name, version.version)
+            print(f"[pruned] {name} v{version.version} (kept v{latest.version})")
+
+        if dry_run:
+            continue
+        try:
+            client.get_prompt_version(name, latest.version)
+        except Exception:
+            print(
+                f"[ERROR] {name} v{latest.version} is no longer retrievable after pruning -- "
+                f"the registry appears to have dropped the whole prompt. Restore it with: "
+                f"python -m src --only {name}",
+                file=sys.stderr,
+            )
+
+
+def prune_unused_prompts(client: Any, known_ids: set[str], dry_run: bool) -> None:
+    """Delete prompts registered in MLflow that no longer appear in any catalog file."""
+    unused = sorted(p.name for p in client.search_prompts() if p.name not in known_ids)
+    if not unused:
+        print("[prune-unused] nothing to prune -- every registered prompt is still cataloged")
+        return
+    for name in unused:
+        if dry_run:
+            print(f"[dry-run] would delete prompt '{name}' (no longer cataloged) and all its versions")
+            continue
+        for version in client.search_prompt_versions(name):
+            client.delete_prompt_version(name, version.version)
+        try:
+            client.delete_prompt(name)
+        except Exception as exc:
+            # Observed on this deployment: deleting a prompt's last remaining version can
+            # already remove the prompt itself, making this call redundant -- fine, that's
+            # the end state we wanted anyway.
+            if "RESOURCE_DOES_NOT_EXIST" not in str(exc):
+                raise
+        print(f"[pruned] {name} (prompt + all versions removed)")
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "WARNING"))
     args = parse_args(argv)
@@ -153,8 +227,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: unknown prompt id(s): {', '.join(sorted(missing))}", file=sys.stderr)
             return 1
 
+    needs_live_connection = args.prune_old_versions or args.prune_unused
     tracking_uri = args.tracking_uri or os.environ.get("MLFLOW_TRACKING_URI")
     if not tracking_uri:
+        if needs_live_connection:
+            print(
+                "error: --prune-old-versions/--prune-unused need a live MLflow connection "
+                "(to see what's currently registered) even with --dry-run. Set "
+                "MLFLOW_TRACKING_URI or pass --tracking-uri.",
+                file=sys.stderr,
+            )
+            return 1
         if args.dry_run:
             for prompt in prompts:
                 print(f"[dry-run] would check '{prompt['id']}' ({len(prompt['template'])} chars) -- offline, no MLFLOW_TRACKING_URI set")
@@ -168,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
 
     import mlflow
     import mlflow.genai
+    from mlflow import MlflowClient
 
     if args.tracking_uri:
         mlflow.set_tracking_uri(args.tracking_uri)
@@ -197,5 +281,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         action = "updated" if existing is not None else "created"
         print(f"[{action}] {prompt['id']} -> version {version.version}")
+
+    if args.prune_old_versions or args.prune_unused:
+        client = MlflowClient()
+
+        if args.prune_old_versions:
+            prune_old_versions(client, prompts, args.dry_run)
+
+        if args.prune_unused:
+            known_ids = {p["id"] for p in load_catalogs(discover_catalog_files(REPO_ROOT))}
+            prune_unused_prompts(client, known_ids, args.dry_run)
 
     return 0

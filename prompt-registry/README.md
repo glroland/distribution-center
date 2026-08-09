@@ -93,6 +93,16 @@ python -m src --file ../local-dc-agent/prompts.json --file ../label-api/prompts.
 
 # Point at a different MLflow server
 python -m src --tracking-uri https://my-mlflow-server/
+
+# Delete every version of each processed prompt except the current latest
+python -m src --prune-old-versions
+
+# Delete whole prompts (all versions) that no longer appear in any prompts.json
+python -m src --prune-unused
+
+# Preview either prune without deleting anything (still needs a live MLflow
+# connection -- unlike plain --dry-run, pruning can't fall back to an offline listing)
+python -m src --prune-old-versions --prune-unused --dry-run
 ```
 
 Each run creates a new prompt version (or a new prompt if the name doesn't
@@ -101,3 +111,31 @@ exist yet) tagged with `service`, `source_file`, `source_symbol`, `role`, and
 new version rather than overwriting the old one, so history is preserved in
 MLflow. Registration fails loudly if the same prompt id appears in more than
 one catalog file -- ids are meant to be unique across the whole repo.
+
+## Pruning
+
+`--prune-old-versions` deletes every version of each *processed* prompt
+(respects `--only`/`--file`) except the current latest, for cleaning up
+version history that's piled up from repeated registration runs.
+`--prune-unused` deletes whole prompts -- not just old versions of them --
+that exist in the registry's namespace/workspace but no longer appear in any
+`<service>/prompts.json` in the repo (e.g. left behind by a rename or a
+removed prompt); it always compares against every catalog file regardless of
+`--only`/`--file`, since "unused" is a whole-namespace property, not one
+scoped to whatever subset of catalogs a given run happened to touch.
+
+Both require a live MLflow connection even under `--dry-run`, since deciding
+what's prunable means seeing what's currently registered -- there's no
+offline fallback the way plain registration has.
+
+**Known issue on this repo's RHOAI MLflow deployment:** deleting the older
+version of a 2-version prompt has been observed to drop the *entire* prompt,
+including the version meant to survive, rather than leaving just the latest
+version behind. `--prune-old-versions` guards against this by re-fetching the
+kept version after each prompt it prunes and printing a loud `[ERROR]` (with
+the exact `--only <id>` command to re-register it from its catalog file) if
+that version is no longer retrievable -- but it cannot prevent the underlying
+data loss, only surface it immediately instead of it going unnoticed. If you
+hit this, the fix is simply re-running `python -m src --only <id>`: the
+catalog file is the source of truth MLflow mirrors, so nothing is actually
+lost.
