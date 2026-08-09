@@ -6,3 +6,4 @@ mlflow[kubernetes]>=3.8.1,<4
 mcp>=1.26.0,<2
 jsonschema>=4.20
 reportlab>=4.0
+eval-hub-sdk

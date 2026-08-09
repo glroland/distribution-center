@@ -10,6 +10,13 @@ MLFLOW_TRACKING_URI := https://rh-ai.apps.ocp.home.glroland.com/mlflow
 MLFLOW_WORKSPACE := distribution-center
 MLFLOW_TRACKING_TOKEN := $(shell oc whoami --show-token)
 
+# The OpenShift AI EvalHub instance (trustyai.opendatahub.io/v1alpha1 EvalHub,
+# namespace redhat-ods-applications) validates the same OpenShift bearer
+# token as MLflow above, via k8s TokenReview -- tenant is just the namespace
+# it's deployed in, the same role MLFLOW_WORKSPACE plays for MLflow.
+EVALHUB_BASE_URL := https://evalhub-redhat-ods-applications.apps.ocp.home.glroland.com
+EVALHUB_TENANT := redhat-ods-applications
+
 # name:subdir:port-env-var for every service start-all/kill-all manage.
 SERVICES := \
 	ingest-api:po-ingest-api:PO_INGEST_API_PORT \
@@ -83,16 +90,53 @@ load-prompts:
 eval-suite:
 	cd eval-suite && python3 -m src $(ARGS)
 
-# Registers eval-suite's provider + collection (config/evalhub.yaml) with a
-# running OpenShift AI 3.4 EvalHub instance -- not a Kubernetes resource you
-# apply, EvalHub exposes this as CLI/REST registration. Requires the
-# `evalhub` CLI (pip install eval-hub-sdk) already installed and
-# authenticated against your target EvalHub server, and the image referenced
-# by config/evalhub.yaml's provider.runtime.k8s.image already pushed (see
-# deploy/Jenkinsfile's "Create Docker Image for eval-suite" stage).
+# Registers eval-suite's provider + collection (config/evalhub-provider.yaml,
+# config/evalhub-collection.yaml) with a running OpenShift AI 3.4 EvalHub
+# instance -- not a Kubernetes resource you apply, EvalHub exposes this as
+# CLI/REST registration. Requires the `evalhub` CLI (pip install
+# eval-hub-sdk) already installed. `evalhub config set` writes to
+# ~/.config/evalhub/config.yaml (outside this repo), so it's safe/idempotent
+# to re-run on every invocation -- re-authenticates with a fresh OpenShift
+# token each time rather than relying on a previous run's (expiring) one.
+# Also requires the image referenced by config/evalhub-provider.yaml's
+# runtime.k8s.image already pushed (see deploy/Jenkinsfile's "Create Docker
+# Image for eval-suite" stage). Two separate flat files, not one combined
+# file, because the CLI's --file loads a flat mapping straight into each
+# request's Pydantic model -- see evalhub-provider.yaml's header comment.
+#
+# Idempotent by name, not just re-runnable: EvalHub's create APIs don't
+# reject a duplicate name, they'd happily mint a second provider/collection
+# with a new random id every time this ran -- so this looks each up by name
+# first (`evalhub providers/collections list --format json`) and reuses an
+# existing one instead of re-creating. That lookup also solves
+# evalhub-collection.yaml's `__PROVIDER_ID__` placeholder: the provider's
+# real id is a server-assigned UUID unrelated to the `name` we send (see
+# evalhub-provider.yaml's header comment), so it can only be known after
+# create-or-find, then substituted into a temp copy of the collection spec.
 register-eval-suite:
-	evalhub providers create   --file eval-suite/config/evalhub.yaml
-	evalhub collections create --file eval-suite/config/evalhub.yaml
+	evalhub config set base_url $(EVALHUB_BASE_URL)
+	evalhub config set token $(MLFLOW_TRACKING_TOKEN)
+	evalhub config set tenant $(EVALHUB_TENANT)
+	@provider_id=$$(evalhub providers list --format json | python3 -c \
+		"import json,sys; d=json.load(sys.stdin); m=[p['resource']['id'] for p in d if p['name']=='dc-eval-suite']; print(m[0] if m else '')"); \
+	if [ -n "$$provider_id" ]; then \
+		echo "Provider dc-eval-suite already registered: $$provider_id"; \
+	else \
+		out=$$(evalhub providers create --file eval-suite/config/evalhub-provider.yaml) || exit 1; \
+		echo "$$out"; \
+		provider_id=$$(echo "$$out" | sed -n 's/^Provider created: //p'); \
+	fi; \
+	collection_id=$$(evalhub collections list --format json | python3 -c \
+		"import json,sys; d=json.load(sys.stdin); m=[c['id'] for c in d if c['name']=='Distribution Center End-to-End Evaluation v1']; print(m[0] if m else '')"); \
+	if [ -n "$$collection_id" ]; then \
+		echo "Collection distribution-center-eval-v1 already registered: $$collection_id"; \
+	else \
+		tmpdir=$$(mktemp -d); \
+		tmp="$$tmpdir/evalhub-collection.yaml"; \
+		sed "s/__PROVIDER_ID__/$$provider_id/" eval-suite/config/evalhub-collection.yaml > "$$tmp"; \
+		evalhub collections create --file "$$tmp"; \
+		rm -rf "$$tmpdir"; \
+	fi
 
 run-ingest-api:
 	cd po-ingest-api && PORT=$(PO_INGEST_API_PORT) python3 -m src

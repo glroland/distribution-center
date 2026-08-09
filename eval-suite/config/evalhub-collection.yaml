@@ -1,0 +1,51 @@
+# Collection spec for `evalhub collections create --file config/evalhub-collection.yaml`.
+#
+# Flat mapping matching evalhub.models.api.CollectionCreateRequest exactly
+# (see evalhub-provider.yaml's header comment for why this is a separate
+# file from the provider spec, and why there's no shell-style ${VAR}
+# expansion). Each benchmarks[].id here is the benchmark id from
+# evalhub-provider.yaml.
+#
+# benchmarks[].provider_id below is a __PROVIDER_ID__ placeholder, not
+# `dc-eval-suite` -- confirmed by registering it once: EvalHub's
+# ProviderCreateRequest has no client-supplied id field, and the server
+# assigns its own random UUID as the provider's real id regardless of
+# `name` (compare `evalhub providers list`'s ID column, a UUID, against its
+# NAME column, `dc-eval-suite`). A provider_id that doesn't match a real
+# provider id is accepted silently at collection-create time (not
+# validated), so this only breaks later when actually running an
+# evaluation. `make register-eval-suite` resolves the real id at registration
+# time and substitutes it in -- don't hand-edit this placeholder or run
+# `evalhub collections create --file` on this file directly.
+
+name: "Distribution Center End-to-End Evaluation v1"
+description: >
+  Prompt accuracy + MCP trajectory correctness + end-to-end outcome
+  accuracy for the distribution-center demo agent. Intended to run
+  nightly and on any PR touching order_extraction.py, fulfillment.py,
+  any service's mcp_server.py, or any service's own prompts.json.
+category: agent-evaluation
+tags: [distribution-center, a2a, mcp, byof, demo, v1]
+benchmarks:
+  - id: dc-extraction-accuracy
+    provider_id: __PROVIDER_ID__
+    weight: 1.0
+    pass_criteria:
+      threshold: 0.90
+
+  - id: dc-mcp-trajectory
+    provider_id: __PROVIDER_ID__
+    weight: 1.0
+    pass_criteria:
+      threshold: 0.90
+
+  - id: dc-end-to-end
+    provider_id: __PROVIDER_ID__
+    weight: 1.5   # heaviest weight: the business-level outcome is what customers see
+    pass_criteria:
+      threshold: 0.80
+
+# An additional gate on the weighted aggregate, on top of each benchmark's
+# own threshold above -- both must pass.
+pass_criteria:
+  threshold: 0.85

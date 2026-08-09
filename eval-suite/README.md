@@ -18,8 +18,8 @@ Each benchmark works two ways:
    anything," and what CI/nightly runs can use before EvalHub is deployed.
 2. **Registered with a running EvalHub** — the same logic wrapped as an
    `evalhub.adapter.FrameworkAdapter` (`src/adapters/base.py`), combined
-   into one weighted collection in `config/evalhub.yaml`
-   (`distribution-center-eval-v1`).
+   into one weighted collection across `config/evalhub-provider.yaml` and
+   `config/evalhub-collection.yaml` (`distribution-center-eval-v1`).
 
 ## Setup
 
@@ -58,7 +58,7 @@ python -m src --adapter extraction --n 10 --seed 7
 Or from the repo root: `make eval-suite ARGS="--adapter extraction"`.
 
 Exits non-zero if any run benchmark scores below its threshold
-(`settings.py`'s `*_THRESHOLD` fields, mirrored in `config/evalhub.yaml`'s
+(`settings.py`'s `*_THRESHOLD` fields, mirrored in `config/evalhub-provider.yaml`'s
 `pass_criteria` — keep both in sync by hand, same as
 `dashboard-ui/settings.py`'s `DISTRIBUTION_CENTER` mirror).
 
@@ -71,26 +71,38 @@ and there is no per-job Kubernetes resource you write by hand either.
 Registering a provider/collection and submitting a run are REST/CLI calls
 against that already-running server.
 
+0. **Point the `evalhub` CLI at your server.** `pip install eval-hub-sdk`,
+   then `evalhub config set base_url <your EvalHub route>`,
+   `evalhub config set token <token>`, `evalhub config set tenant <tenant>`
+   (`evalhub config list` shows what's currently set; `evalhub health`
+   confirms connectivity). `--file`-based commands below load a *flat*
+   YAML mapping straight into each request's Pydantic model — no nested
+   wrapper keys, no `${VAR}` shell expansion — hence separate
+   `evalhub-provider.yaml` / `evalhub-collection.yaml` files rather than one
+   combined file.
+
 1. **Build and push the image.** `deploy/Jenkinsfile`'s "Create Docker Image
    for eval-suite" stage does this on every build, pushing
    `registry.home.glroland.com/distribution-center/eval-suite:$BUILD_NUMBER`
    (no `:latest` tag is pushed for this image, unlike `vision-ml-trainer`).
 
-2. **Point `config/evalhub.yaml` at that build.** Edit
-   `provider.runtime.k8s.image`, replacing the `REPLACE_WITH_BUILD_NUMBER`
+2. **Point `config/evalhub-provider.yaml` at that build.** Edit
+   `runtime.k8s.image`, replacing the `REPLACE_WITH_BUILD_NUMBER`
    placeholder with the Jenkins build number you want registered.
 
-3. **Register the provider and collection.** Requires the `evalhub` CLI
-   (`pip install eval-hub-sdk`) already authenticated against your target
-   EvalHub server:
+3. **Register the provider and collection.**
 
    ```bash
-   evalhub providers create   --file config/evalhub.yaml
-   evalhub collections create --file config/evalhub.yaml
+   evalhub providers create   --file config/evalhub-provider.yaml
+   evalhub collections create --file config/evalhub-collection.yaml
    ```
 
    Or from the repo root: `make register-eval-suite` (runs the same two
-   commands against `eval-suite/config/evalhub.yaml`).
+   commands). `ProviderCreateRequest` has no client-supplied `id` — the
+   server derives one from `name` (`dc-eval-suite`). If `evalhub providers
+   list`/the "Provider created: ..." output shows a different id than
+   `dc-eval-suite`, update `provider_id` in `evalhub-collection.yaml` to
+   match before running `collections create`.
 
 4. **Run it.** Either from the OpenShift AI dashboard's Evaluation Stack UI
    (Tech Preview — the registered collection should appear there once step 3
@@ -130,4 +142,6 @@ whatever build number was last registered.
   `run_local()` result into the real EvalHub `FrameworkAdapter` contract.
 - `src/evalhub_entrypoint.py` — the process EvalHub actually invokes,
   dispatching to the right adapter by `JobSpec.benchmark_id`.
-- `config/evalhub.yaml` — provider + collection + job definitions.
+- `config/evalhub-provider.yaml` / `config/evalhub-collection.yaml` /
+  `config/evalhub-job.yaml` — provider, collection, and optional job
+  definitions, one flat file per `evalhub` CLI request type.

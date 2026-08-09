@@ -1,0 +1,24 @@
+# Optional job spec for `evalhub eval run --config config/evalhub-job.yaml`.
+#
+# Flat mapping matching evalhub.models.api.JobSubmissionRequest exactly (see
+# evalhub-provider.yaml's header comment re: no nested wrapper keys and no
+# shell-style ${VAR} expansion -- this file is loaded with plain
+# yaml.safe_load, so unlike the README's `--model-url $AGENT_URL` CLI-flag
+# form, values here are NOT expanded from the shell environment; edit
+# model.url/model.name by hand for whatever agent deployment you're
+# evaluating before using this file.
+#
+# The README's documented path is the CLI-flag form instead:
+#   evalhub eval run --collection distribution-center-eval-v1 \
+#     --model-url $AGENT_URL --wait
+# This file exists for the MLflow-experiment-tracked alternative.
+
+name: "distribution-center-eval"
+tags: [demo, distribution-center]
+model:
+  url: "http://localhost:9100/"
+  name: "dc-agent"
+collection:
+  id: distribution-center-eval-v1
+experiment:
+  name: "distribution-center-eval"   # same MLflow instance dc-agent already logs prompts/traces to
