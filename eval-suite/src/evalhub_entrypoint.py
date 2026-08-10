@@ -3,21 +3,26 @@ benchmarks, dispatching on JobSpec.benchmark_id -- mirrors the single-script,
 benchmark_id-dispatch pattern used by eval-hub-sdk's own reference BYOF
 adapter (github.com/williamcaban/edd-demo's providers/hr_rag_adapter.py).
 
-Run by EvalHub as: `python -m src.evalhub_entrypoint`, with
-EVALHUB_JOB_SPEC_PATH pointing at the job spec file it writes -- see
-config/evalhub.yaml's provider.runtime.k8s.entrypoint.
+Run by EvalHub as: `python -m src.evalhub_entrypoint`. The job spec is
+*mounted*, not passed via EVALHUB_JOB_SPEC_PATH -- the operator never sets
+that env var; a real k8s Job pod's `adapter` container only gets
+EVALHUB_MODE=k8s, MLFLOW_*. `evalhub.adapter.config.get_job_spec_path()`
+already knows this (EVALHUB_MODE=k8s -> /meta/job.json, matching the actual
+ConfigMap mount -- see FrameworkAdapter.__init__'s own docstring), so this
+must be used instead of hand-rolling the same lookup (which requiring
+EVALHUB_JOB_SPEC_PATH got wrong -- confirmed by a real k8s run crashing
+with "EVALHUB_JOB_SPEC_PATH is not set").
 
-Requires eval-hub-sdk: pip install eval-hub-sdk
+Requires eval-hub-sdk: pip install eval-hub-sdk[adapter]
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
-from pathlib import Path
 
 from evalhub.adapter.callbacks import DefaultCallbacks
+from evalhub.adapter.config import get_job_spec_path
 
 from .adapters.end_to_end_adapter import BENCHMARK_ID as END_TO_END_ID
 from .adapters.end_to_end_adapter import EndToEndFrameworkAdapter
@@ -37,15 +42,8 @@ _ADAPTERS_BY_BENCHMARK = {
 
 
 def main() -> None:
-    job_spec_path = os.environ.get("EVALHUB_JOB_SPEC_PATH")
-    if not job_spec_path:
-        raise RuntimeError(
-            "EVALHUB_JOB_SPEC_PATH is not set. This entrypoint is meant to be invoked "
-            "by EvalHub as a BYOF adapter. For local runs without EvalHub, use "
-            "`python -m src` instead (see README.md)."
-        )
-
-    spec = json.loads(Path(job_spec_path).read_text())
+    job_spec_path = get_job_spec_path()
+    spec = json.loads(job_spec_path.read_text())
     benchmark_id = spec.get("benchmark_id")
     adapter_cls = _ADAPTERS_BY_BENCHMARK.get(benchmark_id)
     if adapter_cls is None:
@@ -54,7 +52,7 @@ def main() -> None:
         )
 
     logger.info("eval-suite BYOF entrypoint starting - benchmark: %s", benchmark_id)
-    adapter = adapter_cls(job_spec_path=job_spec_path)
+    adapter = adapter_cls(job_spec_path=str(job_spec_path))
     callbacks = DefaultCallbacks.from_adapter(adapter)
     try:
         results = adapter.run_benchmark_job(adapter.job_spec, callbacks)
