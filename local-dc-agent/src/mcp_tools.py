@@ -85,13 +85,12 @@ class McpToolRouter:
         stale `label__*` entries in the tool list are replaced rather than
         duplicated, since a reconnect may hit a server whose tool set
         changed (e.g. it was redeployed with new code)."""
-        session, instructions = await self._connect_with_retry(label, base_url)
+        session, instructions, listed_tools = await self._connect_with_retry(label, base_url)
         self._servers[label] = _Server(label=label, session=session, instructions=instructions)
 
-        listed = await session.list_tools()
         prefix = f"{label}{_TOOL_NAME_SEPARATOR}"
         self._tools = [tool for tool in self._tools if not tool["function"]["name"].startswith(prefix)]
-        for tool in listed.tools:
+        for tool in listed_tools:
             self._tools.append(
                 {
                     "type": "function",
@@ -102,18 +101,31 @@ class McpToolRouter:
                     },
                 }
             )
-        disallowed_count = sum(1 for tool in listed.tools if f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}" in _DISALLOWED_TOOLS)
+        disallowed_count = sum(1 for tool in listed_tools if f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}" in _DISALLOWED_TOOLS)
         logger.info(
             "Connected to %s: %d tool(s) registered (%d hidden while Agentic Safety is on)",
-            label, len(listed.tools), disallowed_count,
+            label, len(listed_tools), disallowed_count,
         )
 
-    async def _connect_with_retry(self, label: str, base_url: str) -> tuple[ClientSession, str | None]:
+    async def _connect_with_retry(self, label: str, base_url: str) -> tuple[ClientSession, str | None, list]:
         """Connects to one MCP server, retrying with capped exponential backoff
         until it succeeds. Never gives up -- an unreachable server here is
         assumed to be a start-up ordering race (server not scheduled yet, still
         booting, etc.) rather than a permanent misconfiguration, so this blocks
-        the caller rather than raising and killing the whole agent."""
+        the caller rather than raising and killing the whole agent.
+
+        The handshake (initialize) and the first list_tools() call are both
+        bounded by MCP_CONNECT_TIMEOUT_SECONDS and done here, inside the retry
+        loop, rather than left to the caller: a server whose process is up and
+        accepting TCP connections but hasn't finished its own startup yet
+        (e.g. label-api loading its PyTorch checkpoints before it can serve)
+        can leave either await hanging indefinitely -- the MCP client's HTTP
+        transport has no read timeout, since a long-lived SSE stream needs
+        one. Without a bound, that hang wedges this attempt forever, since
+        the except-and-retry below only ever runs on an exception, never on
+        a hang -- which in practice wedged the whole OrderWorker on every
+        fresh deploy/restart that happened to race a slower-starting server,
+        recoverable only by bouncing dc-agent after everything else was up."""
         delay = _CONNECT_RETRY_INITIAL_DELAY_SECONDS
         attempt = 1
         while True:
@@ -125,9 +137,14 @@ class McpToolRouter:
                     streamable_http_client(f"{base_url}/mcp")
                 )
                 session = await attempt_stack.enter_async_context(ClientSession(read_stream, write_stream))
-                init_result = await session.initialize()
+                init_result = await asyncio.wait_for(
+                    session.initialize(), timeout=settings.MCP_CONNECT_TIMEOUT_SECONDS
+                )
+                listed = await asyncio.wait_for(
+                    session.list_tools(), timeout=settings.MCP_CONNECT_TIMEOUT_SECONDS
+                )
                 succeeded = True
-            except Exception as exc:  # noqa: BLE001 - any failure here means "not reachable yet", retry
+            except Exception as exc:  # noqa: BLE001 - any failure (including a timed-out hang) means "not reachable yet", retry
                 logger.warning(
                     "MCP server %s at %s not reachable yet (%s); retrying in %.1fs",
                     label, base_url, exc, delay,
@@ -145,7 +162,7 @@ class McpToolRouter:
 
             if succeeded:
                 self._server_stacks[label] = attempt_stack
-                return session, init_result.instructions
+                return session, init_result.instructions, listed.tools
 
             await asyncio.sleep(delay)
             delay = min(delay * 2, _CONNECT_RETRY_MAX_DELAY_SECONDS)

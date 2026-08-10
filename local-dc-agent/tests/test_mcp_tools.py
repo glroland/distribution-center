@@ -110,11 +110,11 @@ async def test_register_excludes_disallowed_tools_from_registration() -> None:
             SimpleNamespace(name="reset_inventory", description="", inputSchema={}),
         ]
     )
-    session = SimpleNamespace(list_tools=lambda: _async_result(listed_tools))
+    session = SimpleNamespace()
     router = McpToolRouter()
 
     async def fake_connect_with_retry(label: str, base_url: str):
-        return session, None
+        return session, None, listed_tools.tools
 
     router._connect_with_retry = fake_connect_with_retry
     await router._register("wms", "http://wms")
@@ -136,11 +136,11 @@ async def test_register_still_discovers_disallowed_tools_for_later_toggle() -> N
             SimpleNamespace(name="reset_inventory", description="", inputSchema={}),
         ]
     )
-    session = SimpleNamespace(list_tools=lambda: _async_result(listed_tools))
+    session = SimpleNamespace()
     router = McpToolRouter()
 
     async def fake_connect_with_retry(label: str, base_url: str):
-        return session, None
+        return session, None, listed_tools.tools
 
     router._connect_with_retry = fake_connect_with_retry
     await router._register("wms", "http://wms")
@@ -148,10 +148,6 @@ async def test_register_still_discovers_disallowed_tools_for_later_toggle() -> N
     guardrails.set_enabled(False)
     names = [t["function"]["name"] for t in router.list_openai_tools()]
     assert names == ["wms__get_inventory_status", "wms__reset_inventory"]
-
-
-async def _async_result(value):
-    return value
 
 
 def test_list_openai_tools_are_prefixed_by_server() -> None:
@@ -213,6 +209,9 @@ def _make_fake_session_cls(fail_times: list[int], calls: list[str]):
                 raise ConnectionError("mcp endpoint not mounted yet")
             return SimpleNamespace(instructions="do the thing")
 
+        async def list_tools(self) -> SimpleNamespace:
+            return SimpleNamespace(tools=[])
+
     return _FakeSession
 
 
@@ -231,7 +230,7 @@ async def test_connect_with_retry_backs_off_until_server_becomes_reachable(monke
     monkeypatch.setattr(mcp_tools.asyncio, "sleep", fake_sleep)
 
     router = McpToolRouter()
-    session, instructions = await router._connect_with_retry("wms", "http://wms")
+    session, instructions, tools = await router._connect_with_retry("wms", "http://wms")
 
     assert instructions == "do the thing"
     assert sleeps == [1.0, 2.0]  # capped exponential backoff, not given up on
@@ -242,6 +241,60 @@ async def test_connect_with_retry_backs_off_until_server_becomes_reachable(monke
     # router's lifetime
     assert calls.count("transport_exit") == 2
     assert calls.count("session_exit") == 2
+
+
+@pytest.mark.asyncio
+async def test_connect_with_retry_times_out_a_hung_handshake(monkeypatch) -> None:
+    """A downstream server whose pod/process is up and accepting TCP
+    connections but hasn't finished its own startup yet (e.g. label-api still
+    loading its ML checkpoints) can leave initialize() hanging forever with no
+    exception -- the MCP client's HTTP transport has no read timeout. Without
+    a bound on the attempt, that hang wedges connect() (and the whole
+    OrderWorker) permanently instead of the retry-with-backoff loop ever
+    getting a chance to run again."""
+    calls: list[str] = []
+    hang_times = [1]  # first attempt hangs past the timeout, second succeeds
+    sleeps: list[float] = []
+
+    class _HangsOnceThenOkSession:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        async def __aenter__(self) -> "_HangsOnceThenOkSession":
+            calls.append("session_enter")
+            return self
+
+        async def __aexit__(self, *_exc) -> bool:
+            calls.append("session_exit")
+            return False
+
+        async def initialize(self) -> SimpleNamespace:
+            if hang_times[0] > 0:
+                hang_times[0] -= 1
+                await asyncio.Event().wait()  # never set -- hangs forever, unlike asyncio.sleep
+            return SimpleNamespace(instructions="do the thing")
+
+        async def list_tools(self) -> SimpleNamespace:
+            return SimpleNamespace(tools=[])
+
+    monkeypatch.setattr(mcp_tools, "streamable_http_client", lambda url: _FakeTransportContext(calls))
+    monkeypatch.setattr(mcp_tools, "ClientSession", _HangsOnceThenOkSession)
+    mcp_tools.settings.MCP_CONNECT_TIMEOUT_SECONDS = 0.01
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr(mcp_tools.asyncio, "sleep", fake_sleep)
+
+    router = McpToolRouter()
+    try:
+        session, instructions, tools = await router._connect_with_retry("label", "http://label")
+    finally:
+        mcp_tools.settings.MCP_CONNECT_TIMEOUT_SECONDS = 15.0
+
+    assert instructions == "do the thing"
+    assert sleeps == [1.0]  # one retry after the timed-out attempt
+    assert calls.count("session_enter") == 2
 
 
 @pytest.mark.asyncio
@@ -267,7 +320,7 @@ async def test_call_reconnects_when_the_connection_dies() -> None:
 
     async def fake_connect_with_retry(label: str, base_url: str):
         reconnect_calls.append((label, base_url))
-        return fresh_session, "manage inventory"
+        return fresh_session, "manage inventory", []
 
     router._connect_with_retry = fake_connect_with_retry
 
@@ -325,7 +378,7 @@ async def test_reconnect_closes_the_old_stack_before_reconnecting() -> None:
 
     async def fake_connect_with_retry(label: str, base_url: str):
         assert closed == ["closed"]  # old connection torn down before the new one is opened
-        return new_session, None
+        return new_session, None, []
 
     router._connect_with_retry = fake_connect_with_retry
 

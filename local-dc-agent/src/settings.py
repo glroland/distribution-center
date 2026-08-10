@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # restart. This only sets the value at process startup.
     GUARDRAILS_ENABLED: bool = True
     MCP_TOOL_CALL_TIMEOUT_SECONDS: float = 60.0
+    MCP_CONNECT_TIMEOUT_SECONDS: float = 15.0
     OPENAI_REQUEST_TIMEOUT_SECONDS: float = 60.0
     HOST: str = "0.0.0.0"
     PORT: int = 9100
