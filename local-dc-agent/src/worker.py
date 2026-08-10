@@ -93,6 +93,18 @@ class OrderWorker:
             self._ready.set()
             logger.info("Order worker connected to all MCP servers; processing queued jobs")
             await self._run()
+        except asyncio.CancelledError:
+            raise
+        except BaseException:
+            # Nothing else ever awaits this background task except stop() at
+            # shutdown, so an exception escaping here (this has happened
+            # before -- see McpToolRouter._connect_with_retry's docstring for
+            # the specific anyio-cancellation failure mode that slipped past
+            # its retry loop) would otherwise die completely silently: the
+            # process keeps serving /health, /ready stays stuck at "starting"
+            # forever, and there is zero trace in the logs of why.
+            logger.exception("Order worker's connect/run loop died unexpectedly")
+            raise
         finally:
             await self._router.close()
 

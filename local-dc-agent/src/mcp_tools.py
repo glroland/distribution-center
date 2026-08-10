@@ -3,6 +3,7 @@ import logging
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 
+import anyio
 import mlflow
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
@@ -117,53 +118,81 @@ class McpToolRouter:
         The handshake (initialize) and the first list_tools() call are both
         bounded by MCP_CONNECT_TIMEOUT_SECONDS and done here, inside the retry
         loop, rather than left to the caller: a server whose process is up and
-        accepting TCP connections but hasn't finished its own startup yet
-        (e.g. label-api loading its PyTorch checkpoints before it can serve)
-        can leave either await hanging indefinitely -- the MCP client's HTTP
-        transport has no read timeout, since a long-lived SSE stream needs
-        one. Without a bound, that hang wedges this attempt forever, since
-        the except-and-retry below only ever runs on an exception, never on
-        a hang -- which in practice wedged the whole OrderWorker on every
-        fresh deploy/restart that happened to race a slower-starting server,
-        recoverable only by bouncing dc-agent after everything else was up."""
+        accepting TCP connections but hasn't actually started reading from the
+        socket yet (e.g. label-api/wms still loading data/model files before
+        uvicorn's event loop is running) leaves the connection sitting in the
+        kernel's accept queue -- our request goes out, but nothing ever reads
+        or responds to it, even after that server finishes starting, since by
+        then it's on to serving newer connections rather than draining stale
+        ones. The MCP client's HTTP transport has no read timeout of its own
+        (a long-lived SSE stream needs none), so without a bound here this
+        wedges the attempt forever, since the except-and-retry below only
+        runs on an exception, never on a hang. This is bounded with
+        anyio.fail_after() rather than asyncio.wait_for(): the mcp SDK's
+        ClientSession is itself built on anyio task groups/cancel scopes, and
+        asyncio.wait_for()'s raw Task.cancel() does not reliably interrupt an
+        anyio-scoped await -- confirmed by reproducing this exact hang with
+        asyncio.wait_for() in place and watching it sail past its own
+        timeout with no warning log.
+
+        A second, independent failure mode lives here too, also confirmed by
+        reproduction: when the server flat-out refuses the connection (e.g.
+        its port isn't listening yet at all) rather than merely being slow,
+        the ConnectError happens inside a *child* task of the mcp SDK's own
+        anyio task group (the backgrounded request sender), not in our
+        foreground await directly. That child failure cancels the task
+        group's scope, which delivers a bare asyncio.CancelledError to our
+        foreground await -- a BaseException, so a plain `except Exception`
+        never sees it; it skips straight past to a bare `finally`, where
+        attempt_stack.aclose() re-raises the *real* underlying error as an
+        ExceptionGroup that then escapes this function entirely, silently
+        killing OrderWorker's background task (nobody awaits it to observe
+        the exception) -- the same "narrow except clause" failure class as
+        the past bug documented in worker.py's history, just via anyio's
+        cancellation semantics instead of a typo. Distinguishing that from a
+        *genuine* shutdown request (OrderWorker.stop() cancelling this same
+        task, which also arrives as CancelledError and must be allowed to
+        propagate) needs Task.cancelling() (3.11+): >0 means this task
+        itself was asked to stop; a CancelledError seen while it's still 0
+        is necessarily incidental to some inner scope, safe to treat as a
+        failed attempt and retry."""
         delay = _CONNECT_RETRY_INITIAL_DELAY_SECONDS
         attempt = 1
         while True:
             attempt_stack = AsyncExitStack()
             succeeded = False
+            caught: BaseException | None = None
             try:
                 logger.info("Connecting to MCP server %s at %s (attempt %d)", label, base_url, attempt)
                 read_stream, write_stream, _ = await attempt_stack.enter_async_context(
                     streamable_http_client(f"{base_url}/mcp")
                 )
                 session = await attempt_stack.enter_async_context(ClientSession(read_stream, write_stream))
-                init_result = await asyncio.wait_for(
-                    session.initialize(), timeout=settings.MCP_CONNECT_TIMEOUT_SECONDS
-                )
-                listed = await asyncio.wait_for(
-                    session.list_tools(), timeout=settings.MCP_CONNECT_TIMEOUT_SECONDS
-                )
+                with anyio.fail_after(settings.MCP_CONNECT_TIMEOUT_SECONDS):
+                    init_result = await session.initialize()
+                with anyio.fail_after(settings.MCP_CONNECT_TIMEOUT_SECONDS):
+                    listed = await session.list_tools()
                 succeeded = True
-            except Exception as exc:  # noqa: BLE001 - any failure (including a timed-out hang) means "not reachable yet", retry
-                logger.warning(
-                    "MCP server %s at %s not reachable yet (%s); retrying in %.1fs",
-                    label, base_url, exc, delay,
-                )
-            finally:
-                # Must close a failed attempt's contexts here, even when the
-                # exception is a CancelledError (e.g. pod shutdown mid-retry)
-                # that the `except Exception` clause above doesn't catch --
-                # otherwise its anyio cancel scope is left open, which
-                # corrupts cleanup ordering for every later close() call on
-                # this task (surfacing as an unrelated-looking RuntimeError
-                # far away, at shutdown).
-                if not succeeded:
+            except BaseException as exc:  # noqa: BLE001 - see Task.cancelling() note above on why this is deliberately broad
+                caught = exc
+
+            if not succeeded:
+                try:
                     await attempt_stack.aclose()
+                except BaseException as close_exc:  # noqa: BLE001 - closing a failed attempt can itself raise the real underlying error (see docstring); still not a reason to skip the retry-vs-propagate decision below
+                    caught = close_exc
 
             if succeeded:
                 self._server_stacks[label] = attempt_stack
                 return session, init_result.instructions, listed.tools
 
+            if isinstance(caught, asyncio.CancelledError) and asyncio.current_task().cancelling() > 0:
+                raise caught
+
+            logger.warning(
+                "MCP server %s at %s not reachable yet (%s); retrying in %.1fs",
+                label, base_url, caught, delay,
+            )
             await asyncio.sleep(delay)
             delay = min(delay * 2, _CONNECT_RETRY_MAX_DELAY_SECONDS)
             attempt += 1
@@ -220,10 +249,15 @@ class McpToolRouter:
         with mlflow.start_span(name=f"mcp__{name}", span_type="TOOL") as span:
             span.set_inputs(arguments)
             try:
-                result = await asyncio.wait_for(
-                    server.session.call_tool(tool_name, arguments),
-                    timeout=settings.MCP_TOOL_CALL_TIMEOUT_SECONDS,
-                )
+                # anyio.fail_after(), not asyncio.wait_for(): ClientSession is
+                # built on anyio task groups/cancel scopes, and
+                # asyncio.wait_for()'s raw Task.cancel() does not reliably
+                # interrupt an anyio-scoped await -- see the longer note on
+                # this in _connect_with_retry, where the same swap was needed
+                # to make a connect-time hang actually time out instead of
+                # sailing past its own deadline.
+                with anyio.fail_after(settings.MCP_TOOL_CALL_TIMEOUT_SECONDS):
+                    result = await server.session.call_tool(tool_name, arguments)
             except TimeoutError:
                 # Without this, a downstream server that dies mid-call (e.g.
                 # killed by its own liveness probe while inferencing) leaves
