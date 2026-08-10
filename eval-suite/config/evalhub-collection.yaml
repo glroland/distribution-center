@@ -1,22 +1,17 @@
-# Collection spec for `evalhub collections create --file config/evalhub-collection.yaml`.
-#
-# Flat mapping matching evalhub.models.api.CollectionCreateRequest exactly
-# (see evalhub-provider.yaml's header comment for why this is a separate
-# file from the provider spec, and why there's no shell-style ${VAR}
-# expansion). Each benchmarks[].id here is the benchmark id from
+# Collection spec rendered into a ConfigMap by
+# scripts/render_evalhub_configmap.py and applied via `make
+# register-eval-suite` -- see evalhub-provider.yaml's header comment for why
+# this ConfigMap mechanism, not `evalhub collections create --file`, is what
+# the OpenShift AI dashboard and `evalhub eval run` actually use. Shape
+# matches evalhub.models.api.CollectionCreateRequest (plus an `id`, added by
+# the render script) -- each benchmarks[].id is a benchmark id from
 # evalhub-provider.yaml.
 #
-# benchmarks[].provider_id below is a __PROVIDER_ID__ placeholder, not
-# `dc-eval-suite` -- confirmed by registering it once: EvalHub's
-# ProviderCreateRequest has no client-supplied id field, and the server
-# assigns its own random UUID as the provider's real id regardless of
-# `name` (compare `evalhub providers list`'s ID column, a UUID, against its
-# NAME column, `dc-eval-suite`). A provider_id that doesn't match a real
-# provider id is accepted silently at collection-create time (not
-# validated), so this only breaks later when actually running an
-# evaluation. `make register-eval-suite` resolves the real id at registration
-# time and substitutes it in -- don't hand-edit this placeholder or run
-# `evalhub collections create --file` on this file directly.
+# benchmarks[].provider_id below is the literal `dc-eval-suite` id, not a
+# placeholder: unlike `evalhub providers create` (which always assigns its
+# own random UUID, ignoring any id you send), the ConfigMap mechanism uses
+# exactly the id the render script sets on evalhub-provider.yaml's spec, so
+# it's already known and stable up front.
 
 name: "Distribution Center End-to-End Evaluation v1"
 description: >
@@ -28,19 +23,19 @@ category: agent-evaluation
 tags: [distribution-center, a2a, mcp, byof, demo, v1]
 benchmarks:
   - id: dc-extraction-accuracy
-    provider_id: __PROVIDER_ID__
+    provider_id: dc-eval-suite
     weight: 1.0
     pass_criteria:
       threshold: 0.90
 
   - id: dc-mcp-trajectory
-    provider_id: __PROVIDER_ID__
+    provider_id: dc-eval-suite
     weight: 1.0
     pass_criteria:
       threshold: 0.90
 
   - id: dc-end-to-end
-    provider_id: __PROVIDER_ID__
+    provider_id: dc-eval-suite
     weight: 1.5   # heaviest weight: the business-level outcome is what customers see
     pass_criteria:
       threshold: 0.80

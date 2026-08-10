@@ -1,23 +1,31 @@
-# Provider spec for `evalhub providers create --file config/evalhub-provider.yaml`.
+# Provider spec, rendered into a ConfigMap by
+# scripts/render_evalhub_configmap.py and applied via `make
+# register-eval-suite` (`oc apply`, in redhat-ods-applications).
 #
-# The installed eval-hub-sdk CLI loads --file as a flat YAML mapping and
-# passes it straight to evalhub.models.api.ProviderCreateRequest(**data) --
-# no nested `provider:` wrapper key, and no shell-style ${VAR} expansion
-# (plain yaml.safe_load). ProviderCreateRequest has no `id` field: the
-# server always assigns its own random UUID as the provider's real id on
-# creation, regardless of `name` below (confirmed by registering it once --
-# `name: dc-eval-suite` came back with a UUID id, not `dc-eval-suite`).
-# `make register-eval-suite` looks that id up after creation (or reuses an
-# existing provider's, by matching `name`) and substitutes it into
-# evalhub-collection.yaml's `__PROVIDER_ID__` placeholder -- don't hardcode
-# an assumed id anywhere else.
+# This is NOT what `evalhub providers create --file ...` (a plain REST
+# create, not an upsert) consumes -- that call always assigns its own
+# random UUID as the provider's real id regardless of `name` below, writes
+# straight to EvalHub's runtime DB, and never reconciles into the EvalHub
+# CR's status or the OpenShift AI dashboard's Evaluation Stack UI. What
+# actually drives the dashboard and `evalhub eval run`/`make evalhub-run`
+# is the EvalHub CR's spec.providers (trustyai.opendatahub.io/v1alpha1
+# EvalHub, see home-utils' oai/day_two/cluster_config/evalhub/evalhub.yaml),
+# which the operator reconciles against a ConfigMap in the same namespace
+# labeled trustyai.opendatahub.io/evalhub-provider-name=dc-eval-suite --
+# confirmed the hard way: registering via REST first left the dashboard
+# showing nothing, and a first attempt at the CR/ConfigMap path with
+# evalhub-provider-type: custom failed reconciliation indefinitely
+# ("Failed to reconcile Provider ConfigMaps: provider \"dc-eval-suite\" not
+# found") until switched to type: system -- that label's only supported
+# value, not a claim of being one of the operator's built-in providers.
 #
-# Before registering, the k8s runtime image below must point at a real,
-# already-pushed build -- see deploy/Jenkinsfile's "Create Docker Image for
-# eval-suite" stage, which pushes
-# registry.home.glroland.com/distribution-center/eval-suite:$BUILD_NUMBER
-# (no ":latest" is pushed for this image -- replace the tag below with the
-# build you want this collection to evaluate before registering it).
+# The k8s runtime image below must point at a real, already-pushed build --
+# see deploy/Jenkinsfile's "Create Docker Image for eval-suite" stage,
+# which pushes registry.home.glroland.com/distribution-center/eval-suite:
+# $BUILD_NUMBER (no ":latest" is pushed for this image). Bump the tag here
+# and re-run `make register-eval-suite` to point the live provider at a new
+# build -- `oc apply` on the rendered ConfigMap is a real upsert, so this
+# is safe to re-run on every build, unlike the old REST-create approach.
 
 name: dc-eval-suite
 title: "Distribution Center Eval Suite"

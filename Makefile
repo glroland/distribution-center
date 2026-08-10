@@ -64,7 +64,7 @@ help:
 	@echo "  install                      Install dependencies from every requirements.txt (via: $(PIP))"
 	@echo "  generate-pos                 Generate sample PO PDFs into $(TARGET_DIR)/pos (ARGS=\"--count 25\" to pass flags)"
 	@echo "  eval-suite                   Run the EvalHub benchmarks locally against running services (ARGS=\"--adapter extraction\" to pass flags)"
-	@echo "  register-eval-suite          Register eval-suite's provider + collection with a running OpenShift AI EvalHub instance"
+	@echo "  register-eval-suite          Register/update eval-suite's provider + collection with a running OpenShift AI EvalHub instance (safe to re-run after every image rebuild)"
 	@echo "  evalhub-run                  Submit a real distribution-center-eval-v1 run against the in-cluster agent (ARGS=\"--wait\" to block, ARGS=\"--watch\" to stream logs)"
 	@echo "  load-prompts                 Register every <service>/prompts.json into the MLflow Prompt Registry (ARGS=\"--dry-run\" to pass flags)"
 	@echo "  run-ingest-api               Run the PO ingest API (http://localhost:8000)"
@@ -99,53 +99,46 @@ load-prompts:
 eval-suite:
 	cd eval-suite && python3 -m src $(ARGS)
 
-# Registers eval-suite's provider + collection (config/evalhub-provider.yaml,
-# config/evalhub-collection.yaml) with a running OpenShift AI 3.4 EvalHub
-# instance -- not a Kubernetes resource you apply, EvalHub exposes this as
-# CLI/REST registration. Requires the `evalhub` CLI (pip install
-# eval-hub-sdk) already installed. `evalhub config set` writes to
-# ~/.config/evalhub/config.yaml (outside this repo), so it's safe/idempotent
-# to re-run on every invocation -- re-authenticates with a fresh OpenShift
-# token each time rather than relying on a previous run's (expiring) one.
-# Also requires the image referenced by config/evalhub-provider.yaml's
-# runtime.k8s.image already pushed (see deploy/Jenkinsfile's "Create Docker
-# Image for eval-suite" stage). Two separate flat files, not one combined
-# file, because the CLI's --file loads a flat mapping straight into each
-# request's Pydantic model -- see evalhub-provider.yaml's header comment.
+# Registers (and, on every re-run, UPDATES -- e.g. a new image tag in
+# config/evalhub-provider.yaml after a rebuild) eval-suite's provider +
+# collection with a running OpenShift AI 3.4 EvalHub instance, by rendering
+# them into the ConfigMaps EvalHub's operator actually reconciles the
+# EvalHub CR's spec.providers/spec.collections against and `oc apply`-ing
+# those -- see eval-suite/config/evalhub-provider.yaml's header comment and
+# scripts/render_evalhub_configmap.py for why this, and not `evalhub
+# providers/collections create --file ...`, is what the OpenShift AI
+# dashboard and `make evalhub-run` actually read. `oc apply` is a true
+# upsert (unlike REST create, which happily minted a second, disconnected
+# provider with a stale one still wired to everything real -- don't
+# reintroduce that path).
 #
-# Idempotent by name, not just re-runnable: EvalHub's create APIs don't
-# reject a duplicate name, they'd happily mint a second provider/collection
-# with a new random id every time this ran -- so this looks each up by name
-# first (`evalhub providers/collections list --format json`) and reuses an
-# existing one instead of re-creating. That lookup also solves
-# evalhub-collection.yaml's `__PROVIDER_ID__` placeholder: the provider's
-# real id is a server-assigned UUID unrelated to the `name` we send (see
-# evalhub-provider.yaml's header comment), so it can only be known after
-# create-or-find, then substituted into a temp copy of the collection spec.
+# One-time-only, NOT handled here: the EvalHub CR itself must already list
+# dc-eval-suite/distribution-center-eval-v1 in spec.providers/
+# spec.collections (see home-utils' oai/day_two/cluster_config/evalhub/
+# evalhub.yaml), and evalhub-service needs RBAC in the target namespace
+# (see that same directory's evalhub-service-distribution-center-rbac.yaml,
+# evalhub-job-serviceaccount-distribution-center.yaml,
+# evalhub-service-ca-distribution-center.yaml). None of that changes on a
+# routine image rebuild, which is why it isn't repeated by this target --
+# only run those again against a fresh EvalHub instance or a new namespace.
+#
+# The final rollout restart is not optional: confirmed the hard way that
+# EvalHub's operator reconciling "Provider ConfigMaps" only keeps the
+# ConfigMap *resource* itself in sync (see its controller logs) -- the
+# running EvalHub server process loads provider/collection data from these
+# ConfigMaps once, at its own pod startup, and keeps serving that cached
+# copy indefinitely otherwise. Applying an updated ConfigMap alone left
+# `evalhub providers list` reporting the old image tag until the pod was
+# restarted; the annotate/force-reconcile trick that's enough to fix a
+# genuinely broken CR (a missing spec.providers entry, a bad env var) does
+# nothing for this.
 register-eval-suite:
-	evalhub config set base_url $(EVALHUB_BASE_URL)
-	evalhub config set token $(MLFLOW_TRACKING_TOKEN)
-	evalhub config set tenant $(EVALHUB_TENANT)
-	@provider_id=$$(evalhub providers list --format json | python3 -c \
-		"import json,sys; d=json.load(sys.stdin); m=[p['resource']['id'] for p in d if p['name']=='dc-eval-suite']; print(m[0] if m else '')"); \
-	if [ -n "$$provider_id" ]; then \
-		echo "Provider dc-eval-suite already registered: $$provider_id"; \
-	else \
-		out=$$(evalhub providers create --file eval-suite/config/evalhub-provider.yaml) || exit 1; \
-		echo "$$out"; \
-		provider_id=$$(echo "$$out" | sed -n 's/^Provider created: //p'); \
-	fi; \
-	collection_id=$$(evalhub collections list --format json | python3 -c \
-		"import json,sys; d=json.load(sys.stdin); m=[c['id'] for c in d if c['name']=='Distribution Center End-to-End Evaluation v1']; print(m[0] if m else '')"); \
-	if [ -n "$$collection_id" ]; then \
-		echo "Collection distribution-center-eval-v1 already registered: $$collection_id"; \
-	else \
-		tmpdir=$$(mktemp -d); \
-		tmp="$$tmpdir/evalhub-collection.yaml"; \
-		sed "s/__PROVIDER_ID__/$$provider_id/" eval-suite/config/evalhub-collection.yaml > "$$tmp"; \
-		evalhub collections create --file "$$tmp"; \
-		rm -rf "$$tmpdir"; \
-	fi
+	python3 eval-suite/scripts/render_evalhub_configmap.py provider eval-suite/config/evalhub-provider.yaml \
+		dc-eval-suite distribution-center-evalhub-provider-dc-eval-suite | oc apply -f -
+	python3 eval-suite/scripts/render_evalhub_configmap.py collection eval-suite/config/evalhub-collection.yaml \
+		distribution-center-eval-v1 distribution-center-evalhub-collection-distribution-center-eval-v1 | oc apply -f -
+	oc rollout restart deployment/evalhub -n redhat-ods-applications
+	oc rollout status deployment/evalhub -n redhat-ods-applications --timeout=120s
 
 # Submits a real run of the registered distribution-center-eval-v1
 # collection against the in-cluster agent deployment (see
