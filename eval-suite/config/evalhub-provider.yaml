@@ -38,7 +38,7 @@ runtime:
   local:
     command: "cd eval-suite && EVALHUB_JOB_SPEC_PATH=$EVALHUB_JOB_SPEC_PATH python -m src.evalhub_entrypoint"
   k8s:
-    image: registry.home.glroland.com/distribution-center/eval-suite:29
+    image: registry.home.glroland.com/distribution-center/eval-suite:30
     entrypoint: ["python", "-m", "src.evalhub_entrypoint"]
     cpu_request: 250m
     memory_request: 512Mi
