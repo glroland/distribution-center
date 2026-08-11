@@ -56,6 +56,9 @@ def main() -> None:
     callbacks = DefaultCallbacks.from_adapter(adapter)
     try:
         results = adapter.run_benchmark_job(adapter.job_spec, callbacks)
+        run_id = callbacks.mlflow.save(results, adapter.job_spec)
+        if run_id:
+            results.mlflow_run_id = run_id
         callbacks.report_results(results)
         logger.info(
             "EVALUATION COMPLETE  benchmark=%s  score=%.3f", results.benchmark_id, results.overall_score
