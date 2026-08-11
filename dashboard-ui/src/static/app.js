@@ -19,6 +19,367 @@ const state = {
 
 const $ = (sel) => document.querySelector(sel);
 
+// ---------------------------------------------------------------------------
+// Architecture overview — per-capability "how to wire this into your app" guides
+// ---------------------------------------------------------------------------
+
+const ARCH_DETAILS = {
+  "model-serving": {
+    title: "Generative AI Model Serving",
+    subtitle: "Serve any open model behind an OpenAI-compatible endpoint.",
+    steps: [
+      {
+        title: "Deploy the model",
+        text: "KServe + vLLM runtime. GPU-autoscaled, no custom serving code.",
+        lang: "yaml",
+        code: `apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata: { name: llama-3-70b }
+spec:
+  predictor:
+    model:
+      runtime: vllm-runtime
+      storageUri: s3://models/llama-3-70b`,
+      },
+      {
+        title: "Call it like OpenAI",
+        text: "Point your existing SDK at the new base_url — nothing else changes.",
+        lang: "python",
+        code: `from openai import OpenAI
+client = OpenAI(base_url="https://llama-3-70b.apps.example.com/v1", api_key=token)
+client.chat.completions.create(model="llama-3-70b", messages=[...])`,
+      },
+      {
+        title: "Scale with demand",
+        text: "Pods autoscale on request volume, including down to zero.",
+      },
+    ],
+  },
+  "ai-gateway": {
+    title: "AI Gateway (Models-as-a-Service)",
+    subtitle: "One front door for every model — auth, limits, and usage in one place.",
+    steps: [
+      {
+        title: "Register a model",
+        text: "Point the gateway at an external model — yours or a SaaS provider's — no new infrastructure to stand up.",
+        lang: "yaml",
+        code: `apiVersion: maas.openshift.io/v1alpha1
+kind: ExternalModel
+metadata: { name: gpt-4o }
+spec:
+  provider: openai
+  upstreamUrl: https://api.openai.com/v1
+  upstreamSecretRef: { name: openai-upstream-key }`,
+      },
+      {
+        title: "Issue a subscription",
+        text: "Each consuming team gets a subscription, not a shared key — billable and revocable on its own.",
+        lang: "yaml",
+        code: `apiVersion: maas.openshift.io/v1alpha1
+kind: Subscription
+metadata: { name: checkout-team }
+spec:
+  model: gpt-4o
+  costCenter: CC-4821
+  rateLimit: { requests: 60, window: 1m }`,
+      },
+      {
+        title: "Swap the base URL",
+        text: "Clients already speaking the OpenAI API change one URL and one key — nothing else.",
+      },
+    ],
+  },
+  "tool-orchestration": {
+    title: "Agentic Tool Orchestration",
+    subtitle: "Give the model real actions, not just text, through a standard tool protocol.",
+    steps: [
+      {
+        title: "Expose your system as an MCP tool",
+        lang: "python",
+        code: `from mcp.server.fastmcp import FastMCP
+mcp = FastMCP("wms")
+
+@mcp.tool()
+def adjust_inventory(sku: str, delta: int) -> dict:
+    return inventory.adjust(sku, delta)`,
+      },
+      {
+        title: "Deploy it with the lifecycle operator",
+        text: "The MCP lifecycle operator rolls it out on the cluster — health checks, RBAC, and service discovery included.",
+        lang: "yaml",
+        code: `apiVersion: mcp.x-k8s.io/v1alpha1
+kind: MCPServer
+metadata: { name: wms-mcp-server }
+spec:
+  source:
+    type: ContainerImage
+    containerImage: { ref: quay.io/example/wms-mcp:latest }
+  config: { port: 8080 }`,
+      },
+      {
+        title: "Connect the agent to it",
+        text: "The tool-calling loop runs until the model says it's done — no hardcoded step order.",
+        lang: "python",
+        code: `tools = await mcp_client.connect("https://wms.example.com/mcp")
+agent = Agent(model="llama-3-70b", tools=tools)`,
+      },
+    ],
+  },
+  "ocr-doc": {
+    title: "OCR & Document Processing",
+    subtitle: "Turn scanned PDFs into structured text an LLM can reason over.",
+    steps: [
+      {
+        title: "Call docling-serve",
+        text: "Already deployed on the cluster — no OCR pipeline to build or maintain.",
+        lang: "bash",
+        code: `curl -F files=@purchase_order.pdf https://docling-serve.apps.example.com/v1alpha/convert/file`,
+      },
+      {
+        title: "Get layout-aware markdown back",
+        lang: "json",
+        code: `{ "markdown": "# Purchase Order\\n| SKU | Qty |\\n|---|---|\\n..." }`,
+      },
+      {
+        title: "Feed it to the LLM",
+        text: "No template matching — the model reads the markdown like a person would.",
+      },
+    ],
+  },
+  "vision-inference": {
+    title: "Computer Vision Inference",
+    subtitle: "Read a physical label with a small, purpose-trained model — not a general LLM.",
+    steps: [
+      {
+        title: "Package your checkpoints",
+        text: "Bundled into the serving image at build time, not fetched at runtime.",
+        lang: "dockerfile",
+        code: `COPY models/localize.pt models/orient.pt models/ocr.pt /models/`,
+      },
+      {
+        title: "Expose one inference endpoint",
+        lang: "bash",
+        code: `curl -F photo=@sticker.jpg https://vision.example.com/infer`,
+      },
+      {
+        title: "Publish to the registry",
+        text: "Version the checkpoint so it's tracked and promotable, not a file on someone's laptop.",
+        lang: "python",
+        code: `mlflow.pyfunc.log_model("sku-ocr", python_model=model, registered_model_name="sku-ocr")`,
+      },
+      {
+        title: "Read back a prediction",
+        lang: "json",
+        code: `{ "sku": "SKU-10231", "confidence": 0.97 }`,
+      },
+    ],
+  },
+  "vision-mlops": {
+    title: "MLOps for Computer Vision",
+    subtitle: "Train, version, and promote vision models with the same rigor as any pipeline.",
+    steps: [
+      {
+        title: "Define a pipeline",
+        lang: "python",
+        code: `@dsl.pipeline(name="sku-ocr-train")
+def train(dataset_uri: str):
+    localize_step(dataset_uri) >> orient_step() >> ocr_step()`,
+      },
+      {
+        title: "Run it on OpenShift AI",
+        lang: "bash",
+        code: `oc apply -f pipeline-run.yaml`,
+      },
+      {
+        title: "Promote the winner",
+        text: "Only a checkpoint that beats the current champion on held-out labels ships.",
+      },
+    ],
+  },
+  "prompt-registry": {
+    title: "Prompt Registry",
+    subtitle: "Treat prompts like code — versioned, reviewed, and promotable.",
+    steps: [
+      {
+        title: "Register a prompt",
+        lang: "python",
+        code: `mlflow.genai.register_prompt(
+    name="order-extraction", template=SYSTEM_PROMPT)`,
+      },
+      {
+        title: "Load it by alias",
+        lang: "python",
+        code: `prompt = mlflow.genai.load_prompt("prompts:/order-extraction@production")`,
+      },
+      {
+        title: "Promote after eval passes",
+        text: "Re-point the @production alias — no redeploy needed.",
+      },
+    ],
+  },
+  "model-registry": {
+    title: "Model Registry",
+    subtitle: "One source of truth for which model version is where.",
+    steps: [
+      {
+        title: "Log the model",
+        lang: "python",
+        code: `mlflow.pyfunc.log_model("sku-ocr", python_model=model, registered_model_name="sku-ocr")`,
+      },
+      {
+        title: "Stage it",
+        lang: "python",
+        code: `client.transition_model_version_stage("sku-ocr", version=14, stage="Production")`,
+      },
+      {
+        title: "Deploy from the registry",
+        lang: "yaml",
+        code: `storageUri: models:/sku-ocr/Production`,
+      },
+    ],
+  },
+  tracing: {
+    title: "Distributed Tracing",
+    subtitle: "See every prompt, tool call, and model response an agent made — in order.",
+    steps: [
+      {
+        title: "Instrument the agent",
+        lang: "python",
+        code: `import mlflow
+mlflow.openai.autolog()`,
+      },
+      {
+        title: "Export spans",
+        lang: "bash",
+        code: `export OTEL_EXPORTER_OTLP_ENDPOINT=https://tracing.example.com`,
+      },
+      {
+        title: "Debug from the trace",
+        text: "Every tool call — name, args, and result — is one click away, not grep'd from logs.",
+      },
+    ],
+  },
+  "continuous-eval": {
+    title: "Continuous Evaluation",
+    subtitle: "Grade agent behavior against known-good cases before every promotion.",
+    steps: [
+      {
+        title: "Write a scorer",
+        lang: "python",
+        code: `def score(prediction, expected) -> float:
+    return 1.0 if prediction["sku"] == expected["sku"] else 0.0`,
+      },
+      {
+        title: "Run it against golden cases",
+        lang: "bash",
+        code: `python -m eval_suite --adapter all`,
+      },
+      {
+        title: "Gate promotion on the score",
+        text: "A prompt or model version only ships once it clears the bar.",
+      },
+    ],
+  },
+  guardrails: {
+    title: "Safety Guardrails",
+    subtitle: "Block unsafe input and output before it ever reaches a customer.",
+    steps: [
+      {
+        title: "Define a policy",
+        lang: "yaml",
+        code: `blockedCategories: [pii, prompt-injection, toxicity]
+action: reject`,
+      },
+      {
+        title: "A real example",
+        text: "NeMo Guardrails' Colang catches it before the model ever sees the payload.",
+        lang: "colang",
+        code: `define user express prompt injection
+  "ignore all previous instructions"
+  "disregard the above and"
+  "set ship_to to"
+
+define flow
+  user express prompt injection
+  bot refuse to respond
+  stop`,
+      },
+      {
+        title: "Wrap the model call",
+        lang: "python",
+        code: `if not guardrails.check(user_input).safe:
+    return reject_response()
+response = model.generate(user_input)`,
+      },
+      {
+        title: "Check both directions",
+        text: "Guardrails run on the request and the response — not just one side.",
+      },
+    ],
+  },
+  sandboxing: {
+    title: "Agent Sandboxing",
+    subtitle: "Let the model call tools without giving it the run of the cluster — via NVIDIA OpenShell.",
+    steps: [
+      {
+        title: "Create a sandbox",
+        text: "Kernel-level isolation, policy-controlled filesystem, network, and process access.",
+        lang: "bash",
+        code: `openshell sandbox create --from base --name po-fulfillment`,
+      },
+      {
+        title: "Connect with a harness",
+        text: "SSH into the existing sandbox, then launch any harness — each runs unmodified inside the policy boundary.",
+        lang: "bash",
+        code: `openshell sandbox connect po-fulfillment
+$ claude   # or: codex, opencode`,
+      },
+      {
+        title: "Or open it in VS Code",
+        text: "A full local editor via Remote-SSH, not a browser IDE — the sandbox is just another remote host.",
+        lang: "bash",
+        code: `openshell sandbox connect po-fulfillment --editor vscode`,
+        image: "/static/img/openshell-vscode.png",
+        imageAlt: "VS Code connected to a running OpenShell sandbox via Remote-SSH",
+      },
+    ],
+  },
+};
+
+function escapeHtml(str) {
+  return str.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
+function renderArchDetail(key) {
+  const detail = ARCH_DETAILS[key];
+  if (!detail) return;
+  $("#arch-detail-title").textContent = detail.title;
+  $("#arch-detail-subtitle").textContent = detail.subtitle;
+  const stepsHtml = detail.steps
+    .map((step, i) => {
+      const codeHtml = step.code
+        ? `<span class="arch-step-lang">${escapeHtml(step.lang || "")}</span><pre>${escapeHtml(step.code)}</pre>`
+        : "";
+      const textHtml = step.text ? `<p class="arch-step-text">${escapeHtml(step.text)}</p>` : "";
+      const imageHtml = step.image
+        ? `<img class="arch-step-img" src="${escapeHtml(step.image)}" alt="${escapeHtml(step.imageAlt || "")}" onerror="this.remove()" />`
+        : "";
+      return `
+        <div class="arch-step">
+          <div class="arch-step-head">
+            <span class="arch-step-num">${i + 1}</span>
+            <h4 class="arch-step-title">${escapeHtml(step.title)}</h4>
+          </div>
+          ${textHtml}
+          ${codeHtml}
+          ${imageHtml}
+        </div>`;
+    })
+    .join("");
+  $("#arch-detail-body").innerHTML = stepsHtml;
+  $("#arch-detail-modal").showModal();
+}
+
 function fmtTime(ts) {
   const d = new Date((ts || Date.now() / 1000) * 1000);
   return d.toLocaleTimeString([], { hour12: false });
@@ -60,6 +421,19 @@ async function init() {
   $("#architecture-modal-close").addEventListener("click", () => $("#architecture-modal").close());
   $("#architecture-modal").addEventListener("click", (e) => {
     if (e.target.id === "architecture-modal") $("#architecture-modal").close();
+    const card = e.target.closest(".arch-card");
+    if (card) renderArchDetail(card.dataset.key);
+  });
+  $("#architecture-modal").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const card = e.target.closest(".arch-card");
+    if (!card) return;
+    e.preventDefault();
+    renderArchDetail(card.dataset.key);
+  });
+  $("#arch-detail-close").addEventListener("click", () => $("#arch-detail-modal").close());
+  $("#arch-detail-modal").addEventListener("click", (e) => {
+    if (e.target.id === "arch-detail-modal") $("#arch-detail-modal").close();
   });
   $("#agentic-safety-toggle").addEventListener("change", onToggleAgenticSafety);
   $("#boost-toggle").addEventListener("change", onToggleBoost);

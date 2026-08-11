@@ -443,6 +443,75 @@ h1, h2, h3 { margin: 0; }
 .arch-highlight h4 { margin: 0 0 6px 0; font-size: 13px; color: var(--accent-strong); }
 .arch-highlight p { margin: 0; font-size: 12px; color: var(--text-dim); line-height: 1.45; }
 
+/* --- clickable capability cards inside the architecture diagram --- */
+.arch-card { cursor: pointer; outline: none; }
+.arch-card .arch-card-bg { fill: var(--bg-panel); stroke: var(--border); stroke-width: 1.2; transition: stroke 0.15s ease, filter 0.15s ease; }
+.arch-card .arch-card-chevron { fill: var(--text-faint); transition: fill 0.15s ease; }
+.arch-card:hover .arch-card-bg,
+.arch-card:focus-visible .arch-card-bg {
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  filter: drop-shadow(0 2px 6px rgba(47, 111, 237, 0.18));
+}
+.arch-card:hover .arch-card-chevron,
+.arch-card:focus-visible .arch-card-chevron { fill: var(--accent-strong); }
+
+/* --- implementation guide (per-capability detail) modal --- */
+.arch-detail-body { display: flex; flex-direction: column; gap: 22px; }
+.arch-detail-intro { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; margin: 0; max-width: 78ch; }
+.arch-step {
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  padding: 16px 18px;
+}
+.arch-step-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.arch-step-num {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  background: var(--accent-dim);
+  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.arch-step-title { margin: 0; font-size: 19px; font-weight: 800; color: var(--text); line-height: 1.2; }
+.arch-step-text { margin: 0 0 10px 0; font-size: 13px; color: var(--text-dim); line-height: 1.45; }
+.arch-step-text:last-child { margin-bottom: 0; }
+.arch-step pre {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.arch-step-img {
+  display: block;
+  max-width: 100%;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.arch-step-lang {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+}
+
 .sticker-modal-body {
   padding: 16px;
   max-height: calc(82vh - 62px);

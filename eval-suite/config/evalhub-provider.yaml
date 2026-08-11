@@ -44,6 +44,15 @@ runtime:
     memory_request: 512Mi
     cpu_limit: "1"
     memory_limit: 1Gi
+    # Deliberately no env: here for AGENT_URL/WMS_API_URL/etc. -- tried that
+    # first; confirmed empirically that EvalHub's API accepts and echoes
+    # back runtime.k8s.env from this ConfigMap (`evalhub providers list`
+    # shows it) but never actually applies it to the Job pod's real
+    # environment (a gap in this EvalHub build, not a config mistake here).
+    # Fixed instead in eval-suite/src/settings.py: every downstream service
+    # URL there now defaults based on EVALHUB_MODE (set by the operator
+    # itself in every k8s Job pod, reliably present unlike anything from
+    # this provider config) rather than unconditionally to localhost.
 benchmarks:
   - id: dc-extraction-accuracy
     name: "PO Extraction Field Accuracy"
