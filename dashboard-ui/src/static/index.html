@@ -166,7 +166,7 @@
   </div>
   <div class="architecture-modal-body">
     <figure class="arch-figure">
-      <svg viewBox="0 0 1200 766" role="img" aria-label="Red Hat OpenShift AI provides twelve agentic platform capabilities — generative AI model serving, an AI gateway for models-as-a-service, agentic tool orchestration, OCR and document processing, computer vision inference, MLOps for computer vision models, prompt registry, model registry, distributed tracing, continuous evaluation, safety guardrails, and agent sandboxing — all running on Red Hat OpenShift. Each capability is clickable for an implementation guide. Below that foundation, a purchase order PDF arrives and flows through the pipeline: the inventory ledger is updated after a verified pick, the shipment is booked and tracked, or the order is escalated to a human supervisor when something's off.">
+      <svg viewBox="0 0 1200 766" role="img" aria-label="Red Hat OpenShift AI provides twelve agentic platform capabilities — generative AI model serving, an AI gateway for models-as-a-service, agentic tool orchestration, OCR and document processing, computer vision inference, MLOps for computer vision models, a combined model and prompt registry, a secure software supply chain, distributed tracing, continuous evaluation, safety guardrails, and agent sandboxing — all running on Red Hat OpenShift. Each capability is clickable for an implementation guide. Below that foundation, a purchase order PDF arrives and flows through the pipeline: the inventory ledger is updated after a verified pick, the shipment is booked and tracked, or the order is escalated to a human supervisor when something's off.">
         <defs>
           <marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 Z" fill="var(--accent)"></path>
@@ -286,35 +286,33 @@
           <text x="570" y="334" class="arch-card-chevron" font-size="13" text-anchor="end">&#8250;</text>
         </g>
 
-        <!-- Card G: Prompt Registry -->
-        <g class="arch-card" tabindex="0" role="button" data-key="prompt-registry" aria-label="Prompt Registry — press Enter for an implementation guide">
+        <!-- Card G: Model & Prompt Registry (merged from the former separate Prompt/Model Registry cards) -->
+        <g class="arch-card" tabindex="0" role="button" data-key="model-prompt-registry" aria-label="Model and Prompt Registry — press Enter for an implementation guide">
           <rect x="610" y="216" width="235" height="130" rx="10" class="arch-card-bg"></rect>
           <circle cx="644" cy="250" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
-          <rect x="638" y="243" width="12" height="14" rx="1.5" stroke="var(--accent-strong)" stroke-width="1.2" fill="none"></rect>
+          <path d="M638,247 L644,243 L650,247 L650,254 L644,258 L638,254 Z" stroke="var(--accent-strong)" stroke-width="1.2" fill="none"></path>
           <g stroke="var(--accent-strong)" stroke-width="1.1">
-            <line x1="641" y1="247" x2="647" y2="247"></line>
-            <line x1="641" y1="250" x2="647" y2="250"></line>
-            <line x1="641" y1="253" x2="645" y2="253"></line>
+            <line x1="644" y1="243" x2="644" y2="251"></line>
+            <line x1="638" y1="247" x2="644" y2="251"></line>
+            <line x1="650" y1="247" x2="644" y2="251"></line>
           </g>
-          <text x="666" y="255" font-size="13.5" font-weight="700" fill="var(--text)">Prompt Registry</text>
-          <text x="628" y="282" font-size="11.2" fill="var(--text-dim)">Every prompt version is</text>
-          <text x="628" y="298" font-size="11.2" fill="var(--text-dim)">tracked &amp; promotable.</text>
+          <text x="666" y="253" font-size="13.5" font-weight="700" fill="var(--text)">Model &amp; Prompt</text>
+          <text x="666" y="268" font-size="13.5" font-weight="700" fill="var(--text)">Registry</text>
+          <text x="628" y="291" font-size="11.2" fill="var(--text-dim)">Every model &amp; prompt version</text>
+          <text x="628" y="307" font-size="11.2" fill="var(--text-dim)">is tracked &amp; promotable.</text>
           <text x="825" y="334" class="arch-card-chevron" font-size="13" text-anchor="end">&#8250;</text>
         </g>
 
-        <!-- Card H: Model Registry -->
-        <g class="arch-card" tabindex="0" role="button" data-key="model-registry" aria-label="Model Registry — press Enter for an implementation guide">
+        <!-- Card H: Secure Software Supply Chain -->
+        <g class="arch-card" tabindex="0" role="button" data-key="secure-supply-chain" aria-label="Secure Software Supply Chain — press Enter for an implementation guide">
           <rect x="865" y="216" width="235" height="130" rx="10" class="arch-card-bg"></rect>
           <circle cx="899" cy="250" r="16" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3"></circle>
-          <path d="M893,247 L899,243 L905,247 L905,254 L899,258 L893,254 Z" stroke="var(--accent-strong)" stroke-width="1.2" fill="none"></path>
-          <g stroke="var(--accent-strong)" stroke-width="1.1">
-            <line x1="899" y1="243" x2="899" y2="251"></line>
-            <line x1="893" y1="247" x2="899" y2="251"></line>
-            <line x1="905" y1="247" x2="899" y2="251"></line>
-          </g>
-          <text x="921" y="255" font-size="13.5" font-weight="700" fill="var(--text)">Model Registry</text>
-          <text x="883" y="282" font-size="11.2" fill="var(--text-dim)">Every model version is</text>
-          <text x="883" y="298" font-size="11.2" fill="var(--text-dim)">tracked &amp; promotable.</text>
+          <rect x="893" y="249" width="12" height="10" rx="1.5" stroke="var(--accent-strong)" stroke-width="1.2" fill="none"></rect>
+          <path d="M896,249 L896,245.5 A3,3 0 0 1 902,245.5 L902,249" stroke="var(--accent-strong)" stroke-width="1.2" fill="none"></path>
+          <circle cx="899" cy="253" r="1.1" fill="var(--accent-strong)"></circle>
+          <text x="921" y="255" font-size="13.5" font-weight="700" fill="var(--text)">Secure Supply Chain</text>
+          <text x="883" y="282" font-size="11.2" fill="var(--text-dim)">UBI base image + a trusted</text>
+          <text x="883" y="298" font-size="11.2" fill="var(--text-dim)">PyPI proxy for pip installs.</text>
           <text x="1080" y="334" class="arch-card-chevron" font-size="13" text-anchor="end">&#8250;</text>
         </g>
 

@@ -196,9 +196,9 @@ def train(dataset_uri: str):
       },
     ],
   },
-  "prompt-registry": {
-    title: "Prompt Registry",
-    subtitle: "Treat prompts like code — versioned, reviewed, and promotable.",
+  "model-prompt-registry": {
+    title: "Model & Prompt Registry",
+    subtitle: "One source of truth for which model and prompt version is where — treat both like code.",
     steps: [
       {
         title: "Register a prompt",
@@ -212,29 +212,43 @@ def train(dataset_uri: str):
         code: `prompt = mlflow.genai.load_prompt("prompts:/order-extraction@production")`,
       },
       {
-        title: "Promote after eval passes",
-        text: "Re-point the @production alias — no redeploy needed.",
+        title: "Log a model the same way",
+        lang: "python",
+        code: `mlflow.pyfunc.log_model("sku-ocr", python_model=model, registered_model_name="sku-ocr")
+client.transition_model_version_stage("sku-ocr", version=14, stage="Production")`,
+      },
+      {
+        title: "Promote either one after eval passes",
+        text: "Re-point the @production alias or transition the stage — no redeploy needed.",
       },
     ],
   },
-  "model-registry": {
-    title: "Model Registry",
-    subtitle: "One source of truth for which model version is where.",
+  "secure-supply-chain": {
+    title: "Secure Software Supply Chain",
+    subtitle: "Every image starts hardened; every pip install resolves through a trusted, curated mirror.",
     steps: [
       {
-        title: "Log the model",
-        lang: "python",
-        code: `mlflow.pyfunc.log_model("sku-ocr", python_model=model, registered_model_name="sku-ocr")`,
+        title: "Start from a Red Hat UBI base image",
+        text: "Minimal, FIPS-capable, and patched on a predictable cadence — not a community base you're trusting blind.",
+        lang: "dockerfile",
+        code: `FROM registry.access.redhat.com/ubi9/python-311
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt`,
       },
       {
-        title: "Stage it",
-        lang: "python",
-        code: `client.transition_model_version_stage("sku-ocr", version=14, stage="Production")`,
+        title: "Point pip at the trusted proxy once",
+        text: "One pip.conf, set cluster-wide — every service's existing requirements.txt keeps working unchanged.",
+        lang: "ini",
+        code: `[global]
+index-url = https://pypi.trusted.example.com/simple`,
       },
       {
-        title: "Deploy from the registry",
-        lang: "yaml",
-        code: `storageUri: models:/sku-ocr/Production`,
+        title: "Installs just work",
+        text: "`pip install -r requirements.txt` in any of the eight services resolves through the mirror automatically — no per-package allowlisting, no code changes.",
+      },
+      {
+        title: "Every package is vetted before it's mirrored",
+        text: "CVE scanning and provenance attestation happen once, centrally, upstream of every build — not re-checked (or skipped) per project.",
       },
     ],
   },
