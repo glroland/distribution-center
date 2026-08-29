@@ -1,4 +1,4 @@
-FROM registry.redhat.io/rhai/base-image-cpu-rhel9:3.4.0-1777399554
+FROM registry.redhat.io/rhai/base-image-cpu-rhel9:3.5.0-1786556387
 
 WORKDIR /app
 
