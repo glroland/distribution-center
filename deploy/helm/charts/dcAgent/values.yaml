@@ -1,0 +1,24 @@
+# Default values for the dcAgent subchart -- a standalone example so this
+# chart is functional on its own. The umbrella chart's values.yaml
+# overrides these under the `dcAgent:` key. wms-api/robot-api/shipping-api/
+# po-ingest-api/supervisor-api/label-api addresses are read from
+# `global.*`, since those live in sibling subcharts and Helm only shares
+# `global` values automatically.
+
+enabled: true
+displayName: "Distribution Center A"
+image:
+  repository: local-dc-agent
+port: 9100
+maxFulfillmentTurns: 1000
+mcpToolCallTimeoutSeconds: 60
+openaiRequestTimeoutSeconds: 60
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+route:
+  enabled: true

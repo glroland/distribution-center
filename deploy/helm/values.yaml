@@ -1,9 +1,10 @@
 # Default values for the ai-distribution-center chart.
 #
 # Everything below `global` is scoped to one of the subcharts under charts/
-# (poIngestApi, supervisorApi, distributionCenter) and simply overrides that
-# subchart's own defaults in charts/<name>/values.yaml. Values under `global`
-# are the only ones Helm shares across all subcharts automatically.
+# (poIngestApi, supervisorApi, dashboardUi, labelApi, dcAgent, wmsApi,
+# robotApi, shippingApi) and simply overrides that subchart's own defaults
+# in charts/<name>/values.yaml. Values under `global` are the only ones
+# Helm shares across all subcharts automatically.
 
 global:
   # Prefix applied to every image repository below, e.g. an OpenShift
@@ -27,9 +28,10 @@ global:
 
   openai:
     # Consumed by every distribution center's dc-agent (OPENAI_API_KEY).
-    # Leave apiKey empty and set existingSecret to use a pre-created secret
-    # instead of storing the key in values.
-    apiKey: ""
+    # Deliberately NOT managed by this chart -- existingSecret must name a
+    # Secret you create yourself with deploy/apply-openai-secret.sh (see
+    # deploy/openai-secret.template.yaml), so the key never has to pass
+    # through `helm install/upgrade --set` or live in values.yaml.
     model: gemma-4
     # Set to point dc-agent at an OpenAI-compatible endpoint (e.g. a local
     # or self-hosted model server) instead of the real OpenAI API. Leave
@@ -38,17 +40,23 @@ global:
     existingSecret: "distribution-center-credentials"
     existingSecretKey: OPENAI_API_KEY
 
-  # Ports of the global services below, mirrored here so the
-  # distributionCenter subchart's dc-agent (poIngestApi, supervisorApi) and
-  # dashboardUi (labelApi, for sticker-photo proxying) can address
-  # them -- Helm only shares `global` values across subcharts, never one
-  # subchart's local values with another.
+  # Ports of every service other subcharts need to address, mirrored here
+  # so dcAgent (wmsApi, robotApi, shippingApi, poIngestApi, supervisorApi,
+  # labelApi) and dashboardUi (labelApi, for sticker-photo proxying) can
+  # reach them -- Helm only shares `global` values across subcharts, never
+  # one subchart's local values with another.
   poIngestApi:
     port: 8000
   supervisorApi:
     port: 8003
   labelApi:
     port: 8005
+  wmsApi:
+    port: 8001
+  robotApi:
+    port: 8002
+  shippingApi:
+    port: 8004
 
   # MLflow tracing (see each service's src/tracing.py), consumed by every
   # service below via the shared ConfigMap in templates/mlflow-configmap.yaml.
@@ -172,113 +180,118 @@ labelApi:
     enabled: true
 
 # ---------------------------------------------------------------------------
-# Distribution center (charts/distributionCenter subchart): one dc-agent,
-# wms-api, robot-api, and shipping-api, wired to talk only to each other
-# (plus the two global services above).
+# Distribution center components: one dc-agent, wms-api, robot-api, and
+# shipping-api, each its own subchart under charts/ but wired to talk only
+# to each other (via global.wmsApi/robotApi/shippingApi.port above) plus
+# the cluster-shared services above. `displayName` is duplicated across all
+# four (and locationName in wmsApi) rather than shared, since Helm only
+# shares `global` values across subcharts -- keep them in sync by hand,
+# same as dashboardUi.distributionCenter below.
 # ---------------------------------------------------------------------------
 
-distributionCenter:
-  name: distribution-center-a
+dcAgent:
+  enabled: true
+  displayName: "Distribution Center A"
+  image:
+    repository: local-dc-agent
+  port: 9100
+  maxFulfillmentTurns: 1000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  route:
+    enabled: true
+
+wmsApi:
+  enabled: true
   displayName: "Distribution Center A"
   locationName: DC-VIRTUAL-01
+  image:
+    repository: local-wms-api
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  # Seeds the ConfigMap mounted at data/inventory.csv.
+  inventoryCsv: |
+    sku,on_hand_qty,location_x,location_y
+    SKU-1001,120,3,5
+    SKU-1002,45,7,2
+    SKU-1003,300,1,1
+    SKU-1004,0,9,4
+    SKU-1005,78,5,8
+    SKU-1006,60,2,9
+    SKU-1007,15,0,3
+    SKU-1008,200,4,6
+    SKU-1009,33,8,1
+    SKU-1010,90,6,0
+    SKU-1011,25,1,7
+    SKU-1012,50,9,9
+    SKU-1013,110,3,2
+    SKU-1014,40,7,5
+    SKU-1015,65,2,4
+    SKU-1016,150,5,3
+    SKU-1017,20,0,8
+    SKU-1018,80,6,6
 
-  dcAgent:
-    image:
-      repository: local-dc-agent
-    port: 9100
-    maxFulfillmentTurns: 1000
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-    route:
-      enabled: true
+robotApi:
+  enabled: true
+  displayName: "Distribution Center A"
+  image:
+    repository: local-inventory-robot-api
+  grid:
+    width: 10
+    height: 10
+  dock:
+    x: 0
+    "y": 0
+  carryCapacity: 100
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  # Seeds the ConfigMap mounted at data/shelves.csv.
+  shelvesCsv: |
+    sku,qty,location_x,location_y
+    SKU-1001,50,3,5
+    SKU-1001,10,6,6
+    SKU-1002,20,7,2
+    SKU-1003,15,1,8
+    SKU-1004,40,9,4
+    SKU-1005,5,5,6
+    SKU-1006,60,2,9
+    SKU-1007,15,0,3
+    SKU-1008,45,4,6
+    SKU-1009,33,8,1
+    SKU-1010,90,6,0
+    SKU-1011,25,1,7
+    SKU-1012,50,9,9
+    SKU-1013,20,3,2
+    SKU-1014,40,7,5
+    SKU-1015,30,2,4
+    SKU-1016,75,5,3
+    SKU-1017,20,0,8
+    SKU-1018,80,6,6
 
-  wmsApi:
-    image:
-      repository: local-wms-api
-    port: 8001
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-    # Seeds the ConfigMap mounted at data/inventory.csv.
-    inventoryCsv: |
-      sku,on_hand_qty,location_x,location_y
-      SKU-1001,120,3,5
-      SKU-1002,45,7,2
-      SKU-1003,300,1,1
-      SKU-1004,0,9,4
-      SKU-1005,78,5,8
-      SKU-1006,60,2,9
-      SKU-1007,15,0,3
-      SKU-1008,200,4,6
-      SKU-1009,33,8,1
-      SKU-1010,90,6,0
-      SKU-1011,25,1,7
-      SKU-1012,50,9,9
-      SKU-1013,110,3,2
-      SKU-1014,40,7,5
-      SKU-1015,65,2,4
-      SKU-1016,150,5,3
-      SKU-1017,20,0,8
-      SKU-1018,80,6,6
-
-  robotApi:
-    image:
-      repository: local-inventory-robot-api
-    port: 8002
-    grid:
-      width: 10
-      height: 10
-    dock:
-      x: 0
-      "y": 0
-    carryCapacity: 100
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-    # Seeds the ConfigMap mounted at data/shelves.csv.
-    shelvesCsv: |
-      sku,qty,location_x,location_y
-      SKU-1001,50,3,5
-      SKU-1001,10,6,6
-      SKU-1002,20,7,2
-      SKU-1003,15,1,8
-      SKU-1004,40,9,4
-      SKU-1005,5,5,6
-      SKU-1006,60,2,9
-      SKU-1007,15,0,3
-      SKU-1008,45,4,6
-      SKU-1009,33,8,1
-      SKU-1010,90,6,0
-      SKU-1011,25,1,7
-      SKU-1012,50,9,9
-      SKU-1013,20,3,2
-      SKU-1014,40,7,5
-      SKU-1015,30,2,4
-      SKU-1016,75,5,3
-      SKU-1017,20,0,8
-      SKU-1018,80,6,6
-
-  shippingApi:
-    image:
-      repository: local-shipping-api
-    port: 8004
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
+shippingApi:
+  enabled: true
+  displayName: "Distribution Center A"
+  image:
+    repository: local-shipping-api
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

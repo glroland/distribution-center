@@ -26,5 +26,15 @@ dependencies:
   - name: labelApi
     version: 0.1.0
     condition: labelApi.enabled
-  - name: distributionCenter
+  - name: dcAgent
     version: 0.1.0
+    condition: dcAgent.enabled
+  - name: wmsApi
+    version: 0.1.0
+    condition: wmsApi.enabled
+  - name: robotApi
+    version: 0.1.0
+    condition: robotApi.enabled
+  - name: shippingApi
+    version: 0.1.0
+    condition: shippingApi.enabled

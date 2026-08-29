@@ -1,0 +1,46 @@
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSSubscription
+metadata:
+  annotations:
+    openshift.io/display-name: Distribution Center
+  name: distribution-center
+  namespace: models-as-a-service
+spec:
+  modelRefs:
+    - name: gemma-4
+      namespace: sandbox
+      tokenRateLimits:
+        - limit: 1000
+          window: 1s
+    - name: gemma-4-safe
+      namespace: sandbox
+      tokenRateLimits:
+        - limit: 1000
+          window: 1s
+  owner:
+    groups:
+      - name: cluster-admins
+      - name: model-registry-users
+      - name: rhods-admins
+      - name: system:authenticated
+  priority: 0
+---
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSAuthPolicy
+metadata:
+  annotations:
+    openshift.io/description: Auth policy created for subscription "distribution-center"
+  name: distribution-center-policy
+  namespace: models-as-a-service
+spec:
+  modelRefs:
+    - name: gemma-4
+      namespace: sandbox
+    - name: gemma-4-safe
+      namespace: sandbox
+  subjects:
+    groups:
+      - name: cluster-admins
+      - name: model-registry-users
+      - name: rhods-admins
+      - name: system:authenticated

@@ -7,14 +7,25 @@ Global services:
 {{- if .Values.supervisorApi.enabled }}
   - supervisor-api: {{ include "adc.supervisorApi.serviceName" . }}:{{ .Values.global.supervisorApi.port }}
 {{- end }}
+{{- if .Values.labelApi.enabled }}
+  - label-api     : {{ include "adc.labelApi.serviceName" . }}:{{ .Values.global.labelApi.port }}
+{{- end }}
+{{- if .Values.dashboardUi.enabled }}
+  - dashboard-ui  : {{ include "adc.dashboardUi.serviceName" . }}:{{ .Values.dashboardUi.port }}
+{{- end }}
 
-Distribution centers:
-{{- range $dc := .Values.distributionCenter.centers }}
-  - {{ $dc.displayName }} ({{ $dc.name }})
-      dc-agent  : {{ include "adc.dc.serviceName" (dict "root" $ "dc" $dc "component" "dc-agent") }}:{{ $dc.dcAgent.port }}
-      wms-api   : {{ include "adc.dc.serviceName" (dict "root" $ "dc" $dc "component" "wms-api") }}:{{ $dc.wmsApi.port }}
-      robot-api : {{ include "adc.dc.serviceName" (dict "root" $ "dc" $dc "component" "robot-api") }}:{{ $dc.robotApi.port }}
-      shipping-api: {{ include "adc.dc.serviceName" (dict "root" $ "dc" $dc "component" "shipping-api") }}:{{ $dc.shippingApi.port }}
+Distribution center ({{ .Values.dcAgent.displayName }}):
+{{- if .Values.dcAgent.enabled }}
+  - dc-agent    : {{ include "adc.dcAgent.serviceName" . }}:{{ .Values.dcAgent.port }}
+{{- end }}
+{{- if .Values.wmsApi.enabled }}
+  - wms-api     : {{ include "adc.wmsApi.serviceName" . }}:{{ .Values.global.wmsApi.port }}
+{{- end }}
+{{- if .Values.robotApi.enabled }}
+  - robot-api   : {{ include "adc.robotApi.serviceName" . }}:{{ .Values.global.robotApi.port }}
+{{- end }}
+{{- if .Values.shippingApi.enabled }}
+  - shipping-api: {{ include "adc.shippingApi.serviceName" . }}:{{ .Values.global.shippingApi.port }}
 {{- end }}
 
 Check rollout status:

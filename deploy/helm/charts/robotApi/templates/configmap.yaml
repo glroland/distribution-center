@@ -1,3 +1,4 @@
+{{- if .Values.enabled }}
 {{- $cmName := printf "%s-robot-shelves" (include "adc.fullname" $) }}
 apiVersion: v1
 kind: ConfigMap
@@ -10,4 +11,5 @@ metadata:
     app.kubernetes.io/component: robot-api
 data:
   shelves.csv: |
-    {{- .Values.robotApi.shelvesCsv | nindent 4 }}
+    {{- .Values.shelvesCsv | nindent 4 }}
+{{- end }}

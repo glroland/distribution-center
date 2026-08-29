@@ -1,8 +1,8 @@
-{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "robot-api") }}
+{{- if .Values.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $svcName }}
+  name: {{ include "adc.robotApi.serviceName" . }}
   labels:
     {{- include "adc.commonLabels" . | nindent 4 }}
     app.kubernetes.io/name: robot-api
@@ -14,5 +14,6 @@ spec:
     app.kubernetes.io/instance: {{ .Release.Name }}
   ports:
     - name: http
-      port: {{ .Values.robotApi.port }}
+      port: {{ .Values.global.robotApi.port }}
       targetPort: http
+{{- end }}

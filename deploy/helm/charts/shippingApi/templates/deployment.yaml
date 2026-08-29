@@ -1,28 +1,28 @@
-{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "wms-api") }}
-{{- $cmName := printf "%s-wms-inventory" (include "adc.fullname" $) }}
+{{- if .Values.enabled }}
+{{- $svcName := include "adc.shippingApi.serviceName" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $svcName }}
   labels:
     {{- include "adc.commonLabels" . | nindent 4 }}
-    app.kubernetes.io/name: wms-api
+    app.kubernetes.io/name: shipping-api
     app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/component: wms-api
+    app.kubernetes.io/component: shipping-api
   annotations:
     distribution-center/display-name: {{ .Values.displayName | quote }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: wms-api
+      app.kubernetes.io/name: shipping-api
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: wms-api
+        app.kubernetes.io/name: shipping-api
         app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/component: wms-api
+        app.kubernetes.io/component: shipping-api
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
@@ -31,28 +31,20 @@ spec:
       securityContext:
         {{- include "adc.podSecurityContext" . | nindent 8 }}
       containers:
-        - name: wms-api
-          image: {{ include "adc.image" (dict "root" $ "image" .Values.wmsApi.image) }}
+        - name: shipping-api
+          image: {{ include "adc.image" (dict "root" $ "image" .Values.image) }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext:
             {{- include "adc.containerSecurityContext" . | nindent 12 }}
           ports:
             - name: http
-              containerPort: {{ .Values.wmsApi.port }}
+              containerPort: {{ .Values.global.shippingApi.port }}
           env:
             - name: HOST
               value: "0.0.0.0"
             - name: PORT
-              value: {{ .Values.wmsApi.port | quote }}
-            - name: LOCATION_NAME
-              value: {{ .Values.locationName | quote }}
-            - name: INVENTORY_CSV_PATH
-              value: data/inventory.csv
+              value: {{ .Values.global.shippingApi.port | quote }}
             {{- include "adc.mlflow.envVars" . | nindent 12 }}
-          volumeMounts:
-            - name: inventory-data
-              mountPath: /app/data/inventory.csv
-              subPath: inventory.csv
           readinessProbe:
             httpGet:
               path: /health
@@ -66,8 +58,5 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
-            {{- toYaml .Values.wmsApi.resources | nindent 12 }}
-      volumes:
-        - name: inventory-data
-          configMap:
-            name: {{ $cmName }}
+            {{- toYaml .Values.resources | nindent 12 }}
+{{- end }}

@@ -1,0 +1,8 @@
+apiVersion: v2
+name: robotApi
+description: >-
+  Simulated picking robot on a 2D shelf grid for one virtual distribution
+  center, seeded on startup from a CSV ConfigMap.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

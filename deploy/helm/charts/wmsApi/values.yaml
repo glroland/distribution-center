@@ -1,0 +1,25 @@
+# Default values for the wmsApi subchart -- a standalone example so this
+# chart is functional on its own. The umbrella chart's values.yaml
+# overrides these under the `wmsApi:` key; the port itself lives under
+# `global.wmsApi.port` since dc-agent (a sibling subchart) needs it too.
+
+enabled: true
+displayName: "Distribution Center A"
+locationName: DC-VIRTUAL-01
+image:
+  repository: local-wms-api
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+# Seeds the ConfigMap mounted at data/inventory.csv.
+inventoryCsv: |
+  sku,on_hand_qty,location_x,location_y
+  SKU-1001,120,3,5
+  SKU-1002,45,7,2
+  SKU-1003,300,1,1
+  SKU-1004,0,9,4
+  SKU-1005,78,5,8

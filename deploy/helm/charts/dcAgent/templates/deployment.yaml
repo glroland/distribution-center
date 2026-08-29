@@ -1,10 +1,11 @@
-{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "dc-agent") }}
-{{- $wmsSvc := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "wms-api") }}
-{{- $robotSvc := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "robot-api") }}
-{{- $shippingSvc := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "shipping-api") }}
-{{- $poIngestSvc := include "adc.poIngestApi.serviceName" $ }}
-{{- $supervisorSvc := include "adc.supervisorApi.serviceName" $ }}
-{{- $labelApiSvc := include "adc.labelApi.serviceName" $ }}
+{{- if .Values.enabled }}
+{{- $svcName := include "adc.dcAgent.serviceName" . }}
+{{- $wmsSvc := include "adc.wmsApi.serviceName" . }}
+{{- $robotSvc := include "adc.robotApi.serviceName" . }}
+{{- $shippingSvc := include "adc.shippingApi.serviceName" . }}
+{{- $poIngestSvc := include "adc.poIngestApi.serviceName" . }}
+{{- $supervisorSvc := include "adc.supervisorApi.serviceName" . }}
+{{- $labelApiSvc := include "adc.labelApi.serviceName" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,26 +38,25 @@ spec:
         {{- include "adc.podSecurityContext" . | nindent 8 }}
       containers:
         - name: dc-agent
-          image: {{ include "adc.image" (dict "root" $ "image" .Values.dcAgent.image) }}
+          image: {{ include "adc.image" (dict "root" $ "image" .Values.image) }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext:
             {{- include "adc.containerSecurityContext" . | nindent 12 }}
           ports:
             - name: http
-              containerPort: {{ .Values.dcAgent.port }}
+              containerPort: {{ .Values.port }}
           env:
             - name: HOST
               value: "0.0.0.0"
             - name: PORT
-              value: {{ .Values.dcAgent.port | quote }}
-            # Wired to the other local-* components within this same
-            # distribution center grouping.
+              value: {{ .Values.port | quote }}
+            # Wired to the sibling local-* components, each its own subchart.
             - name: WMS_API_URL
-              value: http://{{ $wmsSvc }}:{{ .Values.wmsApi.port }}
+              value: http://{{ $wmsSvc }}:{{ .Values.global.wmsApi.port }}
             - name: ROBOT_API_URL
-              value: http://{{ $robotSvc }}:{{ .Values.robotApi.port }}
+              value: http://{{ $robotSvc }}:{{ .Values.global.robotApi.port }}
             - name: SHIPPING_API_URL
-              value: http://{{ $shippingSvc }}:{{ .Values.shippingApi.port }}
+              value: http://{{ $shippingSvc }}:{{ .Values.global.shippingApi.port }}
             # Wired to the cluster-wide global services.
             - name: PO_INGEST_API_URL
               value: http://{{ $poIngestSvc }}:{{ .Values.global.poIngestApi.port }}
@@ -65,13 +65,13 @@ spec:
             - name: LABEL_API_URL
               value: http://{{ $labelApiSvc }}:{{ .Values.global.labelApi.port }}
             - name: AGENT_URL
-              value: http://{{ $svcName }}:{{ .Values.dcAgent.port }}/
+              value: http://{{ $svcName }}:{{ .Values.port }}/
             - name: MAX_FULFILLMENT_TURNS
-              value: {{ .Values.dcAgent.maxFulfillmentTurns | quote }}
+              value: {{ .Values.maxFulfillmentTurns | quote }}
             - name: MCP_TOOL_CALL_TIMEOUT_SECONDS
-              value: {{ .Values.dcAgent.mcpToolCallTimeoutSeconds | quote }}
+              value: {{ .Values.mcpToolCallTimeoutSeconds | quote }}
             - name: OPENAI_REQUEST_TIMEOUT_SECONDS
-              value: {{ .Values.dcAgent.openaiRequestTimeoutSeconds | quote }}
+              value: {{ .Values.openaiRequestTimeoutSeconds | quote }}
             - name: OPENAI_MODEL
               value: {{ .Values.global.openai.model | quote }}
             {{- if .Values.global.openai.baseUrl }}
@@ -110,4 +110,5 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
-            {{- toYaml .Values.dcAgent.resources | nindent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
+{{- end }}

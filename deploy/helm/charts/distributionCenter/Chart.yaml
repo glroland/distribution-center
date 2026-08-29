@@ -1,9 +1,0 @@
-apiVersion: v2
-name: distributionCenter
-description: >-
-  One or more self-contained distribution center component groups
-  (dc-agent, wms-api, robot-api, shipping-api), each wired to talk only to
-  its own siblings plus the cluster-wide global services.
-type: application
-version: 0.1.0
-appVersion: "0.1.0"

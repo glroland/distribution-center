@@ -1,3 +1,4 @@
+{{- if .Values.enabled }}
 {{- $cmName := printf "%s-wms-inventory" (include "adc.fullname" $) }}
 apiVersion: v1
 kind: ConfigMap
@@ -10,4 +11,5 @@ metadata:
     app.kubernetes.io/component: wms-api
 data:
   inventory.csv: |
-    {{- .Values.wmsApi.inventoryCsv | nindent 4 }}
+    {{- .Values.inventoryCsv | nindent 4 }}
+{{- end }}

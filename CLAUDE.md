@@ -241,16 +241,19 @@ random sampling can't be steered to specific known-outcome SKUs anyway).
 ### Deployment (`deploy/`)
 
 `deploy/helm` is a Helm chart with subcharts under `charts/` for
-`poIngestApi`, `supervisorApi`, and `dashboardUi` (cluster-shared
-singletons) and `distributionCenter` (the single DC — dc-agent, wms,
-robot, shipping together). `values.yaml`'s `global` section is the only
-values shared automatically across subcharts (e.g. `global.poIngestApi.port`
-so the `distributionCenter` subchart's dc-agent can address the shared
-ingest service). Locally, `dashboard-ui/src/settings.py`'s hardcoded
-`DISTRIBUTION_CENTER` mirrors the `distributionCenter` block in
-`values.yaml` by hand; in the chart, `dashboardUi.distributionCenter`
-(itself hand-mirroring `distributionCenter` — Helm only shares `global`
-values across subcharts) is rendered into a `DISTRIBUTION_CENTER_JSON` env
-var that `settings.py` parses instead, pointing at the DC's in-cluster
-Service DNS rather than `localhost`. Both mirrors must be kept in sync by
-hand. `deploy/Jenkinsfile` builds/archives a Docker image per service.
+`poIngestApi`, `supervisorApi`, `labelApi`, and `dashboardUi`
+(cluster-shared singletons) and `dcAgent`, `wmsApi`, `robotApi`, and
+`shippingApi` (the single DC's components — each its own subchart, wired
+only to each other plus the singletons above). `values.yaml`'s `global`
+section is the only values shared automatically across subcharts (e.g.
+`global.poIngestApi.port` so `dcAgent` can address the shared ingest
+service, and likewise `global.wmsApi/robotApi/shippingApi.port` so
+`dcAgent` can address its now-separate DC siblings). Locally,
+`dashboard-ui/src/settings.py`'s hardcoded `DISTRIBUTION_CENTER` mirrors
+the `dcAgent`/`wmsApi`/`robotApi`/`shippingApi` blocks in `values.yaml` by
+hand; in the chart, `dashboardUi.distributionCenter` (itself hand-mirroring
+those same blocks — Helm only shares `global` values across subcharts) is
+rendered into a `DISTRIBUTION_CENTER_JSON` env var that `settings.py`
+parses instead, pointing at the DC's in-cluster Service DNS rather than
+`localhost`. Both mirrors must be kept in sync by hand. `deploy/Jenkinsfile`
+builds/archives a Docker image per service.

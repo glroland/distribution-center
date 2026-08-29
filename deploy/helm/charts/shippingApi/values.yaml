@@ -1,0 +1,16 @@
+# Default values for the shippingApi subchart -- a standalone example so
+# this chart is functional on its own. The umbrella chart's values.yaml
+# overrides these under the `shippingApi:` key; the port itself lives under
+# `global.shippingApi.port` since dc-agent (a sibling subchart) needs it too.
+
+enabled: true
+displayName: "Distribution Center A"
+image:
+  repository: local-shipping-api
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

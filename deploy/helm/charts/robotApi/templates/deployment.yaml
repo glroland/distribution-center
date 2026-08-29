@@ -1,6 +1,7 @@
-{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "robot-api") }}
+{{- if .Values.enabled }}
+{{- $svcName := include "adc.robotApi.serviceName" . }}
 {{- $cmName := printf "%s-robot-shelves" (include "adc.fullname" $) }}
-{{- $labelApiSvc := include "adc.labelApi.serviceName" $ }}
+{{- $labelApiSvc := include "adc.labelApi.serviceName" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,30 +34,30 @@ spec:
         {{- include "adc.podSecurityContext" . | nindent 8 }}
       containers:
         - name: robot-api
-          image: {{ include "adc.image" (dict "root" $ "image" .Values.robotApi.image) }}
+          image: {{ include "adc.image" (dict "root" $ "image" .Values.image) }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext:
             {{- include "adc.containerSecurityContext" . | nindent 12 }}
           ports:
             - name: http
-              containerPort: {{ .Values.robotApi.port }}
+              containerPort: {{ .Values.global.robotApi.port }}
           env:
             - name: HOST
               value: "0.0.0.0"
             - name: PORT
-              value: {{ .Values.robotApi.port | quote }}
+              value: {{ .Values.global.robotApi.port | quote }}
             - name: SHELVES_CSV_PATH
               value: data/shelves.csv
             - name: GRID_WIDTH
-              value: {{ .Values.robotApi.grid.width | quote }}
+              value: {{ .Values.grid.width | quote }}
             - name: GRID_HEIGHT
-              value: {{ .Values.robotApi.grid.height | quote }}
+              value: {{ .Values.grid.height | quote }}
             - name: DOCK_X
-              value: {{ .Values.robotApi.dock.x | quote }}
+              value: {{ .Values.dock.x | quote }}
             - name: DOCK_Y
-              value: {{ .Values.robotApi.dock.y | quote }}
+              value: {{ .Values.dock.y | quote }}
             - name: CARRY_CAPACITY
-              value: {{ .Values.robotApi.carryCapacity | quote }}
+              value: {{ .Values.carryCapacity | quote }}
             - name: LABEL_API_URL
               value: http://{{ $labelApiSvc }}:{{ .Values.global.labelApi.port }}
             {{- include "adc.mlflow.envVars" . | nindent 12 }}
@@ -77,8 +78,9 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
-            {{- toYaml .Values.robotApi.resources | nindent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
       volumes:
         - name: shelves-data
           configMap:
             name: {{ $cmName }}
+{{- end }}

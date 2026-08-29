@@ -1,0 +1,10 @@
+apiVersion: v2
+name: dcAgent
+description: >-
+  The A2A agent that orchestrates purchase-order extraction and
+  fulfillment for one distribution center, wired to its wms-api/robot-api/
+  shipping-api siblings plus the cluster-wide po-ingest-api/supervisor-api/
+  label-api services.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

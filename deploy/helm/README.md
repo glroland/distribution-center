@@ -5,28 +5,31 @@ subchart per component group, under `charts/`:
 
 - **`charts/poIngestApi`** -- the global PO submission entry point (singleton).
 - **`charts/supervisorApi`** -- the global human-escalation service (singleton).
+- **`charts/labelApi`** -- the global sticker-photo/SKU-inference service (singleton).
 - **`charts/dashboardUi`** -- the demo control room UI (singleton). Its
   `DISTRIBUTION_CENTER_JSON` env var is rendered from
-  `dashboardUi.distributionCenter` in `values.yaml`, which hand-mirrors
-  `distributionCenter` (name + ports) so it can address the DC's in-cluster
-  Service DNS -- see `charts/dashboardUi/values.yaml` for why this can't
-  just reference `distributionCenter` directly.
-- **`charts/distributionCenter`** -- the single self-contained "local"
-  grouping, rendering `local-dc-agent`, `local-wms-api`,
-  `local-inventory-robot-api`, `local-shipping-api` with 1 replica each. The
-  `local-*` components are wired to talk only to each other (plus the two
-  global services) via in-cluster Service DNS. Driven by the
-  `distributionCenter` block in the umbrella chart's `values.yaml`.
+  `dashboardUi.distributionCenter` in `values.yaml`, which hand-mirrors the
+  `dcAgent`/`wmsApi`/`robotApi`/`shippingApi` blocks below (name + ports) so
+  it can address the DC's in-cluster Service DNS -- see
+  `charts/dashboardUi/values.yaml` for why this can't just reference those
+  subcharts' values directly.
+- **`charts/dcAgent`**, **`charts/wmsApi`**, **`charts/robotApi`**,
+  **`charts/shippingApi`** -- the single distribution center's components
+  (`local-dc-agent`, `local-wms-api`, `local-inventory-robot-api`,
+  `local-shipping-api`), each its own subchart with 1 replica. They're
+  wired to talk only to each other (via `global.wmsApi/robotApi/shippingApi.port`)
+  plus the global services above, all over in-cluster Service DNS.
 
 Values under `global:` (image registry/pull settings, security context,
-OpenShift route settings, OpenAI settings) are shared automatically across
-every subchart. Everything else in the umbrella `values.yaml` is scoped to
-one subchart by name (`poIngestApi:`, `supervisorApi:`,
-`distributionCenter:`) and overrides that subchart's own defaults.
+OpenShift route settings, OpenAI settings, and the ports every subchart
+needs to address a sibling) are shared automatically across every
+subchart. Everything else in the umbrella `values.yaml` is scoped to one
+subchart by name (`poIngestApi:`, `supervisorApi:`, `dcAgent:`, `wmsApi:`,
+etc.) and overrides that subchart's own defaults.
 
 Per-service inventory/shelf data is seeded from ConfigMaps
-(`distributionCenter.wmsApi.inventoryCsv`, `...robotApi.shelvesCsv` in
-`values.yaml`), mounted over each container's `data/*.csv` path.
+(`wmsApi.inventoryCsv`, `robotApi.shelvesCsv` in `values.yaml`), mounted
+over each container's `data/*.csv` path.
 
 ## Build and push images
 
@@ -46,8 +49,7 @@ Then point the chart at that registry:
 
 ```sh
 helm install adc deploy/helm \
-  --set global.imageRegistry="$REGISTRY/$NAMESPACE" \
-  --set global.openai.apiKey="$OPENAI_API_KEY"
+  --set global.imageRegistry="$REGISTRY/$NAMESPACE"
 ```
 
 If pulling from OpenShift's internal registry from within the same
@@ -56,12 +58,22 @@ project, `imagePullSecrets` usually isn't needed; for anything else, set
 
 ## OpenAI credentials
 
-The `dc-agent` in every distribution center needs `OPENAI_API_KEY`. Either
-pass it directly (`--set global.openai.apiKey=...`, dev/test only) or point
-at a secret you create yourself:
+The `dc-agent` in every distribution center needs `OPENAI_API_KEY`, read
+from a Secret named by `global.openai.existingSecret` (default:
+`distribution-center-credentials`). This chart deliberately never creates
+that Secret itself -- the key must never pass through `helm install/upgrade
+--set` or live in `values.yaml`. Apply it yourself, once per namespace (and
+again whenever the key rotates), with `deploy/apply-openai-secret.sh`
+(fills in `deploy/openai-secret.template.yaml` and `oc apply`s it):
 
 ```sh
-oc create secret generic my-openai-secret --from-literal=OPENAI_API_KEY=sk-...
+deploy/apply-openai-secret.sh sk-... -n distribution-center
+```
+
+If you'd rather manage the Secret some other way, just point
+`global.openai.existingSecret` at whatever name you used:
+
+```sh
 helm install adc deploy/helm --set global.openai.existingSecret=my-openai-secret
 ```
 
@@ -77,7 +89,6 @@ LLM/MCP calls of its own, just REST/SSE passthrough.
 
 ```sh
 helm install adc deploy/helm \
-  --set global.openai.apiKey="$OPENAI_API_KEY" \
   --set global.mlflow.trackingUri=https://your-mlflow-server/
 ```
 
@@ -123,7 +134,7 @@ other SA a Deployment is customized to run as.
 
 ```sh
 helm lint deploy/helm
-helm template adc deploy/helm --set global.openai.apiKey=sk-test
+helm template adc deploy/helm
 helm install adc deploy/helm -f my-values.yaml
 helm upgrade adc deploy/helm -f my-values.yaml
 ```

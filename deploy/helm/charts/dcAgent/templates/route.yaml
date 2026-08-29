@@ -1,9 +1,8 @@
-{{- $svcName := include "adc.distributionCenter.serviceName" (dict "root" $ "component" "dc-agent") }}
-{{- if and .Values.global.openshift.routes.enabled .Values.dcAgent.route.enabled }}
+{{- if and .Values.enabled .Values.global.openshift.routes.enabled .Values.route.enabled }}
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: {{ $svcName }}
+  name: {{ include "adc.dcAgent.serviceName" . }}
   labels:
     {{- include "adc.commonLabels" . | nindent 4 }}
     app.kubernetes.io/name: dc-agent
@@ -12,7 +11,7 @@ metadata:
 spec:
   to:
     kind: Service
-    name: {{ $svcName }}
+    name: {{ include "adc.dcAgent.serviceName" . }}
   port:
     targetPort: http
   tls:

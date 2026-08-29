@@ -62,22 +62,40 @@ Name of the global label-api Service.
 {{- end -}}
 
 {{/*
-Name of the OpenAI secret consumed by dc-agent deployments.
+Name of the OpenAI secret consumed by dc-agent deployments. Never rendered
+by this chart -- global.openai.existingSecret must name a Secret you
+created yourself (see deploy/apply-openai-secret.sh).
 */}}
 {{- define "adc.openai.secretName" -}}
-{{- if .Values.global.openai.existingSecret -}}
-{{ .Values.global.openai.existingSecret }}
-{{- else -}}
-{{ include "adc.fullname" . }}-openai
-{{- end -}}
+{{ required "global.openai.existingSecret is required -- create it first with deploy/apply-openai-secret.sh" .Values.global.openai.existingSecret }}
 {{- end -}}
 
 {{/*
-Distribution-center component Service name for a given component suffix.
-Usage: {{ include "adc.distributionCenter.serviceName" (dict "root" $ "component" "wms-api") }}
+Name of the dc-agent Service.
 */}}
-{{- define "adc.distributionCenter.serviceName" -}}
-{{ include "adc.fullname" .root }}-{{ .component }}
+{{- define "adc.dcAgent.serviceName" -}}
+{{ include "adc.fullname" . }}-dc-agent
+{{- end -}}
+
+{{/*
+Name of the wms-api Service.
+*/}}
+{{- define "adc.wmsApi.serviceName" -}}
+{{ include "adc.fullname" . }}-wms-api
+{{- end -}}
+
+{{/*
+Name of the robot-api Service.
+*/}}
+{{- define "adc.robotApi.serviceName" -}}
+{{ include "adc.fullname" . }}-robot-api
+{{- end -}}
+
+{{/*
+Name of the shipping-api Service.
+*/}}
+{{- define "adc.shippingApi.serviceName" -}}
+{{ include "adc.fullname" . }}-shipping-api
 {{- end -}}
 
 {{/*

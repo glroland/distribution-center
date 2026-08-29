@@ -1,0 +1,8 @@
+apiVersion: v2
+name: shippingApi
+description: >-
+  Mock carrier handoff for one virtual distribution center -- issues
+  tracking numbers, no real carrier integration.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
