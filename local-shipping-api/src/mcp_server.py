@@ -1,4 +1,7 @@
+from typing import Annotated
+
 from mcp.server.fastmcp import FastMCP as MCPServer
+from pydantic import BaseModel, Field
 
 from .prompts import get_prompt
 from .settings import settings
@@ -6,6 +9,11 @@ from .shipping import Shipment, ShippingStore
 from .tracing import configure_tracing, tool_trace
 
 configure_tracing()
+
+
+class ShipItem(BaseModel):
+    sku: str
+    qty: Annotated[int, Field(gt=0)]
 
 
 def _shipment_dict(shipment: Shipment) -> dict:
@@ -37,16 +45,13 @@ def build_mcp_server(store: ShippingStore) -> MCPServer:
     @mcp_server.tool()
     @tool_trace
     def ship_order(
-        po_number: str, customer_name: str, customer_address: str, items: list[dict]
+        po_number: str, customer_name: str, customer_address: str, items: list[ShipItem]
     ) -> dict:
         """Ship the given items to a customer to fulfil a purchase order. `items`
         is a list of objects each with a `sku` and `qty` key. Returns the
         created shipment, including its carrier, tracking number, and estimated
         delivery date."""
-        try:
-            line_items = [(item["sku"], item["qty"]) for item in items]
-        except (KeyError, TypeError) as exc:
-            raise ValueError("each item must be an object with 'sku' and 'qty' keys") from exc
+        line_items = [(item.sku, item.qty) for item in items]
         shipment = store.create_shipment(po_number, customer_name, customer_address, line_items)
         return _shipment_dict(shipment)
 

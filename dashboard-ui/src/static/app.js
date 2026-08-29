@@ -483,7 +483,6 @@ async function init() {
 }
 
 async function loadDc() {
-  $("#dc-subtitle").textContent = `${state.dc.display_name} · ${state.dc.location_name}`;
   $("#boost-toggle").checked = false;
 
   const [pos, mapData, inventory] = await Promise.all([
@@ -1390,5 +1389,4 @@ function escapeHtml(str) {
 
 init().catch((err) => {
   console.error(err);
-  $("#dc-subtitle").textContent = `Failed to load: ${err}`;
 });
