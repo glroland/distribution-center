@@ -13,6 +13,26 @@ port: 9100
 maxFulfillmentTurns: 1000
 mcpToolCallTimeoutSeconds: 60
 openaiRequestTimeoutSeconds: 60
+# $/million tokens for whatever model global.openai.model actually points at
+# (see root values.yaml) -- MLflow's own trace cost calculator only knows
+# public models with a published price, so a self-hosted model (e.g.
+# gemma-4 via global.openai.baseUrl) always shows token counts but no cost
+# unless dc-agent computes it itself from this rate (see src/llm_cost.py).
+# Rendered into its own ConfigMap (templates/pricing-configmap.yaml) rather
+# than a plain env value so it can be read/updated independently of a Helm
+# upgrade.
+#
+# Default derived from amortizing a self-hosted GPU rather than any published
+# price (there isn't one for a self-hosted model): a $3000 card (purchase +
+# power, over its life) run flat-out for 5 years at an assumed steady-state
+# 100 tokens/sec:
+#   tokens = 100 tok/s * (5 * 365 * 24 * 3600) s = 15,768,000,000 tokens
+#   $/million = 3000 / (15,768,000,000 / 1,000,000) = ~$0.1903
+# The 100 tok/s figure is a rough single-stream estimate for a small (~4B
+# parameter) quantized model on a 4090, not a measurement -- recompute this
+# with a real benchmarked tokens/sec for your actual model/hardware/quantization
+# if you have one.
+llmCostPerMillionTokens: 0.1903
 resources:
   requests:
     cpu: 100m

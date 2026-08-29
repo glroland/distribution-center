@@ -31,6 +31,16 @@ Per-service inventory/shelf data is seeded from ConfigMaps
 (`wmsApi.inventoryCsv`, `robotApi.shelvesCsv` in `values.yaml`), mounted
 over each container's `data/*.csv` path.
 
+`dcAgent.llmCostPerMillionTokens` (also a ConfigMap, `<release>-llm-pricing`)
+is the $/million-token rate dc-agent uses to compute `mlflow.llm.cost` on its
+traces itself (`local-dc-agent/src/llm_cost.py`) -- MLflow's own trace cost
+calculator only recognizes public models with a published price, so a
+self-hosted `global.openai.model` always shows token counts with no cost
+otherwise. Defaults to `0.1903`, derived from amortizing a $3000 GPU
+(purchase + power) over 5 years at an assumed 100 tok/s -- not a
+measurement, just a rough placeholder; replace with your own numbers if
+you have real ones (formula in `values.yaml`).
+
 ## Build and push images
 
 The app repos build with Podman/Buildah `Containerfile`s, not Dockerfiles.

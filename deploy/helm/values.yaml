@@ -196,6 +196,13 @@ dcAgent:
     repository: local-dc-agent
   port: 9100
   maxFulfillmentTurns: 1000
+  # $/million tokens for global.openai.model, used to compute mlflow.llm.cost
+  # ourselves since it's a self-hosted model MLflow's own cost calculator
+  # doesn't recognize. Derived from amortizing a $3000 GPU (purchase +
+  # power) over 5 years run flat-out at an assumed 100 tok/s -- see
+  # charts/dcAgent/values.yaml for the full derivation. Not a measurement;
+  # replace with a real benchmarked tokens/sec if you have one.
+  llmCostPerMillionTokens: 0.1903
   resources:
     requests:
       cpu: 100m

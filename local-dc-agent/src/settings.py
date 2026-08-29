@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     MLFLOW_TRACKING_URI: str | None = None
     PROMPT_SOURCE: str = "local"
     PROMPT_CATALOG_PATH: str | None = None
+    # MLflow's built-in trace cost calculator (mlflow.openai.autolog()) only
+    # knows public models with a published per-token price -- a self-hosted
+    # OPENAI_MODEL like gemma-4 always comes back with token counts but no
+    # cost. This is the one number needed to compute it ourselves (see
+    # llm_cost.py); centrally configured via the dcAgent chart's own
+    # ConfigMap rather than hardcoded, since it isn't a build-time constant.
+    LLM_COST_PER_MILLION_TOKENS: float = 0.0
 
     @model_validator(mode="after")
     def _default_agent_url(self) -> "Settings":

@@ -6,6 +6,7 @@
 {{- $poIngestSvc := include "adc.poIngestApi.serviceName" . }}
 {{- $supervisorSvc := include "adc.supervisorApi.serviceName" . }}
 {{- $labelApiSvc := include "adc.labelApi.serviceName" . }}
+{{- $pricingCmName := printf "%s-llm-pricing" (include "adc.fullname" $) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -83,6 +84,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "adc.openai.secretName" . }}
                   key: {{ .Values.global.openai.existingSecretKey }}
+            - name: LLM_COST_PER_MILLION_TOKENS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ $pricingCmName }}
+                  key: LLM_COST_PER_MILLION_TOKENS
             {{- include "adc.mlflow.envVars" . | nindent 12 }}
           readinessProbe:
             # /ready reflects whether the worker has finished connecting to

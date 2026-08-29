@@ -7,6 +7,7 @@ from openai import OpenAI
 from pydantic import ValidationError
 
 from .settings import settings
+from .llm_cost import record_usage_and_cost
 from .models import ExtractedOrder
 from .prompts import get_prompt
 from .tracing import configure_tracing
@@ -114,6 +115,8 @@ def extract_order(markdown: str) -> ExtractedOrder:
     except Exception as exc:  # openai.APIError and friends
         logger.exception("OpenAI API call failed during extraction")
         raise ExtractionError(f"OpenAI API call failed: {exc}") from exc
+
+    record_usage_and_cost(getattr(response, "usage", None))
 
     tool_input = _find_tool_input(response.choices)
     if tool_input is None:

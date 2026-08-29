@@ -1,0 +1,14 @@
+{{- if .Values.enabled }}
+{{- $cmName := printf "%s-llm-pricing" (include "adc.fullname" $) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $cmName }}
+  labels:
+    {{- include "adc.commonLabels" . | nindent 4 }}
+    app.kubernetes.io/name: dc-agent
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: dc-agent
+data:
+  LLM_COST_PER_MILLION_TOKENS: {{ .Values.llmCostPerMillionTokens | quote }}
+{{- end }}

@@ -8,6 +8,7 @@ from openai import OpenAI
 from pydantic import ValidationError
 
 from . import guardrails
+from .llm_cost import record_usage_and_cost
 from .mcp_tools import McpToolRouter, ToolCallError
 from .models import Escalation, FulfillmentItemResult, FulfillmentResult, ProcessOrderResult
 from .prompts import get_prompt
@@ -168,6 +169,7 @@ async def fulfill_order(
     logger.info("Starting fulfillment for PO %s (%d line items)", order.po_number, len(order.line_items))
 
     nudged = False
+    usages = []
     for _ in range(settings.MAX_FULFILLMENT_TURNS):
         try:
             response = client.chat.completions.create(
@@ -179,6 +181,12 @@ async def fulfill_order(
         except Exception as exc:  # openai.APIError and friends
             logger.exception("OpenAI API call failed during fulfillment of PO %s", order.po_number)
             raise FulfillmentError(f"OpenAI API call failed: {exc}") from exc
+
+        # Recorded cumulatively (not just this turn's numbers) after every turn --
+        # not only once at the end -- so a partial run that escalates or times out
+        # mid-loop still reports the usage/cost it actually incurred.
+        usages.append(getattr(response, "usage", None))
+        record_usage_and_cost(*usages)
 
         message = response.choices[0].message
         messages.append(message.model_dump(exclude_none=True))
