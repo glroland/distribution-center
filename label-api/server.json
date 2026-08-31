@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.glroland/label-api",
+  "name": "com.glroland.distribution-center/label-api",
   "title": "Label API",
   "description": "Generates synthetic SKU sticker photos and runs local vision-model SKU inference.",
   "version": "0.1.0",

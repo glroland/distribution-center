@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.glroland/supervisor-api",
+  "name": "com.glroland.distribution-center/supervisor-api",
   "title": "Supervisor API",
   "description": "Human-in-the-loop escalation queue for order fulfillment exceptions.",
   "version": "0.1.0",

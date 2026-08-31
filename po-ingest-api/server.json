@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.glroland/po-ingest-api",
+  "name": "com.glroland.distribution-center/po-ingest-api",
   "title": "PO Ingest API",
   "description": "Converts purchase order PDFs to Markdown/JSON via Docling for downstream extraction.",
   "version": "0.1.0",

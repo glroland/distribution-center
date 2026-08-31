@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.glroland/local-inventory-robot-api",
+  "name": "com.glroland.distribution-center/local-inventory-robot-api",
   "title": "Local Inventory Robot API",
   "description": "Simulated picking robot that plans routes and fetches items on a 2D shelf grid.",
   "version": "0.1.0",
