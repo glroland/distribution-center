@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.glroland/local-inventory-robot-api",
+  "title": "Local Inventory Robot API",
+  "description": "Simulated picking robot that plans routes and fetches items on a 2D shelf grid.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/glroland/dc-agent",
+    "source": "github",
+    "subfolder": "local-inventory-robot-api"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "http://adc-robot-api.distribution-center.svc.cluster.local:8002/mcp"
+    }
+  ],
+  "_meta": {
+    "com.glroland.distribution-center/deployment": {
+      "namespace": "distribution-center",
+      "externalRoute": false,
+      "note": "No OpenShift Route is deployed for this service -- it is intentionally cluster-internal, reachable only from other pods in the distribution-center namespace. URL above is the in-cluster Service DNS name, not a Route."
+    }
+  }
+}

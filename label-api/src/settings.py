@@ -11,6 +11,15 @@ class Settings(BaseSettings):
     PROMPT_SOURCE: str = "local"
     PROMPT_CATALOG_PATH: str | None = None
 
+    # MCP tool autodiscovery (src/mcp_registration.py): registers this
+    # service in MLflow's MCP Server Registry and refreshes its discovered
+    # tool list on every startup. Only takes effect when MLFLOW_TRACKING_URI
+    # is set; this is an independent off-switch for deployments that trace
+    # but don't want registry writes.
+    MCP_AUTODISCOVERY_ENABLED: bool = True
+    MCP_AUTODISCOVERY_STARTUP_DELAY_SECONDS: float = 2.0
+    MCP_SERVER_JSON_PATH: str | None = None
+
     # Every generated image picks its own random size in these ranges - there is no fixed output size.
     MIN_IMAGE_WIDTH: int = 480
     MAX_IMAGE_WIDTH: int = 900

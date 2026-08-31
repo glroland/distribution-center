@@ -2,6 +2,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 
+from .mcp_registration import configure_mcp_registration
 from .mcp_server import build_mcp_server
 from .models import HelpRequestResponse, ResolveRequest, TransferRequestResponse
 from .settings import settings
@@ -25,6 +26,7 @@ mcp_app = mcp_server.streamable_http_app()
 async def lifespan(app: FastAPI):
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
+        await configure_mcp_registration()
         yield
 
 

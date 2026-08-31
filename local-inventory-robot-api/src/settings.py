@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     PROMPT_SOURCE: str = "local"
     PROMPT_CATALOG_PATH: str | None = None
 
+    # MCP tool autodiscovery (src/mcp_registration.py): registers this
+    # service in MLflow's MCP Server Registry and refreshes its discovered
+    # tool list on every startup. Only takes effect when MLFLOW_TRACKING_URI
+    # is set; this is an independent off-switch for deployments that trace
+    # but don't want registry writes.
+    MCP_AUTODISCOVERY_ENABLED: bool = True
+    MCP_AUTODISCOVERY_STARTUP_DELAY_SECONDS: float = 2.0
+    MCP_SERVER_JSON_PATH: str | None = None
+
     # Where get_item_photo (src/mcp_server.py) fetches a picked SKU's shelf
     # sticker photo from, to hand to label-api's own infer_sku tool for
     # visual pick verification.

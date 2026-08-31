@@ -10,6 +10,7 @@ from PIL import Image
 from .bulk import generate_bulk_zip
 from .image_store import ImageStore
 from .inference import get_pipeline
+from .mcp_registration import configure_mcp_registration
 from .mcp_server import build_mcp_server
 from .models import BulkGenerateRequest, CapturedImage, SkuInferenceResult
 from .settings import settings
@@ -26,6 +27,7 @@ mcp_app = mcp_server.streamable_http_app()
 async def lifespan(app: FastAPI):
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
+        await configure_mcp_registration()
         yield
 
 

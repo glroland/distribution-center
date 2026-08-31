@@ -4,6 +4,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from .conversion import convert_pdf
+from .mcp_registration import configure_mcp_registration
 from .mcp_server import mcp_server
 from .models import ConversionResult
 from .tracing import configure_tracing
@@ -18,6 +19,7 @@ mcp_app = mcp_server.streamable_http_app()
 async def lifespan(app: FastAPI):
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
+        await configure_mcp_registration()
         yield
 
 

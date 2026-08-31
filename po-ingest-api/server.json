@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.glroland/po-ingest-api",
+  "title": "PO Ingest API",
+  "description": "Converts purchase order PDFs to Markdown/JSON via Docling for downstream extraction.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/glroland/dc-agent",
+    "source": "github",
+    "subfolder": "po-ingest-api"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://adc-po-ingest-api-distribution-center.apps.ocp.home.glroland.com/mcp"
+    }
+  ],
+  "_meta": {
+    "com.glroland.distribution-center/deployment": {
+      "namespace": "distribution-center",
+      "externalRoute": true,
+      "route": "adc-po-ingest-api"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.glroland/supervisor-api",
+  "title": "Supervisor API",
+  "description": "Human-in-the-loop escalation queue for order fulfillment exceptions.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/glroland/dc-agent",
+    "source": "github",
+    "subfolder": "supervisor-api"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "http://adc-supervisor-api.distribution-center.svc.cluster.local:8003/mcp"
+    }
+  ],
+  "_meta": {
+    "com.glroland.distribution-center/deployment": {
+      "namespace": "distribution-center",
+      "externalRoute": false,
+      "note": "This service's Helm chart has a Route template (route.yaml) but it is currently disabled (supervisorApi.route.enabled: false in values.yaml), so no Route exists in-cluster today. URL above is the in-cluster Service DNS name, not a Route. Set that value to true and redeploy to expose one."
+    }
+  }
+}
