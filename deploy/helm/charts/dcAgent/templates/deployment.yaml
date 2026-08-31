@@ -79,6 +79,10 @@ spec:
             - name: OPENAI_BASE_URL
               value: {{ .Values.global.openai.baseUrl | quote }}
             {{- end }}
+            {{- if .Values.global.openai.provider }}
+            - name: OPENAI_PROVIDER
+              value: {{ .Values.global.openai.provider | quote }}
+            {{- end }}
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:

@@ -62,10 +62,13 @@ def record_usage_and_cost(*usages) -> None:
     span.set_attribute("mlflow.llm.cost", cost_from_totals(totals, settings.LLM_COST_PER_MILLION_TOKENS))
     # autolog's own per-call child span carries "mlflow.llm.model" (read from
     # the OpenAI response), but never a cost (self-hosted model, unknown to its
-    # pricing catalog -- see module docstring). The Overview tab's cost-by-model
-    # dashboard groups by joining each span's cost against that same span's
-    # model attribute, so without this, our cost lives on a span with no model
-    # and autolog's model lives on a span with no cost -- neither joins, and the
-    # dashboard shows "No cost data available" despite the trace genuinely
-    # having cost data.
+    # pricing catalog -- see module docstring) or a "mlflow.llm.provider" --
+    # mlflow.openai.autolog() doesn't set that attribute at all, unlike its
+    # Anthropic/Gemini/Bedrock integrations. The Overview tab's cost-by-model/
+    # cost-by-provider dashboard groups by joining each span's cost against
+    # that same span's model/provider attributes, so without these, our cost
+    # lives on a span with neither and autolog's model lives on a span with no
+    # cost -- neither joins, and the dashboard shows "No cost data available"
+    # despite the trace genuinely having cost data.
     span.set_attribute("mlflow.llm.model", settings.OPENAI_MODEL)
+    span.set_attribute("mlflow.llm.provider", settings.OPENAI_PROVIDER)

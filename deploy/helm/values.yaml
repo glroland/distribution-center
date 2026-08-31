@@ -39,6 +39,10 @@ global:
     baseUrl: "https://maas.apps.ocp.home.glroland.com/sandbox/gemma-4/v1"
     existingSecret: "distribution-center-credentials"
     existingSecretKey: OPENAI_API_KEY
+    # Stamped onto the cost-carrying span (see local-dc-agent/src/llm_cost.py)
+    # as mlflow.llm.provider for the MLflow Overview tab's cost-by-provider
+    # grouping -- mlflow.openai.autolog() never sets this attribute itself.
+    provider: openshift_ai
 
   # Ports of every service other subcharts need to address, mirrored here
   # so dcAgent (wmsApi, robotApi, shippingApi, poIngestApi, supervisorApi,

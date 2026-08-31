@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-5"
     OPENAI_BASE_URL: str | None = None
+    # mlflow.openai.autolog() never sets "mlflow.llm.provider" on its own spans
+    # (unlike its Anthropic/Gemini/Bedrock integrations), so this is what
+    # llm_cost.py stamps onto its cost-carrying span for the Overview tab's
+    # cost-by-provider grouping. Not necessarily the wire protocol ("openai")
+    # -- defaults to the platform actually serving OPENAI_MODEL in this repo's
+    # own deployments.
+    OPENAI_PROVIDER: str = "openshift_ai"
     MAX_FULFILLMENT_TURNS: int = 20
     # Default for the "Agentic Safety" toggle (GET/POST /guardrails; see
     # guardrails.py) -- on by default, flippable live for demos without a

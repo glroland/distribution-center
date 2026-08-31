@@ -63,19 +63,23 @@ def test_record_usage_and_cost_sets_attributes_on_current_span(monkeypatch) -> N
     }
 
 
-def test_record_usage_and_cost_sets_model_for_dashboard_grouping(monkeypatch) -> None:
-    """The Overview tab's cost-by-model dashboard joins each span's cost against
-    that same span's model attribute -- autolog's own child span carries the
-    model but never a cost for a self-hosted model, so our span needs both or
-    the join finds nothing to group (dashboard shows "No cost data available"
-    despite the trace genuinely having cost data)."""
+def test_record_usage_and_cost_sets_model_and_provider_for_dashboard_grouping(monkeypatch) -> None:
+    """The Overview tab's cost-by-model/cost-by-provider dashboard joins each
+    span's cost against that same span's model/provider attributes --
+    autolog's own child span carries the model (and, for the openai
+    integration, never a provider) but never a cost for a self-hosted model,
+    so our span needs all three or the join finds nothing to group (dashboard
+    shows "No cost data available" despite the trace genuinely having cost
+    data)."""
     span = _FakeSpan()
     monkeypatch.setattr(llm_cost_module.mlflow, "get_current_active_span", lambda: span)
     monkeypatch.setattr(settings, "OPENAI_MODEL", "gemma-4")
+    monkeypatch.setattr(settings, "OPENAI_PROVIDER", "openshift_ai")
 
     record_usage_and_cost(_FakeUsage(10, 5))
 
     assert span.attributes["mlflow.llm.model"] == "gemma-4"
+    assert span.attributes["mlflow.llm.provider"] == "openshift_ai"
 
 
 def test_record_usage_and_cost_accumulates_across_calls(monkeypatch) -> None:
