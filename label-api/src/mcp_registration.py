@@ -2,6 +2,13 @@
 fresh) in MLflow's MCP Server Registry -- mlflow.genai.register_mcp_server /
 refresh_mcp_server_version_tools, experimental as of mlflow==3.15.0.
 
+Also records this version's remotes[] as approved *access endpoints*
+(mlflow.genai.create_mcp_access_endpoint) rather than leaving MLflow to show
+the raw server.json remote URL as an unmanaged "official" endpoint -- access
+endpoints are what MLflow's own UI/consumers are meant to connect through.
+There is no server.json field for this (access endpoints are a registry-side
+concept, not part of the MCP server.json schema), so it has to happen here.
+
 Reuses the exact same MLFLOW_TRACKING_URI / MLFLOW_WORKSPACE /
 MLFLOW_TRACKING_AUTH env vars tracing.py and prompts.py already rely on --
 mlflow reads all three natively from the environment (see tracing.py's
@@ -64,6 +71,51 @@ def _source_url(server_json: dict) -> str | None:
     return f"{repository['url']}/blob/main/{subfolder}/server.json"
 
 
+def _ensure_access_endpoints(name: str, version: str, server_json: dict) -> None:
+    """Backfills access endpoints for a server version that was registered
+    before this existed, or by a call that hit the RESOURCE_ALREADY_EXISTS
+    branch below (register_mcp_server's create_access_endpoints_from_remotes
+    only fires on the call that actually creates the version). Idempotent --
+    safe to call on every startup."""
+    import mlflow.genai
+
+    remotes = server_json.get("remotes") or []
+    if not remotes:
+        return
+    try:
+        existing_urls = {
+            ep.url
+            for ep in mlflow.genai.search_mcp_access_endpoints(server_name=name, server_version=version)
+        }
+    except Exception:
+        logger.warning("Could not list existing MCP access endpoints for %s@%s", name, version, exc_info=True)
+        return
+
+    for remote in remotes:
+        url = remote.get("url")
+        if not url or url in existing_urls:
+            continue
+        try:
+            mlflow.genai.create_mcp_access_endpoint(
+                server_name=name,
+                url=url,
+                transport_type=remote.get("type", "streamable-http"),
+                server_version=version,
+            )
+            logger.info("Created MCP access endpoint for %s@%s -> %s", name, version, url)
+        except MlflowException as exc:
+            if exc.error_code == "RESOURCE_ALREADY_EXISTS":
+                logger.debug("MCP access endpoint for %s@%s -> %s already exists", name, version, url)
+            else:
+                logger.warning(
+                    "Could not create MCP access endpoint for %s@%s -> %s: %s", name, version, url, exc
+                )
+        except Exception:
+            logger.warning(
+                "Could not create MCP access endpoint for %s@%s -> %s", name, version, url, exc_info=True
+            )
+
+
 def _register_and_refresh() -> None:
     import mlflow.genai  # deferred: keeps a cold import cheap when unused, same as prompts.py
 
@@ -76,6 +128,7 @@ def _register_and_refresh() -> None:
             server_json=server_json,
             source=_source_url(server_json),
             status="active",
+            create_access_endpoints_from_remotes=True,
         )
         logger.info("Registered MCP server %s@%s in MLflow", name, version)
     except MlflowException as exc:
@@ -85,6 +138,8 @@ def _register_and_refresh() -> None:
             logger.warning("Could not register MCP server %s@%s in MLflow: %s", name, version, exc)
     except Exception:
         logger.warning("Could not register MCP server %s@%s in MLflow", name, version, exc_info=True)
+
+    _ensure_access_endpoints(name, version, server_json)
 
     try:
         mlflow.genai.refresh_mcp_server_version_tools(name=name, version=version)
