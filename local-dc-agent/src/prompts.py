@@ -28,6 +28,9 @@ from pathlib import Path
 
 import mlflow
 from mlflow.entities.model_registry import PromptVersion
+from mlflow.tracing.constant import SpanAttributeKey
+from mlflow.tracing.trace_manager import InMemoryTraceManager
+from mlflow.tracing.utils.prompt import update_linked_prompts_tag
 
 from .settings import settings
 
@@ -39,8 +42,8 @@ _DEFAULT_CATALOG_PATH = _SERVICE_ROOT / "prompts.json"
 
 # PromptVersion.version is typed as int; there's no registry version for
 # locally-loaded prompts, so this is a placeholder -- _tag_current_trace()
-# below tags the trace with the literal string "local" instead of this
-# number, so it's never surfaced to a human as if it were a real version.
+# below skips trace linking entirely for PROMPT_SOURCE=local, so this
+# number is never surfaced to a human as if it were a real registry version.
 _LOCAL_VERSION = 0
 
 
@@ -104,10 +107,11 @@ def _load(prompt_id: str) -> PromptVersion:
 
 def get_prompt(prompt_id: str) -> PromptVersion:
     """Returns a cached PromptVersion for prompt_id (loaded once per process).
-    Call .format(**kwargs) on the result to render variables. Also tags the
-    current active MLflow trace/span (if any) with this prompt's name and
+    Call .format(**kwargs) on the result to render variables. Also links the
+    current active MLflow trace/span (if any) to this prompt's registry
     version, on every call -- not just on first load -- so a cache hit in a
-    later request still shows up correctly in that request's own trace."""
+    later request still shows up correctly linked in that request's own
+    trace (PROMPT_SOURCE=mlflow only; see _tag_current_trace())."""
     prompt = _cache.get(prompt_id)
     if prompt is None:
         with _cache_lock:
@@ -120,20 +124,30 @@ def get_prompt(prompt_id: str) -> PromptVersion:
 
 
 def _tag_current_trace(prompt: PromptVersion) -> None:
-    """Best-effort only: mlflow.genai.load_prompt() does NOT auto-link a
-    loaded prompt to an active trace/span (verified against the installed
-    mlflow package -- it only links to an active *run* or *logged model*,
-    both unrelated concepts here). Tagging the trace explicitly is
-    therefore the only way to see which prompt name+version produced a
-    given trace in the MLflow UI. Must never raise into the caller -- this
-    is observability, not correctness."""
+    """Best-effort only: mlflow.genai.load_prompt() DOES auto-link a loaded
+    prompt to the active trace/span, but only on the call that actually hits
+    the registry -- get_prompt()'s cache means that's just the first call per
+    prompt id per process, so every cache-hit call (the overwhelming
+    majority, across every later PO this process handles) got no linking at
+    all here previously. Reproduces the same linking mlflow.genai.load_prompt()
+    performs internally (mlflow.tracking._model_registry.fluent.load_prompt,
+    same helpers) directly against the cached PromptVersion, so every call
+    links correctly without paying a registry round-trip each time. Only
+    meaningful for PROMPT_SOURCE=mlflow -- a local-catalog prompt has no
+    registry version to link. Must never raise into the caller -- this is
+    observability, not correctness."""
+    if settings.PROMPT_SOURCE != "mlflow":
+        return
     try:
-        if mlflow.get_current_active_span() is None:
-            return
-        version_label = "local" if settings.PROMPT_SOURCE == "local" else str(prompt.version)
-        mlflow.update_current_trace(tags={f"prompt.{prompt.name}": version_label})
+        if trace_id := mlflow.get_active_trace_id():
+            InMemoryTraceManager.get_instance().register_prompt(trace_id=trace_id, prompt=prompt)
+        if span := mlflow.get_current_active_span():
+            current_value = span.attributes.get(SpanAttributeKey.LINKED_PROMPTS)
+            span.set_attribute(
+                SpanAttributeKey.LINKED_PROMPTS, update_linked_prompts_tag(current_value, [prompt])
+            )
     except Exception:
-        logger.debug("Could not tag current trace with prompt %s@%s", prompt.name, prompt.version, exc_info=True)
+        logger.debug("Could not link prompt %s@%s to current trace", prompt.name, prompt.version, exc_info=True)
 
 
 def reset_prompt_cache() -> None:
