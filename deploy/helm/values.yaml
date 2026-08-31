@@ -74,6 +74,13 @@ global:
     # alongside MLflow. Leave both empty to skip OTLP entirely.
     otlpEndpoint: ""
     otlpHeaders: ""
+    # Optional: mlflow's own logger (mlflow.utils.logging_utils._configure_mlflow_loggers),
+    # read from MLFLOW_LOGGING_LEVEL at `import mlflow` time -- separate from each
+    # service's own LOG_LEVEL (its app logger), since mlflow's logger has its own
+    # handler with propagate: False. Set to "DEBUG" to see e.g. the full traceback
+    # behind a "span data is corrupted" trace-export warning. Leave empty for
+    # mlflow's own default (INFO).
+    loggingLevel: "DEBUG"
     # Service accounts that need kubernetes-namespaced auth against RHOAI's
     # MLflow -- being in-namespace isn't enough, RHOAI only grants that to
     # service accounts explicitly bound to integrationClusterRole below (the
@@ -205,11 +212,11 @@ dcAgent:
   llmCostPerMillionTokens: 0.1903
   resources:
     requests:
-      cpu: 100m
-      memory: 128Mi
+      cpu: 250m
+      memory: 256Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 1000m
+      memory: 1Gi
   route:
     enabled: true
 

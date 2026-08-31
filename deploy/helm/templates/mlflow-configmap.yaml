@@ -20,4 +20,7 @@ data:
   {{- if .Values.global.mlflow.otlpHeaders }}
   OTEL_EXPORTER_OTLP_HEADERS: {{ .Values.global.mlflow.otlpHeaders | quote }}
   {{- end }}
+  {{- if .Values.global.mlflow.loggingLevel }}
+  MLFLOW_LOGGING_LEVEL: {{ .Values.global.mlflow.loggingLevel | quote }}
+  {{- end }}
 {{- end }}

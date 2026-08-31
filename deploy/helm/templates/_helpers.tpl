@@ -172,5 +172,12 @@ Renders nothing when global.mlflow.enabled is false.
       name: {{ include "adc.mlflow.configMapName" . }}
       key: OTEL_EXPORTER_OTLP_HEADERS
 {{- end }}
+{{- if .Values.global.mlflow.loggingLevel }}
+- name: MLFLOW_LOGGING_LEVEL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "adc.mlflow.configMapName" . }}
+      key: MLFLOW_LOGGING_LEVEL
+{{- end }}
 {{- end }}
 {{- end -}}
