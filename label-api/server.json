@@ -5,7 +5,7 @@
   "description": "Generates synthetic SKU sticker photos and runs local vision-model SKU inference.",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/glroland/dc-agent",
+    "url": "https://github.com/glroland/distribution-center",
     "source": "github",
     "subfolder": "label-api"
   },

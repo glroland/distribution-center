@@ -5,7 +5,7 @@
   "description": "In-memory warehouse inventory ledger for one virtual distribution center.",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/glroland/dc-agent",
+    "url": "https://github.com/glroland/distribution-center",
     "source": "github",
     "subfolder": "local-wms-api"
   },

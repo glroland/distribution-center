@@ -5,7 +5,7 @@
   "description": "Converts purchase order PDFs to Markdown/JSON via Docling for downstream extraction.",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/glroland/dc-agent",
+    "url": "https://github.com/glroland/distribution-center",
     "source": "github",
     "subfolder": "po-ingest-api"
   },

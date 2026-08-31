@@ -5,7 +5,7 @@
   "description": "Mock carrier handoff that issues tracking numbers for shipped orders.",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/glroland/dc-agent",
+    "url": "https://github.com/glroland/distribution-center",
     "source": "github",
     "subfolder": "local-shipping-api"
   },

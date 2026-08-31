@@ -19,7 +19,7 @@ pipeline
                 '''
 
             git branch: 'main',
-                url: 'https://github.com/glroland/dc-agent.git'
+                url: 'https://github.com/glroland/distribution-center.git'
          }
       }
 
