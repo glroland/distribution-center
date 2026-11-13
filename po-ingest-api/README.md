@@ -78,9 +78,11 @@ same Docling model instance. It offers one tool:
 | `convert_pdf_to_markdown` | `pdf_base64: str`, `filename: str = "document.pdf"` | Markdown string |
 
 `pdf_base64` is the PDF's bytes, base64-encoded (MCP tool arguments are
-JSON, so there's no raw binary type). Connect with any MCP client that
-supports Streamable HTTP, e.g. the `mcp` Python SDK's
-`mcp.client.streamable_http.streamable_http_client`.
+JSON, so there's no raw binary type). The endpoint is stateless
+Streamable HTTP: no `Mcp-Session-Id`, no `initialize` handshake required,
+one JSON response per POST. Connect with any MCP client that supports
+Streamable HTTP, e.g. the `mcp` Python SDK's `mcp.Client`
+(`async with Client("http://host:port/mcp/") as client: ...`).
 
 ## Tests
 

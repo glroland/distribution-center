@@ -96,8 +96,8 @@ spec:
       {
         title: "Expose your system as an MCP tool",
         lang: "python",
-        code: `from mcp.server.fastmcp import FastMCP
-mcp = FastMCP("wms")
+        code: `from mcp.server.mcpserver import MCPServer
+mcp = MCPServer("wms")
 
 @mcp.tool()
 def adjust_inventory(sku: str, delta: int) -> dict:

@@ -2,7 +2,8 @@ import io
 import logging
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP as MCPServer
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from PIL import Image
 
 from .image_store import ImageNotFoundError, ImageStore
@@ -22,8 +23,6 @@ def build_mcp_server(image_store: ImageStore) -> MCPServer:
     mcp_server = MCPServer(
         name="label-api",
         instructions=instructions,
-        host=settings.HOST,
-        streamable_http_path="/",
     )
 
     @mcp_server.tool()
@@ -40,14 +39,14 @@ def build_mcp_server(image_store: ImageStore) -> MCPServer:
             image_bytes, _media_type = image_store.pop(image_id)
         except ImageNotFoundError as exc:
             logger.warning("infer_sku tool call rejected: %s", exc)
-            raise ValueError(str(exc)) from None
+            raise ToolError(str(exc)) from None
 
         try:
             image = Image.open(io.BytesIO(image_bytes))
             image.load()
         except Exception as exc:
             logger.warning("infer_sku tool call rejected: not a readable image (%s)", exc)
-            raise ValueError(f"invalid image: {exc}") from None
+            raise ToolError(f"invalid image: {exc}") from None
 
         pipeline = get_pipeline(
             models_dir=Path(settings.INFERENCE_MODELS_DIR),

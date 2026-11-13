@@ -76,8 +76,11 @@ than one-to-one with the REST endpoints:
 | `adjust_inventory` | `sku: str`, `delta: int` | Receive (`delta > 0`) or ship (`delta < 0`) stock for a SKU |
 | `reset_inventory` | - | Reload inventory from the seed CSV |
 
-Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
-Python SDK's `mcp.client.streamable_http.streamable_http_client`.
+The endpoint is stateless Streamable HTTP: no `Mcp-Session-Id`, no
+`initialize` handshake required, one JSON response per POST, so any request
+can be served by any replica. Connect with any MCP client that supports
+Streamable HTTP, e.g. the `mcp` Python SDK's `mcp.Client`
+(`async with Client("http://host:port/mcp/") as client: ...`).
 
 ## Tests
 

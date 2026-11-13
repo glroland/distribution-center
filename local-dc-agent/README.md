@@ -14,8 +14,11 @@ skills on this same agent — this is not meant to be the last one.
 
 Incoming A2A messages don't run this work inline on the HTTP request. Each
 one is handed to a single background `OrderWorker` (`src/worker.py`) that
-owns one persistent set of MCP connections and processes purchase orders
-serially from an `asyncio.Queue`. The worker's loop blocks on `queue.get()`
+owns the MCP tool router and processes purchase orders serially from an
+`asyncio.Queue`. The router talks to the downstream MCP servers statelessly:
+it discovers each one's instructions and tools once at startup, then makes
+every tool call as its own short-lived request with no session or connection
+held in between, so a downstream restart needs no reconnect. The worker's loop blocks on `queue.get()`
 between jobs, so no LLM call (or any other work) happens while there's
 nothing to process — and because there's only one physical picking robot,
 serializing through one worker also avoids two orders racing its position.
@@ -86,8 +89,8 @@ A2A message (PDF)
      the SKU is unknown to the WMS at all), escalate to a human via
      `request_help`, without blocking the rest of the order.
 
-   The five servers' MCP tools are connected once (`src/mcp_tools.py`) and
-   reused for the worker's lifetime, name-prefixed by service
+   The five servers' MCP tools are discovered once (`src/mcp_tools.py`) and
+   that tool list is reused for the worker's lifetime, name-prefixed by service
    (`wms__adjust_inventory`, `robot__fetch_item`, `robot__get_item_photo`,
    `label__infer_sku`, `shipping__ship_order`, `supervisor__request_help`) so
    a single OpenAI tool-calling loop can drive all five. The loop's system

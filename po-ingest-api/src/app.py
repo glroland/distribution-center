@@ -7,12 +7,29 @@ from .conversion import convert_pdf
 from .mcp_registration import configure_mcp_registration
 from .mcp_server import mcp_server
 from .models import ConversionResult
+from .settings import settings
 from .tracing import configure_tracing
 
 logger = logging.getLogger(__name__)
 
 configure_tracing()
-mcp_app = mcp_server.streamable_http_app()
+_MCP_MAX_REQUEST_BODY_BYTES = 64 * 1024 * 1024
+# Stateless: no Mcp-Session-Id, no per-client transport kept between requests,
+# and a plain JSON response per POST rather than an SSE stream -- every
+# request stands alone, so any replica can serve any call and a restart
+# strands no client. Clients speaking the 2026-07-28 protocol revision are
+# session-less by definition; stateless_http extends the same treatment to
+# handshake-era (2025) clients instead of opening a session for them.
+mcp_app = mcp_server.streamable_http_app(
+    streamable_http_path="/",
+    stateless_http=True,
+    json_response=True,
+    host=settings.HOST,
+    # convert_pdf_to_markdown takes the whole PDF base64-encoded in its
+    # arguments; the SDK's default 4 MiB request cap would reject any PDF
+    # over ~3 MB before the tool ever ran.
+    max_request_body_size=_MCP_MAX_REQUEST_BODY_BYTES,
+)
 
 
 @asynccontextmanager

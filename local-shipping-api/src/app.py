@@ -12,12 +12,24 @@ from .shipping import (
     ShippingStore,
     TrackingNumberNotFoundError,
 )
+from .settings import settings
 from .tracing import configure_tracing
 
 configure_tracing()
 store = ShippingStore()
 mcp_server = build_mcp_server(store)
-mcp_app = mcp_server.streamable_http_app()
+# Stateless: no Mcp-Session-Id, no per-client transport kept between requests,
+# and a plain JSON response per POST rather than an SSE stream -- every
+# request stands alone, so any replica can serve any call and a restart
+# strands no client. Clients speaking the 2026-07-28 protocol revision are
+# session-less by definition; stateless_http extends the same treatment to
+# handshake-era (2025) clients instead of opening a session for them.
+mcp_app = mcp_server.streamable_http_app(
+    streamable_http_path="/",
+    stateless_http=True,
+    json_response=True,
+    host=settings.HOST,
+)
 
 
 @asynccontextmanager

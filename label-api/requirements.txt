@@ -1,14 +1,14 @@
-fastapi>=0.139.2
-uvicorn[standard]>=0.51.0
-mcp>=1.28.1,<2
-pydantic-settings>=2.14.2
-mlflow[kubernetes]>=3.14.0,<4
-opentelemetry-exporter-otlp-proto-grpc>=1.44.0
-pillow>=12.3.0
-numpy>=2.5.1
+fastapi>=0.162.0
+uvicorn[standard]>=0.54.0
+mcp>=2.3.0,<3
+pydantic-settings>=2.16.0
+mlflow[kubernetes]>=3.18.0,<4
+opentelemetry-exporter-otlp-proto-grpc>=1.45.0
+pillow>=13.0.0
+numpy>=2.5.4
 # Multipart parsing for POST /infer's file upload (fastapi.UploadFile).
-python-multipart>=0.0.32
+python-multipart>=0.0.33
 # CPU-only inference for POST /infer (src/inference.py) - same base image
 # and unpinned-CUDA convention as vision-ml/requirements.txt, which trains
 # the checkpoints this loads.
-torch>=2.11.0
+torch>=2.15.0

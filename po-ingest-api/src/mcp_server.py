@@ -1,6 +1,6 @@
 import base64
 
-from mcp.server.fastmcp import FastMCP as MCPServer
+from mcp.server.mcpserver import MCPServer
 
 from .conversion import convert_pdf
 from .settings import settings
@@ -10,8 +10,6 @@ configure_tracing()
 mcp_server = MCPServer(
     name="po-ingest-api",
     instructions="Converts PDF documents to Markdown using Docling.",
-    host=settings.HOST,
-    streamable_http_path="/",
 )
 
 

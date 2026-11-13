@@ -2,7 +2,7 @@ import logging
 from typing import Annotated
 
 import httpx
-from mcp.server.fastmcp import FastMCP as MCPServer
+from mcp.server.mcpserver import MCPServer
 from pydantic import BaseModel, Field
 
 from .prompts import get_prompt
@@ -51,8 +51,6 @@ def build_mcp_server(robot: InventoryRobot) -> MCPServer:
     mcp_server = MCPServer(
         name="local-inventory-robot-api",
         instructions=instructions,
-        host=settings.HOST,
-        streamable_http_path="/",
     )
 
     @mcp_server.tool()

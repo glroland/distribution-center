@@ -1,9 +1,9 @@
 a2a-sdk[http-server]>=0.3.26,<0.4
-uvicorn[standard]>=0.51.0
+uvicorn[standard]>=0.54.0
 httpx>=0.28.1
-openai>=2.45.0
-pydantic>=2.13.4
-pydantic-settings>=2.14.2
-mcp>=1.28.1,<2
-mlflow[kubernetes]>=3.14.0,<4
-opentelemetry-exporter-otlp-proto-grpc>=1.44.0
+openai>=3.51.0
+pydantic>=2.14.0
+pydantic-settings>=2.16.0
+mcp>=2.3.0,<3
+mlflow[kubernetes]>=3.18.0,<4
+opentelemetry-exporter-otlp-proto-grpc>=1.45.0

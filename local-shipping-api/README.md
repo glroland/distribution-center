@@ -89,8 +89,11 @@ A typical agent workflow: after a robot has picked and delivered every item
 for a PO, call `ship_order` to dispatch it, then `track_shipment` or
 `get_shipment` to check on it later.
 
-Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
-Python SDK's `mcp.client.streamable_http.streamable_http_client`.
+The endpoint is stateless Streamable HTTP: no `Mcp-Session-Id`, no
+`initialize` handshake required, one JSON response per POST, so any request
+can be served by any replica. Connect with any MCP client that supports
+Streamable HTTP, e.g. the `mcp` Python SDK's `mcp.Client`
+(`async with Client("http://host:port/mcp/") as client: ...`).
 
 ## Tests
 

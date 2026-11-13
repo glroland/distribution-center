@@ -1,1 +1,1 @@
-mlflow[kubernetes]>=3.8.1,<4
+mlflow[kubernetes]>=3.18.0,<4

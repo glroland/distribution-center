@@ -1,12 +1,13 @@
 import asyncio
 import logging
-from contextlib import AsyncExitStack
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 import anyio
 import mlflow
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from mcp import Client, MCPError
+from mcp.types import DiscoverResult
 
 from . import guardrails
 from .settings import settings
@@ -24,70 +25,81 @@ _TOOL_NAME_SEPARATOR = "__"
 # empty-handed, or clear shipment history mid-fulfillment. Hidden from
 # list_openai_tools() and refused by call() while guardrails.is_enabled()
 # (the "Agentic Safety" toggle) is on; still discovered and kept in
-# self._tools either way so flipping the toggle off doesn't require a
-# reconnect to re-expose them.
+# self._tools either way so flipping the toggle off doesn't require
+# rediscovering them.
 _DISALLOWED_TOOLS = {"wms__reset_inventory", "robot__reset_robot", "shipping__reset_shipments"}
 # A dependent MCP server (wms/robot/shipping/supervisor/label) is commonly
 # still starting up when dc-agent's pod comes up during a fresh deploy or a
 # cluster restart, since nothing enforces Kubernetes start-up ordering across
-# services. Retrying with backoff here means that race resolves itself
-# instead of leaving the agent permanently wedged.
-_CONNECT_RETRY_INITIAL_DELAY_SECONDS = 1.0
-_CONNECT_RETRY_MAX_DELAY_SECONDS = 30.0
+# services. Retrying discovery with backoff here means that race resolves
+# itself instead of leaving the agent permanently wedged.
+_DISCOVER_RETRY_INITIAL_DELAY_SECONDS = 1.0
+_DISCOVER_RETRY_MAX_DELAY_SECONDS = 30.0
 
 
 class ToolCallError(Exception):
     """Raised when an MCP tool call reports an error result."""
 
 
+class _ServerUnreachableError(Exception):
+    """One request to an MCP server failed at the transport level (refused,
+    reset, non-MCP response) rather than being answered by the server."""
+
+
 @dataclass
 class _Server:
+    """What discovery learned about one MCP server -- everything a later
+    request needs to stand entirely on its own, with nothing held open."""
+
     label: str
-    session: ClientSession
+    url: str
     instructions: str | None
+    # Replayed into every later request's Client (mode=/prior_discover=) so it
+    # goes straight to the server as a single POST instead of re-running
+    # server/discover first.
+    protocol_version: str
+    discover: DiscoverResult
 
 
 class McpToolRouter:
-    """Connects to every fulfillment MCP server and exposes their tools as a
+    """Discovers every fulfillment MCP server's tools and exposes them as a
     single, name-prefixed OpenAI tool list, routing calls back to the right
-    server. Connections are opened once and reused for the router's lifetime,
-    but a server whose connection dies underneath us (e.g. its pod restarted
-    and dropped the streamable-HTTP session) is transparently reconnected by
-    call() rather than left broken for the rest of this process's life -- see
-    call()'s comment for why that used to require a manual dc-agent restart."""
+    server.
+
+    Entirely stateless on the wire: the downstream servers speak the
+    session-less MCP protocol revision (2026-07-28 -- no initialize handshake,
+    no Mcp-Session-Id), and this router holds no connection to any of them
+    between requests. Discovery (`server/discover` + `tools/list`) and every
+    tool call are each one self-contained HTTP exchange through a short-lived
+    Client. That is what makes a downstream pod restart a non-event: there is
+    no session for it to strand and no long-lived stream for it to sever, so
+    the next call simply reaches whichever instance is up. (The persistent
+    sessions this replaced needed dedicated reconnect logic for exactly that
+    case, and a manual dc-agent restart before that logic existed.)"""
 
     def __init__(self) -> None:
-        self._server_urls: dict[str, str] = {}
-        # Each server's transport/session context is kept in its own stack,
-        # keyed by label so a single server can be torn down and replaced
-        # independently on reconnect (see _reconnect) without touching the
-        # others. A stack is stored only once that server's connection
-        # attempt actually succeeds (see _connect_with_retry) -- that way a
-        # failed attempt never leaks a half-open connection into the
-        # router's lifetime.
-        self._server_stacks: dict[str, AsyncExitStack] = {}
         self._servers: dict[str, _Server] = {}
         self._tools: list[dict] = []
 
     async def connect(self) -> None:
-        self._server_urls = {
+        """Discovers all five servers. "Connect" in name only -- nothing stays
+        open afterwards; this blocks until each server has answered once."""
+        server_urls = {
             "wms": settings.WMS_API_URL,
             "robot": settings.ROBOT_API_URL,
             "shipping": settings.SHIPPING_API_URL,
             "supervisor": settings.SUPERVISOR_API_URL,
             "label": settings.LABEL_API_URL,
         }
-        for label, base_url in self._server_urls.items():
+        for label, base_url in server_urls.items():
             await self._register(label, base_url)
 
     async def _register(self, label: str, base_url: str) -> None:
-        """Connects (or reconnects) one server and (re)registers its tools.
-        Safe to call again for a label that's already registered -- any
-        stale `label__*` entries in the tool list are replaced rather than
-        duplicated, since a reconnect may hit a server whose tool set
-        changed (e.g. it was redeployed with new code)."""
-        session, instructions, listed_tools = await self._connect_with_retry(label, base_url)
-        self._servers[label] = _Server(label=label, session=session, instructions=instructions)
+        """Discovers one server and (re)registers its tools. Safe to call
+        again for a label that's already registered -- any stale `label__*`
+        entries in the tool list are replaced rather than duplicated."""
+        server, listed_tools = await self._discover_with_retry(label, base_url)
+        self._servers[label] = server
 
         prefix = f"{label}{_TOOL_NAME_SEPARATOR}"
         self._tools = [tool for tool in self._tools if not tool["function"]["name"].startswith(prefix)]
@@ -98,132 +110,60 @@ class McpToolRouter:
                     "function": {
                         "name": f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}",
                         "description": tool.description or "",
-                        "parameters": tool.inputSchema,
+                        "parameters": tool.input_schema,
                     },
                 }
             )
         disallowed_count = sum(1 for tool in listed_tools if f"{label}{_TOOL_NAME_SEPARATOR}{tool.name}" in _DISALLOWED_TOOLS)
         logger.info(
-            "Connected to %s: %d tool(s) registered (%d hidden while Agentic Safety is on)",
+            "Discovered %s: %d tool(s) registered (%d hidden while Agentic Safety is on)",
             label, len(listed_tools), disallowed_count,
         )
 
-    async def _connect_with_retry(self, label: str, base_url: str) -> tuple[ClientSession, str | None, list]:
-        """Connects to one MCP server, retrying with capped exponential backoff
-        until it succeeds. Never gives up -- an unreachable server here is
-        assumed to be a start-up ordering race (server not scheduled yet, still
-        booting, etc.) rather than a permanent misconfiguration, so this blocks
-        the caller rather than raising and killing the whole agent.
+    async def _discover_with_retry(self, label: str, base_url: str) -> tuple[_Server, list]:
+        """Fetches one MCP server's instructions and tool list, retrying with
+        capped exponential backoff until it succeeds. Never gives up -- an
+        unreachable server here is assumed to be a start-up ordering race
+        (server not scheduled yet, still booting, etc.) rather than a
+        permanent misconfiguration, so this blocks the caller rather than
+        raising and killing the whole agent.
 
-        The handshake (initialize) and the first list_tools() call are both
-        bounded by MCP_CONNECT_TIMEOUT_SECONDS and done here, inside the retry
-        loop, rather than left to the caller: a server whose process is up and
-        accepting TCP connections but hasn't actually started reading from the
-        socket yet (e.g. label-api/wms still loading data/model files before
-        uvicorn's event loop is running) leaves the connection sitting in the
-        kernel's accept queue -- our request goes out, but nothing ever reads
-        or responds to it, even after that server finishes starting, since by
-        then it's on to serving newer connections rather than draining stale
-        ones. The MCP client's HTTP transport has no read timeout of its own
-        (a long-lived SSE stream needs none), so without a bound here this
-        wedges the attempt forever, since the except-and-retry below only
-        runs on an exception, never on a hang. This is bounded with
-        anyio.fail_after() rather than asyncio.wait_for(): the mcp SDK's
-        ClientSession is itself built on anyio task groups/cancel scopes, and
-        asyncio.wait_for()'s raw Task.cancel() does not reliably interrupt an
-        anyio-scoped await -- confirmed by reproducing this exact hang with
-        asyncio.wait_for() in place and watching it sail past its own
-        timeout with no warning log.
+        Each attempt is bounded by MCP_CONNECT_TIMEOUT_SECONDS: a server whose
+        process is up and accepting TCP connections but hasn't actually
+        started reading from the socket yet (e.g. label-api/wms still loading
+        data/model files before uvicorn's event loop is running) leaves the
+        connection sitting in the kernel's accept queue -- our request goes
+        out, but nothing ever reads or responds to it. Without a bound that
+        wedges the attempt forever, since the retry below only runs on an
+        exception, never on a hang. See _exchange for how the bound is
+        applied and which failure shapes it normalizes.
 
-        A second, independent failure mode lives here too, also confirmed by
-        reproduction: when the server flat-out refuses the connection (e.g.
-        its port isn't listening yet at all) rather than merely being slow,
-        the ConnectError happens inside a *child* task of the mcp SDK's own
-        anyio task group (the backgrounded request sender), not in our
-        foreground await directly. That child failure cancels the task
-        group's scope, which delivers a bare asyncio.CancelledError to our
-        foreground await -- a BaseException, so a plain `except Exception`
-        never sees it; it skips straight past to a bare `finally`, where
-        attempt_stack.aclose() re-raises the *real* underlying error as an
-        ExceptionGroup that then escapes this function entirely, silently
-        killing OrderWorker's background task (nobody awaits it to observe
-        the exception) -- the same "narrow except clause" failure class as
-        the past bug documented in worker.py's history, just via anyio's
-        cancellation semantics instead of a typo. Distinguishing that from a
-        *genuine* shutdown request (OrderWorker.stop() cancelling this same
-        task, which also arrives as CancelledError and must be allowed to
-        propagate) needs Task.cancelling() (3.11+): >0 means this task
-        itself was asked to stop; a CancelledError seen while it's still 0
-        is necessarily incidental to some inner scope, safe to treat as a
-        failed attempt and retry."""
-        delay = _CONNECT_RETRY_INITIAL_DELAY_SECONDS
+        A server that only speaks a handshake-era (pre-2026-07-28, session
+        based) protocol revision is treated the same as one that isn't up
+        yet: this router never opens a session, so it can't use that server
+        until it's upgraded."""
+        # Trailing slash: the servers mount their MCP app at /mcp, so the
+        # endpoint itself is /mcp/ -- asking for /mcp costs a 307 round trip
+        # on every single request.
+        url = f"{base_url}/mcp/"
+        delay = _DISCOVER_RETRY_INITIAL_DELAY_SECONDS
         attempt = 1
         while True:
-            attempt_stack = AsyncExitStack()
-            succeeded = False
-            caught: BaseException | None = None
+            logger.info("Discovering MCP server %s at %s (attempt %d)", label, url, attempt)
             try:
-                logger.info("Connecting to MCP server %s at %s (attempt %d)", label, base_url, attempt)
-                read_stream, write_stream, _ = await attempt_stack.enter_async_context(
-                    streamable_http_client(f"{base_url}/mcp")
+                return await _exchange(url, settings.MCP_CONNECT_TIMEOUT_SECONDS, _discover(label, url))
+            except Exception as exc:  # noqa: BLE001 - anything short of a genuine cancellation (which _exchange lets through as CancelledError, a BaseException) is a failed attempt to retry
+                logger.warning(
+                    "MCP server %s at %s not reachable yet (%s); retrying in %.1fs",
+                    label, url, _describe(exc), delay,
                 )
-                session = await attempt_stack.enter_async_context(ClientSession(read_stream, write_stream))
-                with anyio.fail_after(settings.MCP_CONNECT_TIMEOUT_SECONDS):
-                    init_result = await session.initialize()
-                with anyio.fail_after(settings.MCP_CONNECT_TIMEOUT_SECONDS):
-                    listed = await session.list_tools()
-                succeeded = True
-            except BaseException as exc:  # noqa: BLE001 - see Task.cancelling() note above on why this is deliberately broad
-                caught = exc
-
-            if not succeeded:
-                try:
-                    await attempt_stack.aclose()
-                except BaseException as close_exc:  # noqa: BLE001 - closing a failed attempt can itself raise the real underlying error (see docstring); still not a reason to skip the retry-vs-propagate decision below
-                    caught = close_exc
-
-            if succeeded:
-                self._server_stacks[label] = attempt_stack
-                return session, init_result.instructions, listed.tools
-
-            if isinstance(caught, asyncio.CancelledError) and asyncio.current_task().cancelling() > 0:
-                raise caught
-
-            logger.warning(
-                "MCP server %s at %s not reachable yet (%s); retrying in %.1fs",
-                label, base_url, caught, delay,
-            )
             await asyncio.sleep(delay)
-            delay = min(delay * 2, _CONNECT_RETRY_MAX_DELAY_SECONDS)
+            delay = min(delay * 2, _DISCOVER_RETRY_MAX_DELAY_SECONDS)
             attempt += 1
 
-    async def _reconnect(self, label: str) -> None:
-        """Replaces one server's connection after call() finds it's no longer
-        usable. Closes the old (broken) stack before reconnecting so it isn't
-        leaked, then reuses _connect_with_retry's retry-with-backoff -- the
-        same logic that already handles a downstream server being briefly
-        unreachable at startup applies just as well to a mid-life outage.
-
-        Must run in the task that owns the router (OrderWorker's single
-        background task, same as connect()/close()) rather than a spawned
-        one: anyio's cancel scopes require being entered and exited from the
-        same asyncio task, so closing attempt_stack from a different task
-        would raise RuntimeError (see the same-task note in
-        OrderWorker.stop()). call() satisfies this because it's always
-        awaited directly from that task, never scheduled separately."""
-        old_stack = self._server_stacks.pop(label, None)
-        if old_stack is not None:
-            try:
-                await old_stack.aclose()
-            except Exception:
-                logger.exception("Error closing stale MCP connection to %s", label)
-        await self._register(label, self._server_urls[label])
-        logger.info("Reconnected to MCP server %s", label)
-
     async def close(self) -> None:
-        for label in list(self._server_stacks):
-            stack = self._server_stacks.pop(label)
-            await stack.aclose()
+        """Nothing to release -- no connection outlives the request that
+        opened it. Kept so OrderWorker's lifecycle doesn't need to know that."""
 
     def list_openai_tools(self) -> list[dict]:
         if guardrails.is_enabled():
@@ -242,6 +182,9 @@ class McpToolRouter:
         if server is None:
             raise ToolCallError(f"Unknown tool server '{label}' for tool '{name}'")
 
+        async def call_tool(client: Client):
+            return await client.call_tool(tool_name, arguments)
+
         # Span name is set per-call (rather than via @mlflow.trace, whose name
         # is fixed at decoration time) so each MCP server's calls show up as
         # e.g. "wms__adjust_inventory" in the trace UI instead of every call
@@ -249,61 +192,123 @@ class McpToolRouter:
         with mlflow.start_span(name=f"mcp__{name}", span_type="TOOL") as span:
             span.set_inputs(arguments)
             try:
-                # anyio.fail_after(), not asyncio.wait_for(): ClientSession is
-                # built on anyio task groups/cancel scopes, and
-                # asyncio.wait_for()'s raw Task.cancel() does not reliably
-                # interrupt an anyio-scoped await -- see the longer note on
-                # this in _connect_with_retry, where the same swap was needed
-                # to make a connect-time hang actually time out instead of
-                # sailing past its own deadline.
-                with anyio.fail_after(settings.MCP_TOOL_CALL_TIMEOUT_SECONDS):
-                    result = await server.session.call_tool(tool_name, arguments)
+                result = await _exchange(
+                    server.url,
+                    settings.MCP_TOOL_CALL_TIMEOUT_SECONDS,
+                    call_tool,
+                    mode=server.protocol_version,
+                    prior_discover=server.discover,
+                )
             except TimeoutError:
-                # Without this, a downstream server that dies mid-call (e.g.
-                # killed by its own liveness probe while inferencing) leaves
-                # this await hanging forever with no exception -- since
+                # Without this bound, a downstream server that dies mid-call
+                # (e.g. killed by its own liveness probe while inferencing)
+                # leaves this await hanging with no exception -- since
                 # OrderWorker processes POs serially off one queue, that
                 # wedges every subsequent order too, not just this one.
-                # Deliberately not treated as a dead connection (no
-                # reconnect below): the server may just be slow, and the
-                # call may have already taken effect on its side, so
-                # tearing down the session here wouldn't be safe to do
-                # automatically.
+                # Reported distinctly from an unreachable server: the server
+                # may just be slow, and the call may have already taken
+                # effect on its side, so the model shouldn't be told it's
+                # safe to blindly retry.
                 logger.warning(
                     "MCP tool %s timed out after %.1fs", name, settings.MCP_TOOL_CALL_TIMEOUT_SECONDS
                 )
                 raise ToolCallError(
                     f"Tool '{name}' timed out after {settings.MCP_TOOL_CALL_TIMEOUT_SECONDS:.0f}s"
                 ) from None
+            except MCPError as exc:
+                # The server answered, with a protocol-level rejection (a
+                # tool it doesn't have, a malformed request) rather than a
+                # tool result.
+                logger.warning("MCP tool %s was rejected by %s: %s", name, label, exc)
+                raise ToolCallError(f"Tool '{name}' was rejected by '{label}': {exc.error.message}") from exc
             except Exception as exc:
-                # The persistent session to this server (opened once in
-                # connect() and, until now, never revisited) has died
-                # underneath us -- almost always because the downstream
-                # pod restarted (redeploy/crash/OOM) and the streamable-HTTP
-                # session it held server-side (in-memory, like all state in
-                # this repo's services) is gone. Concretely this surfaces as
-                # mcp.shared.exceptions.McpError (the SDK's own receive loop
-                # noticing the stream closed) or anyio.ClosedResourceError
-                # (writing to a stream that receive loop already tore down).
-                # Left alone, every later call to this server fails the same
-                # way for the rest of this pod's life -- fulfillment just
-                # quietly escalates every order -- and only bouncing the
-                # dc-agent pod itself (which reruns connect()) ever
-                # recovers. Reconnect now instead, so the *next* call --
-                # the model's own retry, or a later order -- goes through a
-                # working session.
-                logger.warning(
-                    "MCP tool %s lost its connection to %s (%s); reconnecting",
-                    name, label, exc,
-                )
-                await self._reconnect(label)
+                # The request never got an MCP answer -- almost always
+                # because the downstream pod is restarting (redeploy/crash/
+                # OOM). Nothing to repair on this side: there's no session
+                # or connection to re-establish, so the *next* call -- the
+                # model's own retry, or a later order -- goes through as
+                # soon as the server is back.
+                logger.warning("MCP tool %s could not reach %s (%s)", name, label, _describe(exc))
                 raise ToolCallError(
-                    f"Lost connection to '{label}' while calling '{name}'; "
-                    "the connection has been re-established, retry the call."
+                    f"Could not reach '{label}' while calling '{name}'; "
+                    "it may be restarting, retry the call."
                 ) from exc
             text = "".join(part.text for part in result.content if hasattr(part, "text"))
-            if result.isError:
+            if result.is_error:
                 logger.warning("MCP tool %s reported an error: %s", name, text)
                 raise ToolCallError(text or f"Tool '{name}' failed")
             span.set_outputs(text)
             return text
+
+
+def _describe(exc: BaseException) -> str:
+    """A log-friendly reason for a failed exchange. Transport failures come
+    out of the SDK's task group wrapped in an ExceptionGroup whose own message
+    ("unhandled errors in a TaskGroup") says nothing about what went wrong."""
+    if isinstance(exc, BaseExceptionGroup):
+        return "; ".join(_describe(inner) for inner in exc.exceptions)
+    return f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+
+
+def _discover(label: str, url: str) -> Callable[[Client], Awaitable[tuple[_Server, list]]]:
+    async def discover(client: Client) -> tuple[_Server, list]:
+        discovered = client.session.discover_result
+        if discovered is None:
+            raise _ServerUnreachableError(
+                f"server negotiated session-based protocol {client.protocol_version}, "
+                "not the stateless 2026-07-28 revision"
+            )
+        listed = await client.list_tools()
+        server = _Server(
+            label=label,
+            url=url,
+            instructions=client.instructions,
+            protocol_version=client.protocol_version,
+            discover=discovered,
+        )
+        return server, listed.tools
+
+    return discover
+
+
+async def _exchange(
+    url: str,
+    timeout: float,
+    operation: Callable[[Client], Awaitable[Any]],
+    **client_options: Any,
+) -> Any:
+    """Runs one operation against an MCP server through a Client that exists
+    only for that operation, bounded by `timeout` seconds end to end.
+
+    Raises TimeoutError if the bound elapses, MCPError if the server answered
+    with a protocol error, and some other Exception if it couldn't be reached
+    at all. Two details here are load-bearing, both confirmed by reproducing
+    the failure they prevent:
+
+    - The bound is anyio.fail_after(), not asyncio.wait_for(): the mcp SDK's
+      client is built on anyio task groups/cancel scopes, and
+      asyncio.wait_for()'s raw Task.cancel() does not reliably interrupt an
+      anyio-scoped await -- a hung request sails past its own timeout.
+
+    - When a server flat-out refuses the connection, the ConnectError happens
+      inside a *child* task of the SDK's own task group (its backgrounded
+      request sender), not in our foreground await. That child failure
+      cancels the task group's scope, which can deliver a bare
+      asyncio.CancelledError to the foreground await -- a BaseException, so
+      a caller's `except Exception` never sees it, and it would escape all
+      the way out of OrderWorker's background task and kill it silently
+      (nobody awaits that task to observe the exception). Distinguishing
+      that from a *genuine* shutdown request (OrderWorker.stop() cancelling
+      this same task, which must be allowed to propagate) needs
+      Task.cancelling() (3.11+): >0 means this task itself was asked to
+      stop; a CancelledError seen while it's still 0 is necessarily
+      incidental to some inner scope, so it's reported as an ordinary
+      failure instead."""
+    try:
+        with anyio.fail_after(timeout):
+            async with Client(url, **client_options) as client:
+                return await operation(client)
+    except asyncio.CancelledError:
+        if asyncio.current_task().cancelling() > 0:
+            raise
+        raise _ServerUnreachableError(f"request to {url} was cancelled by a transport failure") from None

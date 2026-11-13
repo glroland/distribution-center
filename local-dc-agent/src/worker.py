@@ -41,7 +41,7 @@ class OrderWorker:
 
     async def start(self) -> None:
         # Connecting to the downstream MCP servers can block for a while (it
-        # retries internally -- see McpToolRouter._connect_with_retry) if this
+        # retries internally -- see McpToolRouter._discover_with_retry) if this
         # pod came up before they did, e.g. during a fresh deploy or a cluster
         # restart. Run that -- and the queue-draining loop it gates -- as a
         # background task so ASGI/app startup itself returns immediately: the
@@ -54,22 +54,21 @@ class OrderWorker:
     async def stop(self) -> None:
         if self._task is not None:
             self._task.cancel()
-            # Wait for the task to actually unwind (rather than closing the
-            # router here) so McpToolRouter.close() runs inside the same task
-            # that opened its connections -- anyio's cancel scopes require
-            # being entered and exited from the same asyncio task, so closing
-            # them from this (different) task raises RuntimeError.
+            # Wait for the task to actually unwind rather than abandoning it
+            # mid-request: an in-flight MCP exchange is built on anyio cancel
+            # scopes, which have to be exited by the same asyncio task that
+            # entered them.
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
             except Exception:
-                # A cancellation landing mid-connection-attempt can surface as
-                # an ExceptionGroup from anyio's task-group teardown (e.g. a
+                # A cancellation landing mid-request can surface as an
+                # ExceptionGroup from anyio's task-group teardown (e.g. a
                 # connection error that was already in flight) rather than a
                 # clean CancelledError. That's a discarded, in-progress
-                # connection attempt being abandoned -- not a reason to fail
-                # shutdown -- so log it and move on.
+                # request being abandoned -- not a reason to fail shutdown --
+                # so log it and move on.
                 logger.exception("Order worker's background task raised while shutting down")
             self._task = None
         logger.info("Order worker stopped")
@@ -91,14 +90,14 @@ class OrderWorker:
         try:
             await self._router.connect()
             self._ready.set()
-            logger.info("Order worker connected to all MCP servers; processing queued jobs")
+            logger.info("Order worker discovered all MCP servers; processing queued jobs")
             await self._run()
         except asyncio.CancelledError:
             raise
         except BaseException:
             # Nothing else ever awaits this background task except stop() at
             # shutdown, so an exception escaping here (this has happened
-            # before -- see McpToolRouter._connect_with_retry's docstring for
+            # before -- see mcp_tools._exchange's docstring for
             # the specific anyio-cancellation failure mode that slipped past
             # its retry loop) would otherwise die completely silently: the
             # process keeps serving /health, /ready stays stuck at "starting"

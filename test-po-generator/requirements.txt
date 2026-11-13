@@ -1,2 +1,2 @@
-reportlab>=4.0
-faker>=20.0
+reportlab>=5.1.0
+faker>=40.54.0

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from mcp.server.fastmcp import FastMCP as MCPServer
+from mcp.server.mcpserver import MCPServer
 from pydantic import Field
 
 from .inventory import InventoryItem, InventoryStore
@@ -35,8 +35,6 @@ def build_mcp_server(store: InventoryStore) -> MCPServer:
     mcp_server = MCPServer(
         name="local-wms-api",
         instructions=instructions,
-        host=settings.HOST,
-        streamable_http_path="/",
     )
 
     @mcp_server.tool()

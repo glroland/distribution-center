@@ -1,8 +1,8 @@
-fastapi>=0.115
-uvicorn[standard]>=0.30
-python-multipart>=0.0.9
-docling>=2.0
-mcp>=1.26.0,<2
-pydantic-settings>=2.5
-mlflow[kubernetes]>=3.8.1,<4
-opentelemetry-exporter-otlp-proto-grpc>=1.27
+fastapi>=0.162.0
+uvicorn[standard]>=0.54.0
+python-multipart>=0.0.33
+docling>=2.150.0
+mcp>=2.3.0,<3
+pydantic-settings>=2.16.0
+mlflow[kubernetes]>=3.18.0,<4
+opentelemetry-exporter-otlp-proto-grpc>=1.45.0

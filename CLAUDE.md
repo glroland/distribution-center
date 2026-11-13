@@ -73,14 +73,20 @@ the same internal layout:
   mounts it at `/mcp` in the *same process*, sharing the same in-memory
   store/state as the REST endpoints (see the `lifespan`/`AsyncExitStack`
   wiring in `app.py` — the MCP app's own lifespan has to be entered inside
-  FastAPI's).
+  FastAPI's). The MCP app is built stateless
+  (`streamable_http_app(stateless_http=True, json_response=True, ...)`, `mcp`
+  SDK 2.x): no `Mcp-Session-Id`, no per-client transport kept between
+  requests, plain JSON responses. "Stateless" is about the MCP transport
+  only — the domain state below is still in-memory and process-local.
 - `src/mcp_server.py` — MCP tools, deliberately coarser-grained than the
   REST API (e.g. one `adjust_inventory(sku, delta)` tool instead of separate
   increment/decrement endpoints) since these are meant for LLM tool-calling.
   Each server's `MCPServer(..., instructions=...)` string is authoritative
   domain documentation (capacity limits, dock rules, carrier behavior) that
   `local-dc-agent` pulls into its own system prompt at runtime rather than
-  duplicating.
+  duplicating. Tools raise plain domain exceptions; `tracing.py`'s
+  `tool_trace` decorator re-raises them as `ToolError`, the only exception
+  type whose message the SDK forwards to the calling model.
 - `src/<domain>.py` (`inventory.py`, `robot.py`, `shipping.py`, `store.py`)
   — the actual business logic and in-memory state, seeded from a CSV
   (`local-wms-api`, `local-inventory-robot-api`) where applicable. All state
@@ -119,8 +125,8 @@ by `local-inventory-robot-api`'s `get_item_photo` MCP tool and by
 ### The dc-agent pipeline (`local-dc-agent`)
 
 Incoming A2A messages are not processed inline on the HTTP request. A single
-background `OrderWorker` (`src/worker.py`) owns one persistent set of MCP
-connections and processes purchase orders serially off an `asyncio.Queue` —
+background `OrderWorker` (`src/worker.py`) owns the MCP tool router and
+processes purchase orders serially off an `asyncio.Queue` —
 serialization matters here because there's only one virtual picking robot,
 so two orders processing concurrently would race its position.
 
@@ -139,9 +145,12 @@ A2A message (PDF)
                              label-api (via MCP)
 ```
 
-Key detail: the fulfillment loop connects to all five downstream MCP servers
-once (`src/mcp_tools.py`) and reuses those connections for the worker's
-lifetime, with tool names prefixed by service (`wms__adjust_inventory`,
+Key detail: the fulfillment loop discovers all five downstream MCP servers
+once at startup (`src/mcp_tools.py`: instructions + tool list) and holds no
+connection or session to any of them afterwards — MCP here is stateless end
+to end (see "Per-service shape"), so every tool call is its own short-lived
+`mcp.Client` exchange and a downstream restart needs no reconnect handling.
+Tool names are prefixed by service (`wms__adjust_inventory`,
 `robot__plan_and_fetch_items`, `robot__get_item_photo`, `label__infer_sku`,
 `shipping__ship_order`, `supervisor__request_help`) so one OpenAI
 tool-calling loop can drive all five. The robot side is a single

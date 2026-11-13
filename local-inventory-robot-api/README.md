@@ -128,8 +128,11 @@ delivers it the normal way. `get_warehouse_map`, `find_item`, and
 request; `move_robot`/`fetch_item`/`deliver_items` remain available for
 manual control.
 
-Connect with any MCP client that supports Streamable HTTP, e.g. the `mcp`
-Python SDK's `mcp.client.streamable_http.streamable_http_client`.
+The endpoint is stateless Streamable HTTP: no `Mcp-Session-Id`, no
+`initialize` handshake required, one JSON response per POST, so any request
+can be served by any replica. Connect with any MCP client that supports
+Streamable HTTP, e.g. the `mcp` Python SDK's `mcp.Client`
+(`async with Client("http://host:port/mcp/") as client: ...`).
 
 Every pick (a `fetch_item` result, or a `"pick"` step in a
 `plan_and_fetch_items` trace) comes back with `sticker_available: true`,
