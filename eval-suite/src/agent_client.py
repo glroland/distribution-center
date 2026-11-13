@@ -1,5 +1,5 @@
 """A2A client for local-dc-agent, adapted from dashboard-ui/src/agent_client.py
-(same `message/send` envelope, same progress_webhook metadata convention) --
+(same `SendMessage` envelope, same progress_webhook metadata convention) --
 eval-suite drives the agent the same way the real UI does, rather than
 reaching into its internals, so the mcp-trajectory and end-to-end benchmarks
 stay genuinely black-box."""
@@ -19,16 +19,38 @@ class AgentCallError(Exception):
     pass
 
 
+# A2A 1.0 over JSON-RPC: PascalCase method names, enum values spelled out in
+# full (ROLE_USER, TASK_STATE_FAILED), and parts that are told apart by which
+# content field they carry (text / data / raw / url) rather than a `kind` tag.
+# Requests must declare the protocol version -- a request without this header
+# is treated by the agent as coming from a pre-1.0 (v0.3) client.
+_A2A_VERSION_HEADERS = {"A2A-Version": "1.0"}
+_TASK_STATE_PREFIX = "TASK_STATE_"
+
+
+def _restore_ints(value: Any) -> Any:
+    """Undoes the one lossy step in the agent's data part: it travels as a
+    protobuf `Value`, which stores every number as a double, so the order
+    record's integer fields (quantities, shipment ids) arrive as 3.0 rather
+    than 3. Whole-number floats are turned back into ints; a price like 450.0
+    becoming 450 is the same number either way."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        return {key: _restore_ints(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_restore_ints(item) for item in value]
+    return value
+
+
 def _extract_parts(artifact: dict) -> tuple[dict | None, str | None]:
     data: dict | None = None
     text: str | None = None
     for part in artifact.get("parts", []):
-        node = part.get("root", part)
-        kind = node.get("kind")
-        if kind == "data":
-            data = node.get("data")
-        elif kind == "text":
-            text = node.get("text")
+        if "data" in part:
+            data = _restore_ints(part["data"])
+        elif "text" in part:
+            text = part["text"]
     return data, text
 
 
@@ -37,9 +59,8 @@ def _status_message_text(status: dict) -> str | None:
     if not message:
         return None
     for part in message.get("parts", []):
-        node = part.get("root", part)
-        if node.get("kind") == "text":
-            return node.get("text")
+        if "text" in part:
+            return part["text"]
     return None
 
 
@@ -50,24 +71,20 @@ async def process_purchase_order(
     timeout: float = 300.0,
     connect_timeout: float = 5.0,
 ) -> dict[str, Any]:
-    """Sends a PO PDF to a dc-agent's A2A `message/send` endpoint and waits for the
+    """Sends a PO PDF to a dc-agent's A2A `SendMessage` endpoint and waits for the
     (blocking) result, matching dashboard-ui's client. Returns
     {"state", "result": <ProcessOrderResult dict>, "summary"}."""
     pdf_bytes = Path(pdf_path).read_bytes()
     filename = Path(pdf_path).name
 
     message: dict[str, Any] = {
-        "role": "user",
+        "role": "ROLE_USER",
         "messageId": str(uuid.uuid4()),
-        "kind": "message",
         "parts": [
             {
-                "kind": "file",
-                "file": {
-                    "bytes": base64.b64encode(pdf_bytes).decode("ascii"),
-                    "mimeType": "application/pdf",
-                    "name": filename,
-                },
+                "raw": base64.b64encode(pdf_bytes).decode("ascii"),
+                "mediaType": "application/pdf",
+                "filename": filename,
             }
         ],
     }
@@ -77,7 +94,7 @@ async def process_purchase_order(
     payload = {
         "jsonrpc": "2.0",
         "id": str(uuid.uuid4()),
-        "method": "message/send",
+        "method": "SendMessage",
         "params": {"message": message},
     }
 
@@ -85,7 +102,9 @@ async def process_purchase_order(
     logger.info("Sending %s to agent at %s", filename, agent_url)
     try:
         async with httpx.AsyncClient(timeout=request_timeout) as client:
-            response = await client.post(agent_url.rstrip("/") + "/", json=payload)
+            response = await client.post(
+                agent_url.rstrip("/") + "/", json=payload, headers=_A2A_VERSION_HEADERS
+            )
     except httpx.ConnectError as exc:
         raise AgentCallError(f"Could not reach agent at {agent_url}: {exc}") from exc
     except httpx.TimeoutException as exc:
@@ -104,15 +123,18 @@ async def process_purchase_order(
     if "error" in body:
         raise AgentCallError(body["error"].get("message", "agent returned a JSON-RPC error"))
 
-    result = body.get("result") or {}
-    status = result.get("status") or {}
-    state = status.get("state")
+    # SendMessage answers with either a `task` or a bare `message`; this agent
+    # always creates a task, so anything else has no order data to return.
+    task = (body.get("result") or {}).get("task") or {}
+    status = task.get("status") or {}
+    # Reported to callers without the enum prefix ("completed", "failed").
+    state = (status.get("state") or "").removeprefix(_TASK_STATE_PREFIX).lower() or None
 
     if state == "failed":
         raise AgentCallError(_status_message_text(status) or "agent task failed")
 
     data, summary = None, None
-    for artifact in result.get("artifacts") or []:
+    for artifact in task.get("artifacts") or []:
         artifact_data, artifact_text = _extract_parts(artifact)
         data = data or artifact_data
         summary = summary or artifact_text

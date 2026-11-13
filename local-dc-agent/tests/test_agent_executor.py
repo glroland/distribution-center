@@ -1,20 +1,9 @@
-import asyncio
-import base64
-
 import pytest
+from a2a.helpers import get_data_parts, get_text_parts, new_raw_part, new_text_part
 from a2a.server.agent_execution import RequestContext
-from a2a.server.events import EventQueue
-from a2a.types import (
-    DataPart,
-    FilePart,
-    FileWithBytes,
-    Message,
-    MessageSendParams,
-    Part,
-    Role,
-    TaskState,
-    TextPart,
-)
+from a2a.server.context import ServerCallContext
+from a2a.types import Message, Part, Role, SendMessageRequest, TaskState
+from a2a.utils.errors import UnsupportedOperationError
 
 from src.agent_executor import ProcessOrderAgentExecutor
 from src.fulfillment import FulfillmentError
@@ -40,23 +29,35 @@ class _FakeWorker:
         return self.result
 
 
-def _message(parts: list[Part]) -> Message:
-    return Message(message_id="m1", role=Role.user, parts=parts, kind="message")
+def _message(parts: list[Part], metadata: dict | None = None) -> Message:
+    return Message(message_id="m1", role=Role.ROLE_USER, parts=parts, metadata=metadata)
 
 
 def _pdf_part(name: str = "po.pdf") -> Part:
-    file = FileWithBytes(bytes=base64.b64encode(b"%PDF-1.4 fake").decode(), mime_type="application/pdf", name=name)
-    return Part(root=FilePart(file=file))
+    return new_raw_part(b"%PDF-1.4 fake", media_type="application/pdf", filename=name)
 
 
-async def _drain(queue: EventQueue) -> list:
-    events = []
-    while True:
-        try:
-            events.append(await queue.dequeue_event(no_wait=True))
-        except asyncio.QueueEmpty:
-            break
-    return events
+def _context(message: Message) -> RequestContext:
+    return RequestContext(call_context=ServerCallContext(), request=SendMessageRequest(message=message))
+
+
+class _RecordingQueue:
+    """Stands in for the SDK's EventQueue: the executor only ever enqueues."""
+
+    def __init__(self) -> None:
+        self.events: list = []
+
+    async def enqueue_event(self, event) -> None:
+        self.events.append(event)
+
+    @property
+    def artifact_events(self) -> list:
+        return [e for e in self.events if hasattr(e, "artifact")]
+
+    @property
+    def status_events(self) -> list:
+        # the initial Task also has a .status; only the update events count here
+        return [e for e in self.events if hasattr(e, "status") and not hasattr(e, "history")]
 
 
 def _sample_result() -> ProcessOrderResult:
@@ -72,30 +73,29 @@ def _sample_result() -> ProcessOrderResult:
 @pytest.mark.asyncio
 async def test_process_purchase_order_success() -> None:
     worker = _FakeWorker(result=_sample_result())
-    context = RequestContext(request=MessageSendParams(message=_message([_pdf_part()])))
-    queue = EventQueue()
+    context = _context(_message([_pdf_part()]))
+    queue = _RecordingQueue()
 
     await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
-    events = await _drain(queue)
-    artifact_events = [e for e in events if hasattr(e, "artifact")]
-    status_events = [e for e in events if hasattr(e, "status")]
-
-    assert len(artifact_events) == 1
-    data_parts = [p.root.data for p in artifact_events[0].artifact.parts if isinstance(p.root, DataPart)]
-    text_parts = [p.root.text for p in artifact_events[0].artifact.parts if isinstance(p.root, TextPart)]
+    assert len(queue.artifact_events) == 1
+    artifact = queue.artifact_events[0].artifact
+    assert artifact.name == "processed_order"
+    data_parts = get_data_parts(artifact.parts)
+    text_parts = get_text_parts(artifact.parts)
     assert data_parts[0]["po_number"] == "PO-2002"
+    assert data_parts[0]["line_items"][0]["quantity"] == 1
     assert "PO-2002" in text_parts[0]
 
-    assert status_events[-1].status.state == TaskState.completed
-    assert len(worker.calls) == 1
+    assert queue.status_events[-1].status.state == TaskState.TASK_STATE_COMPLETED
+    assert worker.calls == [(b"%PDF-1.4 fake", "po.pdf")]
 
 
 @pytest.mark.asyncio
 async def test_no_progress_webhook_means_no_on_event_hook() -> None:
     worker = _FakeWorker(result=_sample_result())
-    context = RequestContext(request=MessageSendParams(message=_message([_pdf_part()])))
-    queue = EventQueue()
+    context = _context(_message([_pdf_part()]))
+    queue = _RecordingQueue()
 
     await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
@@ -129,15 +129,9 @@ async def test_progress_webhook_metadata_posts_each_event(monkeypatch) -> None:
     monkeypatch.setattr(agent_executor_module.httpx, "AsyncClient", _FakeAsyncClient)
 
     worker = _FakeWorker(result=_sample_result())
-    message = Message(
-        message_id="m1",
-        role=Role.user,
-        parts=[_pdf_part()],
-        kind="message",
-        metadata={"progress_webhook": "http://dashboard.local/events/run-1"},
-    )
-    context = RequestContext(request=MessageSendParams(message=message))
-    queue = EventQueue()
+    message = _message([_pdf_part()], metadata={"progress_webhook": "http://dashboard.local/events/run-1"})
+    context = _context(message)
+    queue = _RecordingQueue()
 
     await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
@@ -153,51 +147,89 @@ async def test_progress_webhook_metadata_posts_each_event(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_missing_pdf_part_fails_task() -> None:
     worker = _FakeWorker()
-    context = RequestContext(request=MessageSendParams(message=_message([Part(root=TextPart(text="hello"))])))
-    queue = EventQueue()
+    context = _context(_message([new_text_part("hello")]))
+    queue = _RecordingQueue()
 
     await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
-    events = await _drain(queue)
-    status_events = [e for e in events if hasattr(e, "status")]
-    assert status_events[-1].status.state == TaskState.failed
+    failure = queue.status_events[-1].status
+    assert failure.state == TaskState.TASK_STATE_FAILED
+    assert "No PDF file part" in get_text_parts(failure.message.parts)[0]
     assert worker.calls == []
 
 
 @pytest.mark.asyncio
 async def test_ingest_failure_fails_task() -> None:
     worker = _FakeWorker(error=IngestError("docling exploded"))
-    context = RequestContext(request=MessageSendParams(message=_message([_pdf_part()])))
-    queue = EventQueue()
+    context = _context(_message([_pdf_part()]))
+    queue = _RecordingQueue()
 
     await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
-    events = await _drain(queue)
-    status_events = [e for e in events if hasattr(e, "status")]
-    assert status_events[-1].status.state == TaskState.failed
+    assert queue.status_events[-1].status.state == TaskState.TASK_STATE_FAILED
 
 
 @pytest.mark.asyncio
 async def test_extraction_failure_fails_task() -> None:
     worker = _FakeWorker(error=ExtractionError("model refused"))
-    context = RequestContext(request=MessageSendParams(message=_message([_pdf_part()])))
-    queue = EventQueue()
+    context = _context(_message([_pdf_part()]))
+    queue = _RecordingQueue()
 
     await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
-    events = await _drain(queue)
-    status_events = [e for e in events if hasattr(e, "status")]
-    assert status_events[-1].status.state == TaskState.failed
+    assert queue.status_events[-1].status.state == TaskState.TASK_STATE_FAILED
 
 
 @pytest.mark.asyncio
 async def test_fulfillment_failure_fails_task() -> None:
     worker = _FakeWorker(error=FulfillmentError("OpenAI API call failed"))
-    context = RequestContext(request=MessageSendParams(message=_message([_pdf_part()])))
-    queue = EventQueue()
+    context = _context(_message([_pdf_part()]))
+    queue = _RecordingQueue()
 
     await ProcessOrderAgentExecutor(worker).execute(context, queue)
 
-    events = await _drain(queue)
-    status_events = [e for e in events if hasattr(e, "status")]
-    assert status_events[-1].status.state == TaskState.failed
+    assert queue.status_events[-1].status.state == TaskState.TASK_STATE_FAILED
+
+
+@pytest.mark.asyncio
+async def test_pdf_referenced_by_url_is_downloaded(monkeypatch) -> None:
+    fetched: list[str] = []
+
+    class _FakeResponse:
+        content = b"%PDF-1.4 remote"
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class _FakeAsyncClient:
+        def __init__(self, timeout: float) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self) -> "_FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, *exc_info) -> None:
+            return None
+
+        async def get(self, url: str) -> _FakeResponse:
+            fetched.append(url)
+            return _FakeResponse()
+
+    import src.agent_executor as agent_executor_module
+
+    monkeypatch.setattr(agent_executor_module.httpx, "AsyncClient", _FakeAsyncClient)
+
+    worker = _FakeWorker(result=_sample_result())
+    part = Part(url="http://files.local/orders/po-7.pdf", filename="po-7.pdf")
+    queue = _RecordingQueue()
+
+    await ProcessOrderAgentExecutor(worker).execute(_context(_message([part])), queue)
+
+    assert fetched == ["http://files.local/orders/po-7.pdf"]
+    assert worker.calls == [(b"%PDF-1.4 remote", "po-7.pdf")]
+
+
+@pytest.mark.asyncio
+async def test_cancel_is_unsupported() -> None:
+    with pytest.raises(UnsupportedOperationError):
+        await ProcessOrderAgentExecutor(_FakeWorker()).cancel(_context(_message([_pdf_part()])), _RecordingQueue())

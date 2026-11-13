@@ -101,9 +101,9 @@ A2A message (PDF)
    structured summary of every line item's outcome. If the loop stalls past
    `MAX_FULFILLMENT_TURNS`, the agent escalates to the supervisor directly
    and returns a degraded result rather than hanging or failing the PO.
-6. The result is returned as an A2A artifact: a `DataPart` with the full
+6. The result is returned as an A2A artifact: a `data` part with the full
    structured JSON (including the `fulfillment` block — per-item status,
-   shipment/tracking info, and any escalations) and a `TextPart`
+   shipment/tracking info, and any escalations) and a `text` part with a
    human-readable summary. If ingestion, extraction, or fulfillment fails
    outright, the task is marked `failed` with an explanatory message
    instead.
@@ -189,20 +189,23 @@ flipping it there disables it here too, live, without a restart.
 
 ## Usage
 
-Generate a sample PO and send it to the agent's `message/send` JSON-RPC
-endpoint as a base64-encoded file part:
+Generate a sample PO and send it to the agent's A2A 1.0 `SendMessage`
+JSON-RPC endpoint as a base64-encoded `raw` part. The `A2A-Version` header
+is required — without it the request is treated as coming from a pre-1.0
+client:
 
 ```bash
 PDF_B64=$(base64 -i ../target/pos/some-po.pdf)
 curl -s http://localhost:9100/ \
   -H 'Content-Type: application/json' \
+  -H 'A2A-Version: 1.0' \
   -d "$(cat <<EOF
 {
-  "jsonrpc": "2.0", "id": "1", "method": "message/send",
+  "jsonrpc": "2.0", "id": "1", "method": "SendMessage",
   "params": {
     "message": {
-      "role": "user", "messageId": "m1", "kind": "message",
-      "parts": [{"kind": "file", "file": {"bytes": "$PDF_B64", "mimeType": "application/pdf", "name": "po.pdf"}}]
+      "role": "ROLE_USER", "messageId": "m1",
+      "parts": [{"raw": "$PDF_B64", "mediaType": "application/pdf", "filename": "po.pdf"}]
     }
   }
 }
@@ -210,11 +213,17 @@ EOF
 )"
 ```
 
-The response's `result.artifacts[0].parts` contains the structured
-`ProcessOrderResult` JSON (`DataPart`, including its `fulfillment` block)
-and a human-readable summary (`TextPart`) — the latter includes the
+The response's `result.task.artifacts[0].parts` contains the structured
+`ProcessOrderResult` JSON (a `data` part, including its `fulfillment` block)
+and a human-readable summary (a `text` part) — the latter includes the
 carrier tracking number if the order shipped, or a note about any
-escalations raised.
+escalations raised. `result.task.status.state` is `TASK_STATE_COMPLETED` or
+`TASK_STATE_FAILED`. Numbers in the `data` part are JSON doubles (`3.0`, not
+`3`): A2A 1.0 carries structured data as a protobuf `Value`.
+
+Pre-1.0 (v0.3) callers are still served on the same endpoint: a
+`message/send` request with `kind`-tagged parts and no `A2A-Version` header
+gets a v0.3-shaped response.
 
 Note `local-wms-api`'s seed inventory only stocks a handful of SKUs (one at
 zero on hand) while `test-po-generator`'s product catalog is much larger,

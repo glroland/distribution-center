@@ -1,4 +1,5 @@
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill
+from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentSkill
+from a2a.utils.constants import PROTOCOL_VERSION_1_0, TransportProtocol
 
 from .settings import settings
 
@@ -26,7 +27,13 @@ AGENT_CARD = AgentCard(
         "picking robot, ships what's available, and escalates shortages to "
         "a human supervisor."
     ),
-    url=settings.AGENT_URL,
+    supported_interfaces=[
+        AgentInterface(
+            url=settings.AGENT_URL,
+            protocol_binding=TransportProtocol.JSONRPC.value,
+            protocol_version=PROTOCOL_VERSION_1_0,
+        )
+    ],
     version="0.1.0",
     capabilities=AgentCapabilities(streaming=False),
     default_input_modes=["application/pdf"],

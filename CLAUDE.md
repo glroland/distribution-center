@@ -173,13 +173,18 @@ Python code silently doing the checking. The loop finishes by calling a
 stalls past `MAX_FULFILLMENT_TURNS`, the agent escalates to the supervisor
 directly and returns a degraded result instead of hanging.
 
-Results come back as an A2A artifact: a `DataPart` with the full structured
+Results come back as an A2A artifact: a `data` part with the full structured
 `ProcessOrderResult` JSON (including the `fulfillment` block) plus a
-human-readable `TextPart` summary.
+human-readable `text` part summary. The agent speaks A2A 1.0 (`a2a-sdk`
+1.x: `SendMessage`, `A2A-Version: 1.0` header, protobuf-backed types) with
+v0.3 compatibility left on for pre-1.0 callers; `dashboard-ui` and
+`eval-suite` call it with hand-written 1.0 JSON-RPC over `httpx` rather than
+the SDK client, and turn the data part's whole-number doubles back into ints
+(a protobuf `Value` has no integer type).
 
 ### Live progress via webhook, not streaming (`dashboard-ui`)
 
-The dc-agent's `message/send` is a single blocking A2A call with
+The dc-agent's `SendMessage` is a single blocking A2A call with
 `capabilities.streaming=False`. To watch a PO move through the pipeline
 live, `dashboard-ui` passes a `progress_webhook` URL in the outbound
 message's `metadata`. If present, the agent POSTs an event to it after

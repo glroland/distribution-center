@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
 
-from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
 from a2a.server.tasks import InMemoryTaskStore
+from a2a.utils.constants import DEFAULT_RPC_URL
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.routing import Route
 
 from . import guardrails
 from .agent_card import AGENT_CARD
@@ -29,9 +31,8 @@ async def lifespan(app: Starlette):
 request_handler = DefaultRequestHandler(
     agent_executor=ProcessOrderAgentExecutor(worker),
     task_store=InMemoryTaskStore(),
+    agent_card=AGENT_CARD,
 )
-
-app = A2AStarletteApplication(agent_card=AGENT_CARD, http_handler=request_handler).build(lifespan=lifespan)
 
 
 async def health(request: Request) -> JSONResponse:
@@ -66,7 +67,17 @@ async def set_guardrails(request: Request) -> JSONResponse:
     return JSONResponse({"enabled": enabled})
 
 
-app.add_route("/health", health, methods=["GET"])
-app.add_route("/ready", ready, methods=["GET"])
-app.add_route("/guardrails", get_guardrails, methods=["GET"])
-app.add_route("/guardrails", set_guardrails, methods=["POST"])
+app = Starlette(
+    routes=[
+        *create_agent_card_routes(AGENT_CARD),
+        # A2A 1.0 JSON-RPC (SendMessage, GetTask, ...). v0.3 compat keeps the
+        # same endpoint answering pre-1.0 callers (message/send, `kind`-tagged
+        # parts) so an external client that hasn't upgraded isn't cut off.
+        *create_jsonrpc_routes(request_handler, rpc_url=DEFAULT_RPC_URL, enable_v0_3_compat=True),
+        Route("/health", health, methods=["GET"]),
+        Route("/ready", ready, methods=["GET"]),
+        Route("/guardrails", get_guardrails, methods=["GET"]),
+        Route("/guardrails", set_guardrails, methods=["POST"]),
+    ],
+    lifespan=lifespan,
+)

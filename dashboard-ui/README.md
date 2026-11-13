@@ -11,7 +11,7 @@ serves the static dashboard UI.
 
 ## How live updates work
 
-The dc-agent's `message/send` call is a single blocking A2A request with no
+The dc-agent's `SendMessage` call is a single blocking A2A request with no
 built-in streaming (its agent card declares `capabilities.streaming=False`).
 To watch a PO move step by step anyway, this dashboard passes a
 `progress_webhook` URL in the outbound message's `metadata`
