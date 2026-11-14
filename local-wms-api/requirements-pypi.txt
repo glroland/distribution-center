@@ -1,0 +1,6 @@
+# Packages the Red Hat RHOAI index (the only index the base image's pip is
+# configured with) doesn't carry at the major version this code needs. The
+# Containerfile installs requirements.txt from that index first, then this
+# file with PyPI added as an extra index. Keep this list as short as possible:
+# anything here is not a Red Hat build.
+mcp>=2.3.0,<3

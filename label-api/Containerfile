@@ -2,8 +2,14 @@ FROM registry.redhat.io/rhai/base-image-cpu-rhel9:3.5.0-1786556387
 
 WORKDIR /app
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-pypi.txt ./
+# Two steps on purpose. The base image's pip only knows the Red Hat RHOAI
+# index; requirements.txt is everything that index can satisfy, so it is
+# installed first and stays Red Hat-built. requirements-pypi.txt is the few
+# packages that index doesn't carry at the needed version -- PyPI is added
+# only for that second step, where everything already installed is left alone.
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir --extra-index-url https://pypi.org/simple -r requirements-pypi.txt
 
 COPY src ./src
 COPY prompts.json ./

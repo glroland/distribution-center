@@ -57,6 +57,17 @@ pytest                   # run that service's tests
 pytest tests/test_foo.py::test_bar -q   # run a single test
 ```
 
+Each service's dependencies are split across two files: `requirements.txt`
+is everything the Red Hat RHOAI package index can satisfy — the base image's
+pip is configured with only that index, so a version floor above what it
+carries breaks the image build even though it installs fine locally from
+PyPI — and `requirements-pypi.txt` is the few packages that index lacks at
+the needed major version (`mcp` 2.x, `a2a-sdk` 1.x). The Containerfiles
+install the first from Red Hat, then the second with PyPI added as an extra
+index. `make install` picks up both. Check the index before raising a floor:
+`https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.5/cpu-ubi9/simple/<package>/`.
+(`po-ingest-api` builds on `python:3.12-slim` and installs from PyPI directly.)
+
 There is no repo-wide lint/format/type-check config (no `pyproject.toml`,
 `ruff`, `flake8`, or `mypy` setup) and no top-level test runner — testing is
 always per-service via `pytest` in that service's own venv.

@@ -29,7 +29,7 @@ Every generated image:
 cd label-api
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-pypi.txt
 
 # for running tests
 pip install -r requirements-dev.txt
